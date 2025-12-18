@@ -1,0 +1,45 @@
+<% layout('/layouts/boilerplate') %>
+<div class="general-max-width margin-auto p50 p0-top">
+    <h1>Contact Us</h1>
+
+    <p>Having issues or questions/suggestions that are not on the <a href="/other/faq">FAQ page</a>? Fill out the form below!</p>
+
+    <form class="contact" action="/other/contact" method="post">
+        <div class="flex-column left">
+            <div class="form-group">
+                <label for="fname">* First Name</label>
+                <input class="" name="fname" required placeholder="Bob" maxlength="50" <%if(currentUser){%> value="<%=currentUser.fname%>" <%}%>>
+            </div>
+
+            <div class="form-group">
+                <label for="email">* Email</label>
+                <input class="" type="email" name="email" required placeholder="bob1967@gmail.com" maxlength="300" <%if(currentUser){%> value="<%=currentUser.username%>" <%}%>>
+            </div>
+
+            <div class="form-group">
+                <label for="email-subject">* Subject</label>
+                <input class="" name="email_subject" id="email-subject" required placeholder="Photo not uploading" maxlength="300" value="<%= prefill.email_subject || '' %>">
+            </div>
+
+            <div class="form-group">
+                <label for="confirmQuestion">* Human check - How many bellybuttons do most humans have?</label>
+                <input class="" name="confirm_question" required placeholder="To confirm that you are one." maxlength="300">
+            </div>
+        </div>
+        
+        <div class="flex-column right">
+            <div class="form-group">
+                <label for="email-body">* Please Describe</label>
+                <textarea class="" name="email_body" id="email-body" required placeholder="When I select 4 photos and click the upload button, nothing happens." maxlength="300"><%= prefill?.email_body || '' %></textarea>
+            </div>
+        </div>
+
+
+
+        <div style="width: 100%;">
+            <button style=" margin: 40px auto 0px auto;" class="btn btn-primary" type="submit">Submit</button>
+        </div>
+        
+    </form>
+
+</div>

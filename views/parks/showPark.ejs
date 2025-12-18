@@ -1,0 +1,224 @@
+<% layout('/layouts/boilerplate') %>
+
+<link rel="stylesheet" href="/css/showPark.css">
+<link
+  rel="stylesheet"
+  href="/css/swiper-bundle.min.css"
+/>
+
+<script>
+  // Serialize safely to avoid XSS or JSON parsing issues
+  window.PARK = <%- JSON.stringify(park) %>;
+  window.CURRENT_USER_ID = "<%= currentUser ? currentUser._id : '' %>";
+  window.CURRENT_USER_IS_ADMIN = <%= currentUser?.isAdmin ? true : false %>;
+  window.CURRENT_USER_EMAIL_VERIFIED = <%= currentUser?.email_verified ? true : false %>;
+</script>
+
+<!-- Div to show campsite popup -->
+
+<%- include('../partials/modals/modal', {
+  id: 'campsite-modal',
+  contentPartial: 'campsiteModalContent',
+  switcher: false,
+  data: {}
+}) %>
+<!-- --------------------------------------------------- -->
+
+
+<!-- SUB-MENU -->
+<!-- <section id="park-submenu">
+  <a href="/camp/all-parks">Go Back to All Parks</a>
+  <a href="#park-campsites">Campsites</a>
+  <a href="#park-media">Media</a>
+  <a href="#park-reviews">Reviews</a>
+</section> -->
+
+<div class="general-max-width margin-auto p50 p0-top">
+  <section id="park-overview">
+    <h1>
+      <%= park.name %> 
+      <% if(park?.type == 'provincial') { %>
+        - Provincial Park
+      <% } else if (park?.type == 'territorial'){ %>
+        - Territorial Park
+      <% } else if (park?.type == 'national'){ %>
+        - National Park
+      <% } %>
+      
+    
+    </h1>
+
+    <div class="small-header"><%= park.province %></div>
+    <p><%= park.description || '' %></p>
+  </section>
+
+  <%- include('../partials/search') %>
+</div>
+
+<!-- MEDIA FOR PARK -->
+<section id="park-media-slider">
+  
+
+  <!-- Main slider -->
+  <div class="swiper parkSwiper">
+    <div class="tear-top">
+      <img src="/images/partials/park-page-nav-ripped.png">
+    </div>
+    <div class="swiper-wrapper" id="park-swiper-wrapper"></div>
+      
+    <!-- Navigation arrows -->
+    <div class="swiper-button-next"></div>
+    <div class="swiper-button-prev"></div>
+    <div class="tear-bottom">
+      <img src="/images/partials/content-top-ripped.png">
+    </div>
+  </div>
+
+  
+
+  <!-- Thumbnails -->
+  <div class="thumbs-container">
+    <button class="thumb-nav left">‹</button>
+    <div class="thumbs-wrapper" id="park-thumbs-wrapper">
+      <!-- thumbs injected via JS -->
+    </div>
+    <button class="thumb-nav right">›</button>
+  </div>
+    <!-- Report btn -->
+  <div class="report-btn park">Report</div>
+</section>
+
+<!-- If no media -->
+<div id="no-park-media"></div>
+
+<div class="general-max-width margin-auto p50">
+  <!-- ALL CAMPGROUNDS / CAMPSITES -->
+  <section id="park-campsites">
+    <h2><%= park.name %> Campsites</h2>
+    <!-- Campgrounds and their campsites (or just campsites if no campground) -->
+      <% if (park.campgrounds && park.campgrounds.length) { %>
+      <% park.campgrounds.forEach(cg => { %>
+        <div class="campground" data-cg-slug="<%= cg.slug %>" id="<%= cg.slug %>">
+          <h3><%= cg.name %> <span><%= cg.sitesRanges ? `(${cg.sitesRanges})` : '' %></span></h3>
+          <ul class="campsite-list">
+            <% if (cg.campsites && cg.campsites.length) { %>
+              <% cg.campsites.forEach(cs => { %>
+                <li
+                  class="campsite <%= cs.hasMedia ? 'has-media' : 'no-media' %>"
+                  data-cs-slug="<%= cs.slug %>"
+                  data-cg-slug="<%= cg?.slug || '' %>"
+                  data-has-cg="<%= !!cg %>"
+                >
+                  <%= cs.siteNumber %>
+                  <% if (cs.mediaCount) { %>
+                    <span class="media-badge"><%= cs.mediaCount %></span>
+                  <% } %>
+                </li>
+              <% }) %>
+            <% } else { %>
+              <li><em>No campsites listed for this campground yet</em></li>
+            <% } %>
+          </ul>
+        </div>
+      <% }) %>
+    <% } %>
+
+    <% if ((!park.campgrounds || !park.campgrounds.length) && park.campsites && park.campsites.length) { %>
+      <div class="standalone-campsites">
+        <h3>Individual Campsites</h3>
+        <ul class="campsite-list">
+          <% park.campsites.forEach(cs => { %>
+            <li
+              class="campsite <%= cs.hasMedia ? 'has-media' : 'no-media' %>"
+              data-cs-slug="<%= cs.slug %>"
+              data-has-cg="false"
+            >
+              Site <%= cs.siteNumber %>
+              <% if (cs.mediaCount) { %>
+                <span class="media-badge"><%= cs.mediaCount %></span>
+              <% } %>
+            </li>
+          <% }) %>
+        </ul>
+      </div>
+    <% } %>
+
+    <% if ((!park.campgrounds || !park.campgrounds.length) && (!park.campsites || !park.campsites.length)) { %>
+      <p>No campsites are listed for this park yet. Check back soon, or <a href="/other/contact?email_subject=Add Campsites to <%=park.name%>" target="_blank">contact us</a> if you want to upload media to this park's campsites!</p>
+    <% } %>
+  </section>
+
+  <!-- PARK MEDIA UPLOAD -->
+  <section id="park-media">
+
+    <!-- Filter images and videos -->
+    <!-- <div id="media-filters"></div> -->
+
+
+    <!-- If logged in, allow upload (max per person) -->
+    <% if (currentUser && currentUser.email_verified) { %>
+      <!-- Include park media upload modal -->
+      <%- include('../partials/modals/modal', {
+        id: 'park-media-upload',
+        contentPartial: 'parkMediaUpload',
+        switcher: true,
+        data: data || {} 
+      }) %>
+
+
+      <button id="open-upload-park-media-modal" class="btn btn-primary" style="margin: auto;">Upload Park Media</button>
+
+      <!-- <hr width="100%"> -->
+    <% } else { %>
+      <div style="margin: 100px auto 0px auto; text-align: center;">Log in to submit your own park photos/videos!</div>
+    <% } %>
+  </section>
+
+  <!-- REVIEWS -->
+  <!-- <section id="park-reviews"> -->
+    <!-- <h2><%= park.name %> Reviews</h2> -->
+
+    <!-- Show average rating -->
+    <!-- <div id="park-average-rating"></div> -->
+    <!-- Show reviews here -->
+    <!-- <div id="park-reviews-list"> -->
+      <!-- <% park.reviews?.forEach(r => { %> -->
+        <!-- <div class="review"> -->
+          <!-- <strong><%= r.user.username %></strong> -->
+          <!-- <span>⭐ <%= r.rating %>/5</span> -->
+          <!-- <p><%= r.text %></p> -->
+        <!-- </div> -->
+      <!-- <% }) %> -->
+      <!-- If no reviews -->
+      <!-- <% if(!park.reviews?.length){ %> -->
+        <!-- <p>No reviews</p> -->
+      <!-- <% } %> -->
+    <!-- </div> -->
+    
+    <!-- If logged in, a delete and edit button -->
+      
+    <!-- Show "report" button -->
+    
+    
+    <!-- If logged in, allow leaving a review (max 1 per person, max 100 characters) -->
+    <!-- <% if (currentUser) { %> -->
+    <!-- <form id="park-review-form"> -->
+      <!-- <select name="rating"> -->
+        <!-- <option value="5">5</option> -->
+        <!-- <option value="4">4</option> -->
+        <!-- <option value="3">3</option> -->
+        <!-- <option value="2">2</option> -->
+        <!-- <option value="1">1</option> -->
+      <!-- </select> -->
+      <!-- <textarea name="text" maxlength="100" placeholder="Your review"></textarea> -->
+      <!-- <button>Submit Review</button> -->
+    <!-- </form> -->
+    <!-- <% } %> -->
+  <!-- </section> -->
+
+</div>
+
+<script src="/js/swiper-bundle.min.js"></script>
+<script src="/js/parkMediaSlider.js"></script>
+<script src="/js/showPark.js"></script>
+

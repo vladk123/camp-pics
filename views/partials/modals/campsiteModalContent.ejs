@@ -1,0 +1,114 @@
+
+<div class="campsite-modal-wrapper">
+    <svg class="close-campsite-modal modal-close" id="close-campsite-modal" width="800px" height="800px" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12Z" stroke="#000000" stroke-width="2"/>
+        <path d="M9 9L15 15M15 9L9 15" stroke="#000000" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+    <div>
+         <!-- Title set from JS -->
+        <h2 id="campsite-modal-title"></h2>
+
+        <!-- MEDIA BLOCK: main slider + thumbs below -->
+        <div class="campsite-media-block">
+
+            <div class="campsite-media-inner">
+                <!-- Main slider -->
+                <div class="swiper campsiteSwiper" id="campsite-swiper">
+                <div class="swiper-wrapper" id="campsite-swiper-wrapper"></div>
+
+                <!-- Navigation arrows -->
+                <div class="swiper-button-next campsite-swiper-next"></div>
+                <div class="swiper-button-prev campsite-swiper-prev"></div>
+                </div>
+            </div>
+
+            <!-- Thumbnails row (like park) -->
+            <div class="thumbs-container thumbs-container-campsite">
+            <button class="thumb-nav left campsite-thumb-left">‹</button>
+            <div class="thumbs-wrapper" id="campsite-thumbs-wrapper">
+                <!-- thumbs injected via JS -->
+            </div>
+            <button class="thumb-nav right campsite-thumb-right">›</button>
+            </div>
+        </div>
+
+        <!-- Report btn -->
+        <div class="report-btn campsite">Report</div>
+
+        <!-- Upload section: EXACT logic from your old #campsite-popup -->
+        <% if (currentUser && currentUser.email_verified) { %>
+            <div class="upload-section" id="modal-upload-section">
+            <form class="campsite-photo-form upload-form" enctype="multipart/form-data">
+                <h3>Upload Photo(s)</h3>
+
+                <div class="form-group">
+                <label>* Photos</label>
+                <input type="file" name="photos" accept="image/*" multiple required>
+                <div class="form-input-rules">Maximum 5 photos per campsite</div>
+                </div>
+
+                <div class="form-group">
+                <label>Caption</label>
+                <input type="text" name="caption" placeholder="Great view of the lake." maxlength="50">
+                <div class="form-input-rules">Will apply to all selected photos</div>
+                </div>
+
+                <div class="form-group">
+                    <label>* Date photo was taken</label>
+                    <input type="date" name="dateTaken" required>
+                </div>
+
+                <div class="form-group checkbox-group">
+                <label>
+                    <input type="checkbox" name="showUsername" value="true">
+                    Show your nickname under the photo?
+                </label>
+                </div>
+
+                <button class="btn btn-secondary" type="submit">Upload Photo(s)</button>
+            </form>
+
+            <form class="campsite-video-form upload-form">
+                <h3>Upload Video</h3>
+
+                <div class="form-group">
+                <label>* YouTube Video URL</label>
+                <input type="url" name="url" placeholder="https://www.youtube.com/watch?v=abc_video_url" required>
+                </div>
+
+                <div class="form-group">
+                <label>Caption (optional)</label>
+                <input type="text" name="caption" placeholder="Large fire pit." maxlength="50">
+                </div>
+
+                <div class="form-group">
+                    <label>* Date video was taken</label>
+                    <input type="date" name="dateTaken" required>
+                </div>
+
+                <div class="form-group checkbox-group">
+                <label>
+                    <input type="checkbox" name="showUsername" value="true">
+                    Show your nickname under the video?
+                </label>
+                </div>
+
+                <button class="btn btn-secondary" type="submit">Upload Video</button>
+            </form>
+            </div>
+
+        <% } else if (currentUser && !currentUser.email_verified) { %>
+            <div class="upload-section">
+            <p>Verify your email before you can upload! Visit your <a href="/user/account">account</a> page.</p>
+            </div>
+
+        <% } else { %>
+            <div class="upload-section">
+            <p style="padding: 20px; margin: auto;">Log in to submit your own photos/videos!</p>
+            </div>
+        <% } %>
+
+    </div>
+
+ 
+</div>

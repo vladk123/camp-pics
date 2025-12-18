@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+Disallow: /camp/search
+Sitemap: https://camppics.ca/sitemap.xml

@@ -1,0 +1,50 @@
+<% layout('/layouts/boilerplate') %>
+
+<div class="general-max-width margin-auto p50 p0-top">
+  <h1>All Camping Parks In Canada</h1>
+  <div>National, provincial, and territorial parks that offer camping.</div>
+
+  <%- include('../partials/search') %>
+
+  <script>
+    // Serialize safely to avoid XSS or JSON parsing issues
+    window.ALL_PARKS = <%- JSON.stringify(parks) %>;
+  </script>
+
+  <link rel="stylesheet" href="/css/allParks.css">
+  <link rel="stylesheet" href="/css/leaflet.css">
+  <script src="/js/external-scripts/leaflet.js"></script>
+
+
+
+  <div id="all-parks-container">
+    <div id="map-column">
+      <div id="all-parks-map"></div>
+    </div>
+    <div id="lists-column">
+      <div id="province-list">
+        <ul></ul>
+      </div>
+    </div>
+  </div>
+  <p>Note: Quebec provincial parks will be added in the future.</p>
+
+  <div id="park-list"></div>
+  <div id="crawlable-park-list">
+    <ul>
+      <% parks.forEach(p => { %>
+        <li>
+          <a href="/camp<%= p.slug %>">
+            <%= p.name %>
+          </a>
+        </li>
+      <% }) %>
+    </ul>
+  </div>
+</div>
+
+
+
+
+
+<script src="/js/allParks.js"></script>

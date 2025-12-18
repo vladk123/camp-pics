@@ -1,0 +1,66 @@
+<% layout('/layouts/boilerplate') %>
+
+<div class="general-max-width margin-auto p50 p0-top">
+    
+    <h1>Search: '<%= data.query %>'</h1>
+    <div><%= data.results.length%> results.</div>
+    <%- include('../partials/search') %>
+    <div id="park-list">
+    <% for (result of data.results) { %>
+        
+        <!-- If park -->
+        <% if (!result.parentPark) { %>
+            <div class="park-result-div">
+                <a href="/camp<%= result.slug %>" translate="no">
+                    <img src="<%= result.image || '/images/icons/not-found.jpg' %>">
+                    <!-- </a> -->
+
+                    <!-- <a href="/camp<%= result.slug %>"> -->
+                        <!-- name -->
+                        <div  translate="no"><%- result._nameHighlighted %></div>
+                    <!-- </a> -->
+
+                    <!-- province -->
+                    <div style="font-size: var(--font-extra-extra-small); font-weight: normal;" translate="no">
+                        <%- result._provinceHighlighted %>
+                    </div>
+                </a>
+            </div>
+
+        <!-- If campground -->
+        <% } else { %>
+
+            <div class="park-result-div">
+                <a href="/camp<%= result.slug %>">
+                    <img src="<%= result.image || '/images/icons/not-found.jpg' %>">
+                <!-- </a> -->
+
+                <!-- parent park -->
+                <!-- <a href="/camp/park/<%= toSlug(result.parentPark) %>"> -->
+                    <%- result._parentHighlighted %>
+                <!-- </a> -->
+
+                <!-- campground name -->
+                <!-- <a style="font-size: var(--font-extra-small);"
+                   href="/camp/park/<%= toSlug(result.parentPark) %>#<%= toSlug(result.parentPark) %>-<%= toSlug(result.name) %>"> -->
+                <div style="font-size: var(--font-extra-small);">
+                   <%- result._nameHighlighted %>
+                </div> 
+                
+
+                <!-- province -->
+                <div style="font-size: var(--font-extra-extra-small); font-weight: normal;">
+                    <%- result._provinceHighlighted %>
+                </div>
+                </a>
+            </div>
+
+        <% } %>
+
+    <% } %>
+    </div>
+
+    <% if (!data.results.length) { %>
+        <p>No results. Try seeing <a href="/camp/all-parks">all parks</a>.</p>
+    <% } %>
+</div>

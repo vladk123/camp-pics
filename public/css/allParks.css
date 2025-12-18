@@ -1,0 +1,177 @@
+#all-parks-map.leaflet-container{
+  background: none;
+}
+
+.leaflet-popup-content-wrapper, .leaflet-popup-tip{
+  background-color: var(--eggshell) !important;
+}
+
+.leaflet-popup-content{
+  color: var(--brown)
+}
+
+.leaflet-bottom.leaflet-right .leaflet-control-attribution.leaflet-control {
+  display: none !important;
+}
+
+.leaflet-container a.popup-link{
+  color: var(--orange);
+}
+
+.pulse-marker {
+  width: 18px;
+  height: 18px;
+  background: red;
+  border-radius: 50%;
+  animation: pulse 0.6s infinite alternate;
+}
+
+@keyframes pulse {
+  from { transform: scale(1); opacity: 1; }
+  to   { transform: scale(1.4); opacity: 0.5; }
+}
+
+#all-parks-container {
+    display: flex;
+    /* flex-wrap: wrap; */
+    justify-content: center;
+    align-items: flex-start;
+    /* gap: 1rem; */
+    width: 100%;
+    /* max-width: 1600px; */
+    margin: 0px auto 30px auto;
+    /* padding: 1rem; */
+    box-sizing: border-box;
+    background-color: white;
+    border: var(--light-brown) 2px solid;
+    border-radius: 5px;
+    box-shadow: #0000003d 0px 4px 4px;
+}
+[data-theme="dark"] #all-parks-container {
+    background-color: #1c1c1a;
+}
+
+
+#all-parks-map {
+  width: 100%;
+  height: calc(100vh - 200px); /* adjust this if header/footer are large */
+  max-width: 1200px;
+  margin: 0 auto;
+  min-height: 400px;
+}
+
+.back-to-canada.leaflet-control{
+  border: var(--darker-orange) 3px solid;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: var(--font-extra-small);
+  box-shadow: #00000042 0px 4px 4px;
+  color: white;
+}
+
+#map-column {
+  flex: 1 1 65%; /* main content */
+  min-width: 500px;
+  width: 100%;
+}
+
+#lists-column {
+  flex: 1 1 30%; /* side panel */
+  min-width: 280px;
+  display: flex;
+  flex-direction: column;
+  /* gap: 1rem; */
+  width: 100%;
+  align-items: stretch;
+  margin: 0px 25px;
+  align-self: center;
+  border-left: var(--light-brown) 3px solid;
+}
+
+
+/* Lists styling */
+#province-list{
+  overflow-y: auto;
+}
+
+#province-list ul{
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  /* background: #f7f7f7; */
+  /* border-radius: 8px; */
+  /* border: 1px solid #ccc; */
+  overflow-y: auto;
+  max-height: 70vh;
+  margin-left: 25px;
+  text-align: center;
+}
+
+#province-list li{
+  padding: 8px 10px;
+  border-bottom: 1px solid #ddd;
+  cursor: pointer;
+}
+#province-list li:hover{
+  background: var(--light-brown);
+}
+
+#province-list li:last-child{
+  border-bottom: none;
+}
+
+.selected-province {
+  font-weight: bold;
+  color: var(--orange);
+}
+
+@media (max-width: 992px) {
+  #all-parks-container {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  #map-column, #lists-column {
+    flex: 1 1 100%;
+    /* max-width: 95%; */
+  }
+
+  #all-parks-map {
+    height: 60vh;
+  }
+
+  #lists-column{
+    border-left: none;
+    margin: 10px;
+  }
+
+  #province-list{
+    max-height: 40vh;
+    margin: auto;
+  }
+
+  #province-list ul {
+    margin-left: 0px;
+  }
+
+
+}
+
+@media(max-width: 600px){
+  #map-column {
+    min-width:unset;
+    width: 100%;
+  }
+  #lists-column {
+    min-width: unset;
+  }
+  #all-parks-map {
+    height: 40vh;
+    max-width: 100%;
+  }
+}
+  
+
+#crawlable-park-list{
+  display: none;
+}

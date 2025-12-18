@@ -1,0 +1,17 @@
+<form id="search-parent" <% if(data?.isHomepage) { %>class='home'<% } %> action="/camp/search" method="get">
+    <div id="search-box-container">
+        <!-- <button id="search-btn">
+            <i class="fa-solid fa-magnifying-glass"></i>
+        </button> -->
+        <div id="search-box-container-left-padding"></div>
+        <input name="q" type="text" id="search-input-box" placeholder="Search for a national or provincial park." maxlength="50">
+        <button id="search-btn">
+            <i class="fa-solid fa-magnifying-glass"></i>
+        </button>
+        <!-- <div id="clear-search">
+            <i class="fa-solid fa-xmark"></i>
+        </div> -->
+    </div>
+</form>
+
+<!--  -->

@@ -1,0 +1,181 @@
+<% layout('/layouts/boilerplate') %>
+<%- include('../partials/search') %>
+
+<h1>Admin Dashboard</h1>
+
+<section>
+  <h2>Recent Uploads</h2>
+  <div id="uploads">
+    <% uploads.forEach(u => { %>
+      <div class="upload-item">
+        <div>
+          <strong><%= u.mediaType %></strong>
+          by <%= u.userId?.fname || 'Unknown' %> (<%= u.userId?.username %>)
+          — <%= new Date(u.createdAt).toLocaleString() %>
+        </div>
+        <div>
+          Park: <%= u.parkName || 'N/A' %>
+          <% if (u.campgroundName) { %> | CG: <%= u.campgroundName %><% } %>
+          <% if (u.campsiteName) { %> | Site: <%= u.campsiteName %><% } %>
+        </div>
+
+        <% if (u.mediaType === 'photo' && u.cloudinaryId) { %>
+            <a href="<%= u.cloudinaryId %>" target="_blank">
+                <img src="<%= u.cloudinaryId %>" class="thumb" alt="photo thumbnail">
+            </a>
+        <% } else if (u.mediaType === 'video' && u.youtubeId) { %>
+            <a href="<%= u.youtubeId %>" target="_blank">
+                <img src="https://img.youtube.com/vi/<%= u.youtubeId.split('v=')[1]?.substring(0,11) %>/hqdefault.jpg" class="thumb" alt="YouTube thumbnail">
+            </a>
+        <% } %>
+
+      </div>
+    <% }) %>
+  </div>
+  <% if (hasMoreUploads) { %>
+    <button id="loadMoreUploads">Load more uploads</button>
+  <% } %>
+</section>
+
+<hr>
+
+<section>
+  <h2>Recent Users</h2>
+  <div id="users">
+    <% users.forEach(u => { %>
+      <div class="user-item">
+        <strong><%= u.fname %></strong> — <%= u.username %> 
+        (joined <%= new Date(u.date_created).toLocaleDateString() %>)
+        
+        <% if (u.blocked) { %>
+          <form action="/a/user/<%= u._id %>/unblock" method="POST" class="inline-form" onsubmit="return confirm('Unblock this user?')">
+            <button type="submit" class="unblock-btn">Unblock</button>
+          </form>
+        <% } else { %>
+          <form action="/a/user/<%= u._id %>/block" method="POST" class="inline-form" onsubmit="return confirm('Block this user?')">
+            <button type="submit" class="block-btn">Block</button>
+          </form>
+        <% } %>
+      </div>
+
+    <% }) %>
+  </div>
+  <% if (hasMoreUsers) { %>
+    <button id="loadMoreUsers">Load more users</button>
+  <% } %>
+</section>
+
+<style>
+.upload-item, .user-item {
+  margin-bottom: 15px;
+  border-bottom: 1px solid #ccc;
+  padding-bottom: 10px;
+}
+.upload-item a {
+  width: min-content;
+  display: block;
+}
+.thumb {
+  display: block;
+  margin-top: 5px;
+  max-width: 200px;
+  max-height: 200px;
+  height: auto;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.inline-form {
+  display: inline;
+  margin-left: 10px;
+}
+
+.block-btn, .unblock-btn {
+  border: none;
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 0.9em;
+}
+
+.block-btn {
+  background: #d9534f;
+  color: white;
+}
+
+.block-btn:hover {
+  background: #c9302c;
+}
+
+.unblock-btn {
+  background: #5cb85c;
+  color: white;
+}
+
+.unblock-btn:hover {
+  background: #449d44;
+}
+
+</style>
+
+<script>
+let uploadPage = <%= uploadPage %>;
+let userPage = <%= userPage %>;
+
+async function fetchMoreUploads() {
+  uploadPage++;
+  const res = await fetch(`/a/dashboard?uploadPage=${uploadPage}`, {
+    headers: { 'Accept': 'application/json' }
+  });
+  const data = await res.json();
+  const uploadsDiv = document.getElementById('uploads');
+
+  data.uploads.forEach(u => {
+    const wrap = document.createElement('div');
+    wrap.className = 'upload-item';
+    const parkName = u.parkName || 'N/A';
+    const cgName = u.campgroundName ? ` | CG: ${u.campgroundName}` : '';
+    const csName = u.campsiteName ? ` | Site: ${u.campsiteName}` : '';
+
+    const thumbHTML =
+        u.mediaType === 'photo' && u.cloudinaryId
+            ? `<a href="${u.cloudinaryId}" target="_blank">
+                <img src="${u.cloudinaryId}" class="thumb">
+            </a>`
+            : u.mediaType === 'video' && u.youtubeId
+            ? `<a href="${u.youtubeId}" target="_blank">
+                <img src="https://img.youtube.com/vi/${u.youtubeId.split('v=')[1]?.substring(0,11)}/hqdefault.jpg" class="thumb">
+            </a>`
+            : '';
+
+
+    wrap.innerHTML = `
+      <div><strong>${u.mediaType}</strong> by ${u.userId?.fname || 'Unknown'} (${u.userId?.username})
+        — ${new Date(u.createdAt).toLocaleString()}</div>
+      <div>Park: ${parkName}${cgName}${csName}</div>
+      ${thumbHTML}
+    `;
+    uploadsDiv.appendChild(wrap);
+  });
+
+  if (!data.hasMoreUploads) document.getElementById('loadMoreUploads')?.remove();
+}
+
+async function fetchMoreUsers() {
+  userPage++;
+  const res = await fetch(`/a/dashboard?userPage=${userPage}`, {
+    headers: { 'Accept': 'application/json' }
+  });
+  const data = await res.json();
+  const usersDiv = document.getElementById('users');
+  data.users.forEach(u => {
+    const el = document.createElement('div');
+    el.className = 'user-item';
+    el.innerHTML = `<strong>${u.fname}</strong> — ${u.username} (joined ${new Date(u.date_created).toLocaleDateString()})`;
+    usersDiv.appendChild(el);
+  });
+  if (!data.hasMoreUsers) document.getElementById('loadMoreUsers')?.remove();
+}
+
+document.getElementById('loadMoreUploads')?.addEventListener('click', fetchMoreUploads);
+document.getElementById('loadMoreUsers')?.addEventListener('click', fetchMoreUsers);
+</script>

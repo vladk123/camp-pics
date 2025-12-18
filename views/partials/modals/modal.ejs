@@ -1,0 +1,12 @@
+<% const safeData = typeof data !== 'undefined' ? data : {}; %>
+
+<div id="<%= id %>-parent" class="hidden modal-parent">
+  <div id="<%= id %>" class="modal">
+    <div class="modal-tear-left"></div>
+    <div class="modal-content">
+
+      <%- include(`./${contentPartial}`, safeData) %>
+    </div>
+    <div class="modal-tear-right"></div>
+  </div>
+</div>

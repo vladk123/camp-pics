@@ -1,0 +1,53 @@
+<nav id="navbar" <% if(data?.isHomepage) { %>class="home"<% } %>>
+  <% if (!data?.isHomepage) { %>
+    <div class="nav-tear">
+      <img src="/images/partials/content-top-ripped.png">
+    </div>
+  <% } %>
+
+  <div class="background"></div>
+
+  <!-- Mobile menu toggle -->
+  <div id="nav-mobile-toggle" aria-label="Toggle navigation" aria-expanded="false">
+    <div class="bar"></div>
+    <div class="bar"></div>
+    <div class="bar"></div>
+  </div>
+
+  <!-- Slide-in links -->
+  <div id="nav-links">
+    <div class="nav-close" id="nav-close-btn">✕</div>  <!-- new close button -->
+
+    <a class="<% if(data?.isHomepage) { %>highlighted<% } %>" href="/">Home</a>
+    <a class="<% if (data?.currentPath?.includes('/all-parks')) { %>highlighted<% } %>" href="/camp/all-parks">Parks</a>
+    <a class="<% if (data?.currentPath?.includes('/faq')) { %>highlighted<% } %>" href="/other/faq">FAQ</a>
+    <a class="<% if (data?.currentPath?.includes('/contact')) { %>highlighted<% } %>" href="/other/contact">Contact</a>
+
+    <% if (currentUser){ %>
+      <a class="<% if (data?.currentPath?.includes('/user/account')) { %>highlighted<% } %>" id="nav-my-account-btn" href="/user/account">Account</a>
+    <% } %>
+
+    <% if (!currentUser){ %>
+      <div id="nav-open-login-modal">Login</div>
+    <% } else { %>
+      <form id="logout-form" action="/user/logout" method="POST" style="display:none;"></form>
+      <div id="nav-logout">Logout</div>
+    <% } %>
+
+    <% if (currentUser?.isAdmin){ %>
+      <a href="/a/dashboard">.</a>
+    <% } %>
+    <button
+      id="themeToggle"
+      class="theme-toggle"
+      aria-label="Toggle dark mode"
+      type="button"
+    >
+      <span class="sun">☀</span>
+      <span class="moon">☾</span>
+    </button>
+  </div>
+</nav>
+
+<!-- BACKDROP for mobile menu -->
+<div id="nav-backdrop"></div>

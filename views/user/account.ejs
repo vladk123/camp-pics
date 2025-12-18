@@ -1,0 +1,120 @@
+<% layout('/layouts/boilerplate') %>
+<div class="general-max-width margin-auto p50 p0-top account">
+  <h1>My Account</h1>
+  <%- // include('../partials/search') %>
+  <div class="flex-column">
+    <h2>Basics</h2>
+    <div class="small-header">Email</div>
+    <div><%= currentUser?.username%></div>
+    <br>
+    <div class="small-header">Nickname</div>
+    <div><%= currentUser?.fname%></div>
+  </div>
+
+  <div class="flex-column">
+    <% if (currentUser && currentUser.email_verified) { %>
+      <h2>Password Reset</h2>
+      <!-- RESET PASSWORD FORM -->
+      <div class="reset-password-section">
+          <form action="/user/change-password" method="post" class="auth-form">
+              <div class="form-group">
+                <label for="reset-original-password">Original Password</label>
+                <input type="password" id="reset-original-password" name="original_password" placeholder="" required>
+              </div>
+
+              <div class="form-group">
+                <label for="reset-new-password">New Password</label>
+                <input 
+                  id="reset-new-password"
+                  type="password"
+                  name="new_password"
+                  placeholder=""
+                  required
+                  pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d@$!%*?&]{8,30}"
+                  title="8–30 characters, at least one uppercase, one lowercase, and one number"
+                />
+              </div>
+
+              <div class="form-group">
+                <label for="reset-new-repeat-password">Repeat New Password</label>
+                <input type="password" id="reset-new-repeat-password" name="new_password_repeat" placeholder="" required>
+              </div>
+
+              <p>Must meet the criteria: 8-30 characters, at least one uppercase letter, one lowercase letter and one number</p>
+              <button class="btn btn-primary">Reset Password</button>
+          </form>
+          <p class="forgot-text">
+              <!-- <span id="login-btn" class="link-text">Back to login</span> -->
+          </p>
+      </div>
+    <% } else { %>
+      <h2>Verify Your Account Email</h2>
+      <% if(currentUser?.token_counter < 2){ %>
+        <p>Your email still needs to be verified. If you did not receieve an email with the code, or lost it, please click the button below.</p>
+        <p>You have <%= 2 - currentUser?.token_counter %> more attempt(s) before your account is locked (contact us if this occurs or if you're not receiving the emails).</p>
+        <form action="/user/resend-verification" method="get">
+          <button id="re-verify-account-btn" class="btn btn-primary">Send New Verification Code</button>
+        </form>
+      <% } else { %>
+        <p>You've run out of verification attempts. Contact us if you still want to get verified.</p>
+      <% } %>
+    <% } %>
+  </div>
+  
+
+  <div class="flex-column">
+    <h2>Delete</h2>
+    <p>Please note: Deleting the your account will permanently delete all your uploaded media as well. This process is not reversible.</p>
+    <!-- <form id="delete-account-form" action="/user/delete-account" method="post">
+        <button class="btn-primary">Delete Account</button>
+    </form> -->
+
+    <!-- Delete Account button -->
+    <button id="delete-account-btn" class="btn btn-primary danger margin-auto">Delete Account</button>
+
+    <!-- Delete Account modals insert point -->
+    <div id="delete-account-modal-backdrop-insert"></div>
+
+    <!-- First confirm modal -->
+    <div id="delete-account-modal" class="modal-parent hidden" data-modal-id="deleteAccount1">
+      <div class="modal-content delete-account-modal">
+        <span class="delete-account-modal-close">&times;</span>
+        <h2>Delete Account</h2>
+        <p>Are you sure you want to delete your account?</p>
+        <div class="modal-actions">
+          <button id="confirm-step1" class="btn btn-secondary danger">Yes, continue</button>
+          <button class="btn btn-secondary delete-account-modal-close">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Second confirm modal -->
+    <div id="delete-account-modal-2" class="modal-parent hidden" data-modal-id="deleteAccount2">
+      <div class="modal-content delete-account-modal">
+        <span class="delete-account-modal-close">&times;</span>
+        <h2>Final Confirmation</h2>
+        <p>All your <strong>photos and videos</strong> will be permanently deleted.</p>
+        <div class="modal-actions">
+          <form action="/user/delete-account" method="post">
+            <button type="submit" class="btn btn-secondary danger">Yes, delete everything</button>
+          </form>
+          <button class="btn btn-secondary delete-account-modal-close">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- <script>
+    document.getElementById('delete-account-form').addEventListener('submit', function (e) {
+      const first = confirm('Are you sure you want to delete your account?');
+      if (!first) return e.preventDefault();
+    
+      const second = confirm('Do you understand that all your uploaded photos and videos will be permanently deleted?');
+      if (!second) return e.preventDefault();
+    });
+</script>
+ -->
+
+ <script type="text/javascript" src="/js/account.js"></script>
