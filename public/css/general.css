@@ -536,6 +536,11 @@ a:hover {
   border-radius: 10px;
 }
 
+[data-theme="dark"] #search-parent.home {
+  border: var(--light-brown) solid 3px;
+
+}
+
 #search-parent:not(.home){
   margin-bottom: 75px;
 }
@@ -584,6 +589,9 @@ a:hover {
     font-size: var(--font-small);
     padding: 10px 12px;
 }
+[data-theme="dark"] #search-input-box {
+    color: rgb(208, 208, 208);
+}
 
 #clear-search{
   padding: 0 10px;
@@ -615,7 +623,13 @@ a:hover {
   color:  var(--white);
 }
 
+@media (max-width: 768px) {
+  #search-input-box > div{
+    
+  }
+}
 
+/* Footer */
 footer{
     margin-top: 25px;
     width: 100%;
