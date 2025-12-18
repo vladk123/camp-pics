@@ -93,10 +93,9 @@
 
 
 		<!-- <script src="/js/scrollToTop.js"></script> -->
+		<script type="text/javascript" src="/js/flash-messages.js"></script>
 		<script type="text/javascript" src="/js/general.js"></script>
 		<script type="text/javascript" src="/js/login.js"></script>
-		<script type="text/javascript" src="/js/flash-messages.js"></script>
-
 				
 		<!-- Handle error messages -->
 		<% if(success && success.length) { %> <script> createFlashMsg('success', '<%= success %>', 'success-msg', 5) </script> <% } %>
@@ -104,7 +103,9 @@
 		<% if(warning && warning.length) { %> <script> createFlashMsg('warning', '<%= warning %>', 'warning-msg', 10) </script> <% } %>
 		<% if(error && error.length) { %> <script> createFlashMsg('error', '<%= error %>', 'error-msg', 15) </script> <% } %>
 
-		<button id="scrollToTopBtn" aria-label="Scroll to top">▲</button>
+		<button id="scrollToTopBtn" aria-label="Scroll to top">
+			<div>▲</div>
+		</button>
 
 	</body>
 </html>

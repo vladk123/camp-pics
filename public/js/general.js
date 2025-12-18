@@ -28,7 +28,20 @@ userMediaThemeSettings.addEventListener('change', e => {
   document.documentElement.dataset.theme = e.matches ? 'dark' : 'light';
 });
 
-
+// Notify user if is using a dark reader extension (it'll look bad)
+document.addEventListener("DOMContentLoaded", () => {
+  (function isDarkReaderEnabled() {
+    const metaElement = document.querySelector('head meta[name="darkreader"]');
+    const darkReaderMsgShown = localStorage.getItem('darkReaderMsgShown');
+    // console.log(darkReaderMsgShown)
+    if(!darkReaderMsgShown){
+      localStorage.setItem('darkReaderMsgShown', true);
+    }
+    if(metaElement && !darkReaderMsgShown){
+      createFlashMsg('info', 'You may have a dark reader extension in your browser - we suggest disabling that to avoid this website from looking unusual.', 'dark-reader-msg', 120);
+    }
+  })()
+})
 
 ////// MODALS
 const modalCloseBtns = document.querySelectorAll('.modal-close')
