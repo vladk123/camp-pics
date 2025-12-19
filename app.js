@@ -191,6 +191,7 @@ const styleSrcUrls = [
 ];
 const connectSrcUrls = [
 	'https://www.googletagmanager.com', // For Google Tag Manager (GA Analytics)
+	'https://www.google-analytics.com', // For tag manager to send GA4 analytics from actions
 ];
 const fontSrcUrls = [
 	'https://cdnjs.cloudflare.com'
