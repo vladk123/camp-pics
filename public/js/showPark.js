@@ -613,6 +613,38 @@ async function submitForm(form, endpoint, { isFile = false, refresh = 'none' } =
       await refreshCampsitePopup();
     }
 
+    // If it's a park media upload, after upload, close modal and scroll user to top of page
+    if (refresh === 'park') {
+      // Close park media upload modal
+      const modal = document.getElementById('park-media-upload-parent');
+      modal?.classList.add('hidden');
+
+      // Remove its backdrop
+      const backdrop = document.querySelector('.modal-backdrop[data-modal-id="park-media-upload"]');
+      backdrop?.remove();
+
+      // Scroll main window to top AFTER modal closes
+      setTimeout(() => {
+        const slider = document.getElementById('park-media-slider');
+        slider?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 150);
+    }
+
+    // If it's a campsite media upload, after upload, scroll user to top of modal
+    if (refresh === 'campsite') {
+      const modalParent = document.getElementById('campsite-modal-parent');
+      const wrapper = modalParent?.querySelector('.campsite-modal-wrapper > div');
+
+      if (wrapper) {
+        wrapper.scrollTop = 0;
+
+        // Safety re-run after DOM repaint
+        setTimeout(() => {
+          wrapper.scrollTop = 0;
+        }, 100);
+      }
+    }
+
     // Clear inputs after success (photo/video forms)
     if (
       form.classList.contains('campsite-photo-form') ||
