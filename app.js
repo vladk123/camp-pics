@@ -186,7 +186,8 @@ const scriptSrcUrls = [
 const styleSrcUrls = [
 	'https://cdnjs.cloudflare.com',
 	'https://fonts.googleapis.com',
-
+	'https://www.googletagmanager.com',
+	'https://www.google-analytics.com'
 ];
 const connectSrcUrls = [
 
