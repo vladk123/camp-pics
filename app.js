@@ -179,18 +179,18 @@ app.disable("x-powered-by")
 
 // Helmet config
 const scriptSrcUrls = [
-	'https://www.googletagmanager.com',
-	'https://www.google-analytics.com'
+	'https://www.googletagmanager.com', // For Google Tag Manager (GA Analytics)
+	'https://www.google-analytics.com' // For Google Tag Manager (GA Analytics)
 	
 ];
 const styleSrcUrls = [
 	'https://cdnjs.cloudflare.com',
 	'https://fonts.googleapis.com',
-	'https://www.googletagmanager.com',
-	'https://www.google-analytics.com'
+	'https://www.googletagmanager.com', // For Google Tag Manager (GA Analytics)
+	'https://www.google-analytics.com' // For Google Tag Manager (GA Analytics)
 ];
 const connectSrcUrls = [
-
+	'https://www.googletagmanager.com', // For Google Tag Manager (GA Analytics)
 ];
 const fontSrcUrls = [
 	'https://cdnjs.cloudflare.com'
