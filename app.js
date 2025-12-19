@@ -211,7 +211,7 @@ app.use(
 				styleSrc: ["'self'", "'unsafe-inline'", ...styleSrcUrls], // 
 				workerSrc: ["'self'",], // "blob:"
 				objectSrc: [],
-				imgSrc: ["'self'","data:","blob:", `https://res.cloudinary.com/${process.env.CLOUDINARY_CLOUD_NAME}/`, 'https://img.youtube.com'], //,
+				imgSrc: ["'self'","data:","blob:", `https://res.cloudinary.com/${process.env.CLOUDINARY_CLOUD_NAME}/`, 'https://img.youtube.com', 'https://www.googletagmanager.com'], //,
 				fontSrc: ["'self'", ...fontSrcUrls],
 				frameAncestors: ["'self'"], // What websites to allow to embed this site's pages on their page
 				frameSrc: ["'self'", 'https://www.youtube.com'], // What to allow to embed on this site (ex. Google Maps)
