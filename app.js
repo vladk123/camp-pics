@@ -179,11 +179,14 @@ app.disable("x-powered-by")
 
 // Helmet config
 const scriptSrcUrls = [
-
+	'https://www.googletagmanager.com',
+	'https://www.google-analytics.com'
 	
 ];
 const styleSrcUrls = [
-	'https://cdnjs.cloudflare.com'
+	'https://cdnjs.cloudflare.com',
+	'https://fonts.googleapis.com',
+
 ];
 const connectSrcUrls = [
 
