@@ -172,7 +172,11 @@
 /* .close-campsite-modal:hover {
   color: var(--orange);
 } */
-
+.close-park-media-modal{
+  position: absolute;
+  top: 20px;
+  right: 60px;
+}
 
 .popup-content {
   /* display: flex; */

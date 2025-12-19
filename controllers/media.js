@@ -134,13 +134,48 @@ export const uploadPhoto = async (req, res, next) => {
   }
 
   try {
-    // Parse multipart form before anything else
-    await new Promise((resolve, reject) => {
+    if (!req.is("multipart/form-data")) {
+      return res.status(400).json({ error: "Invalid form submission." });
+    }
+    // // Parse multipart form before anything else
+    // await new Promise((resolve, reject) => {
+    //   uploadMemory.array('photos', 5)(req, res, (err) => {
+    //     if (err) reject(err);
+    //     else resolve();
+    //   });
+    // });
+    await new Promise((resolve) => {
       uploadMemory.array('photos', 5)(req, res, (err) => {
-        if (err) reject(err);
-        else resolve();
+        if (!err) return resolve();
+
+        // HANDLE MULTER ERRORS HERE
+        if (err.code === "LIMIT_FILE_SIZE") {
+          res.status(413).json({
+            error: "Each file must be under 10MB.",
+            message: "Each file must be under 10MB.",
+          });
+          return;
+        }
+
+        if (err.code === "LIMIT_UNEXPECTED_FILE") {
+          res.status(400).json({
+            error: "Too many files uploaded.",
+            message: "Too many files uploaded.",
+          });
+          return;
+        }
+
+        // Any other Multer error
+        res.status(400).json({
+          error: "UPLOAD_ERROR",
+          message: err.message,
+        });
       });
     });
+
+    // STOP EXECUTION IF RESPONSE WAS SENT
+    if (res.headersSent) return;
+
 
     // Fields and files are now accessible
     if (!req.body.dateTaken) {
@@ -324,17 +359,34 @@ export const uploadPhoto = async (req, res, next) => {
       message,
     });
   } catch (err) {
-    console.log(err)
-    // cleanup logic same as before
-    if (createdUploads.length) await Upload.deleteMany({ _id: { $in: createdUploads } });
-    await Promise.all(uploadedCloudinary.map(id => cloudinary.uploader.destroy(id).catch(() => null)));
-    if (park && target) {
-      const toRemove = uploadedCloudinary.map(id => `/${id}`);
-      target.photos = target.photos.filter(p => !toRemove.some(r => p.url.includes(r)));
-      await park.save().catch(() => null);
-    }
-    next(err);
+  console.error(err);
+
+  // Cleanup (safe)
+  if (createdUploads.length) {
+    await Upload.deleteMany({ _id: { $in: createdUploads } });
   }
+
+  await Promise.all(
+    uploadedCloudinary.map(id =>
+      cloudinary.uploader.destroy(id).catch(() => null)
+    )
+  );
+
+  if (park && target) {
+    const toRemove = uploadedCloudinary.map(id => `/${id}`);
+    target.photos = target.photos.filter(
+      p => !toRemove.some(r => p.url.includes(r))
+    );
+    await park.save().catch(() => null);
+  }
+
+  // ALWAYS RESPOND JSON
+  return res.status(500).json({
+    error: "UPLOAD_FAILED",
+    message: "Upload failed. Please try again.",
+  });
+}
+
 };
 
 

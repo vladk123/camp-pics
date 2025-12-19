@@ -86,6 +86,7 @@
   </div>
     <!-- Report btn -->
   <div class="report-btn park">Report</div>
+  <p class="" style="text-align: center;">Upload Parks Photos and Videos <a href="#park-media">Below</a></p>
 </section>
 
 <!-- If no media -->
@@ -153,8 +154,7 @@
 
     <!-- Filter images and videos -->
     <!-- <div id="media-filters"></div> -->
-
-
+    <h2>Upload <%= park.name %> Media</h2>
     <!-- If logged in, allow upload (max per person) -->
     <% if (currentUser && currentUser.email_verified) { %>
       <!-- Include park media upload modal -->
