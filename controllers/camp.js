@@ -279,14 +279,6 @@ export const showPark = async (req, res, next) => {
     return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
   }
 
-  // Func to find approved park photo for social media (og:image)
-  function findParkOgImage(park) {
-    if (!Array.isArray(park.photos)) return null;
-  
-    const approved = park.photos.find(p => p.socialMediaApproved);
-    return approved ? approved.url : null;
-  }
-
   try {
     let { parkSlug } = req.params;
     parkSlug = toSlug(parkSlug);

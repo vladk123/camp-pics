@@ -157,11 +157,20 @@ mark{
   background-color: var(--yellow);
 }
 
-/* SCROLL TO TOP BUTTON */
-#scrollToTopBtn {
+/* BOTTOM-RIGHT Btns */
+#bottom-right-buttons{
   position: fixed;
-  bottom: 30px;
-  right: 30px;
+  bottom: 25px;
+  right: 25px;
+  gap: 5px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* SCROLL TO TOP BUTTON */
+#scroll-to-top-btn, #share-btn {
+  position:relative;
+
   width: 48px;
   height: 48px;
 
@@ -183,15 +192,26 @@ mark{
   z-index: 500;
 }
 
-#scrollToTopBtn:hover {
+#share-btn{
+  display: none;
+}
+
+#scroll-to-top-btn:hover, #share-btn:hover {
   transform: scale(1.12);
   background: var(--darker-orange);
 }
 
-#scrollToTopBtn.visible {
+#scroll-to-top-btn.visible {
   opacity: 0.95;
   pointer-events: auto;
 }
+
+#share-btn.visible {
+  display: flex;
+  opacity: 0.95;
+  pointer-events: auto;
+}
+
 
 
 /* NAVBAR */

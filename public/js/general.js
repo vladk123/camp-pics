@@ -1,3 +1,35 @@
+////// SOCIAL MEDIA
+const isProbablyMobile =
+  window.matchMedia('(pointer: coarse)').matches &&
+  window.matchMedia('(hover: none)').matches;
+
+const shareBtn = document.getElementById('share-btn');
+// console.log(shareBtn)
+const shareData = {
+  title: document.title,
+  text: window.PARK
+    ? `See and share photos of campsites in ${window.PARK.name}`
+    : `See and share photos of Canadian campsites.`,
+  url: window.location.href
+};
+
+if (!isProbablyMobile) {
+  shareBtn?.classList.remove('visible');
+}
+
+if (navigator.share && navigator.canShare?.(shareData)) {
+  shareBtn?.addEventListener('click', async () => {
+    try {
+      console.log('doing nav.share');
+      await navigator.share(shareData);
+    } catch (err) {
+      console.log('Share cancelled or failed');
+    }
+  });
+} else {
+  shareBtn?.classList.remove('visible');
+}
+
 ////// DARK MODE
 const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
 
@@ -136,7 +168,7 @@ function createModalBackdrop (modalId) {
 ////// SCROLL TO TOP
 // Scroll to top btn
 document.addEventListener("DOMContentLoaded", () => {
-  const btn = document.getElementById("scrollToTopBtn");
+  const btn = document.getElementById("scroll-to-top-btn");
 
   function toggleScrollBtn() {
     if (window.scrollY > 300) {

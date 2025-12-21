@@ -18,10 +18,19 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
 		<meta name="description" content="<%= meta?.description || 'Discover photos and videos of Canadian campsites.' %>">
 		<meta name="keywords" content="camp photos, camping, camp, canada, provincial park, national park, federal park, territorial park, campground, canadian camping">
+		<meta property="og:type" content="website" />
 		<meta property="og:title" content="<%= meta?.title || 'CampPics' %>">
 		<meta property="og:description" content="<%= meta?.description || '' %>">
 		<meta property="og:url" content="<%= meta?.url || '' %>">
 		<meta property="og:image" content="<%= meta?.image || 'https://camppics.ca/images/images/home-hero-summer.jpg' %>">
+		<!-- Facebook / Meta -->
+		<meta property="og:site_name" content="CampPics" />
+		<!-- X (Twitter) -->
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:title" content="<%= meta?.title || 'CampPics' %>" />
+		<meta name="twitter:description" content="<%= meta?.description || '' %>" />
+		<meta name="twitter:image" content="<%= meta?.image || 'https://camppics.ca/images/images/home-hero-summer.jpg' %>" />
+
 
 		<!-- Set dark/light mode -->
 		<script>
@@ -91,21 +100,25 @@
 		<div id="main-loading-overlay"></div>
 		
 
+		<div id="bottom-right-buttons">
+			<button id="scroll-to-top-btn" aria-label="Scroll to top">
+				<div>▲</div>
+			</button>
+			<button id="share-btn" class="visible" aria-label="Share page">
+				<div>&#128279;</div>
+			</button>
+		</div>
 
 		<!-- <script src="/js/scrollToTop.js"></script> -->
 		<script type="text/javascript" src="/js/flash-messages.js"></script>
 		<script type="text/javascript" src="/js/general.js"></script>
 		<script type="text/javascript" src="/js/login.js"></script>
-				
+
 		<!-- Handle error messages -->
 		<% if(success && success.length) { %> <script> createFlashMsg('success', '<%= success %>', 'success-msg', 5) </script> <% } %>
 		<% if(info && info.length) { %> <script> createFlashMsg('info', '<%= info %>', 'info-msg', 10) </script> <% } %>
 		<% if(warning && warning.length) { %> <script> createFlashMsg('warning', '<%= warning %>', 'warning-msg', 10) </script> <% } %>
 		<% if(error && error.length) { %> <script> createFlashMsg('error', '<%= error %>', 'error-msg', 15) </script> <% } %>
-
-		<button id="scrollToTopBtn" aria-label="Scroll to top">
-			<div>▲</div>
-		</button>
 
 	</body>
 </html>
