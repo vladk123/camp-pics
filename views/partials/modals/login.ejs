@@ -12,9 +12,9 @@
         </div>
 
         <!-- LOGIN FORM -->
-        <div id="login-form" class="auth-section">
+        <div id="login-form-div" class="auth-section">
             <!-- <h2>Welcome Back</h2> -->
-            <form action="/user/login" method="post" class="auth-form">
+            <form action="/user/login" id="login-form" method="post" class="auth-form">
                 <div class="form-group">
                     <label for="login-username">* Email</label>
                     <input type="text" id="login-username" name="username" placeholder="" required>
@@ -33,9 +33,9 @@
         </div>
 
         <!-- REGISTER FORM -->
-        <div id="register-form" class="auth-section hidden">
+        <div id="register-form-div" class="auth-section hidden">
             <!-- <h2>Create an Account</h2> -->
-            <form action="/user/register" method="post" class="auth-form" novalidate>
+            <form action="/user/register" id="register-form" method="post" class="auth-form" novalidate>
                 <div class="form-group">
                     <label for="register-fname">* Nickname</label>
                     <input type="text" id="register-fname" name="fname" placeholder="Bob"  maxlength="15" required>
@@ -78,9 +78,9 @@
         </div>
 
         <!-- Forgot PASSWORD FORM -->
-        <div id="forgot-password-form" class="auth-section hidden">
+        <div id="forgot-password-form-div" class="auth-section hidden">
             <h2>Forgot Password</h2>
-            <form action="/user/forgot-password" method="post" class="auth-form">
+            <form action="/user/forgot-password" id="forgot-password-form" method="post" class="auth-form">
                 <label for="forgot-username">* Email</label>
                 <input type="text" id="forgot-username" name="forgot_username" placeholder="" required>
                 <button class="btn btn-secondary">Send Reset Link</button>

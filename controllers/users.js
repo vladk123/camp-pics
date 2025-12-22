@@ -54,7 +54,12 @@ export const register = async(req, res, next) => {
         // Generate and email them the verification code
         await createNewUserVerify(req, res, next, user._id, user.username)
 
-        return redirectedFlash(req, res, 'success', `Registered! Please check your inbox to verify your email (link expires soon!).`, '/')
+        return redirectedFlash(req, res, 'success', `Registered! Please check your inbox to verify your email (link expires soon!).`, '/',
+            {GA4:{
+                event: 'sign_up',
+                user_id: newUser._id
+            }}
+        )
     } catch (err) {
         // console.error(err.errors)
         
@@ -124,7 +129,12 @@ export const login = async(req, res, next) => {
             redirectUrl = req.body.returnTo || '/';
         }
 
-        return redirectedFlash(req, res, 'success', 'Logged In!', redirectUrl);
+        return redirectedFlash(req, res, 'success', 'Logged In!', redirectUrl,
+            {GA4:{
+                event: 'login',
+                user_id: newUser._id
+            }}
+        );
     } catch (err) {
         next()
     }
@@ -132,12 +142,19 @@ export const login = async(req, res, next) => {
 }
 
 export const logout =  (req, res, next) => {
+    const userId = req.user._id
     req.logout(async function (err){
         if(err) return next(err)
         req.session.regenerate((err => {
             if (err) return next(err);
             const redirectUrl = '/';
-            redirectedFlash(req, res, 'success', 'Logged Out!', redirectUrl);
+            redirectedFlash(req, res, 'success', 'Logged Out!', redirectUrl,
+                {GA4:{
+                    event: 'logout',
+                    // user_id: userId // Cannot do this - otherwise it'll keep tracking this id, potentially causing compliance issues?
+                    user_id: null // Better to clear it on log-out
+                }}
+            );
         }))
     });
 
@@ -168,7 +185,12 @@ export const verify =  async(req, res, next) => {
         } else {
             await user.updateOne({$set: {email_verified: true}})
             await Token.findOneAndDelete({ _id: token._id })
-            return redirectedFlash(req, res, 'success', 'Your account is verified and you can now sign in and upload photos and videos!', '/login', true)
+            return redirectedFlash(req, res, 'success', 'Your account is verified and you can now sign in and upload photos and videos!', '/login',
+                {GA4:{
+                    event: 'user_verified',
+                    method: 'email_verification_code'
+                }}
+            )
         }
     } catch(e) {
         if (e.name == 'TypeError') {return expiredLinkRedirect()} 

@@ -13,6 +13,11 @@
 		</script>
 		<!-- End Google Tag Manager -->
 
+		<!-- If any GA4 data is passed from redirectedFlash in backend -->
+		<script>
+			window.__GA4_EVENT__ = <%- JSON.stringify(GA4_EVENT) %>;
+		</script>
+
 		<title><%= `${meta?.title} - CampPics` || "CampPics" %></title>
 		<meta charset="UTF-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">

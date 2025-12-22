@@ -1,9 +1,9 @@
 // LOGIN FORM
 const loginDiv = document.getElementById('auth-modal')
 
-const loginForm = loginDiv.querySelector('#login-form')
-const registerForm = loginDiv.querySelector('#register-form')
-const forgotPasswordForm = loginDiv.querySelector('#forgot-password-form')
+const loginForm = loginDiv.querySelector('#login-form-div')
+const registerForm = loginDiv.querySelector('#register-form-div')
+const forgotPasswordForm = loginDiv.querySelector('#forgot-password-form-div')
 
 // Listen for login/register "tab" switches
 const loginToggleBtn = loginDiv.querySelector('#login-btn')
@@ -25,23 +25,49 @@ loginToggleBtn.addEventListener("click", () => {
     deselectLoginOptions()
     loginToggleBtn.classList.add('selected')
     loginForm.classList.remove('hidden')
+    
+    // Push login event to Google Tag Manager (GTM)).
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push({
+      event: 'modal_tab_change',
+      modal_name: 'login',
+      tab_name: 'login',
+      page_location: window.location.href 
+    });
 });
 // If click on register
 registerToggleBtn.addEventListener("click", () => {
     deselectLoginOptions()
     registerToggleBtn.classList.add('selected')
     registerForm.classList.remove('hidden')
+    
+    // Push login event to Google Tag Manager (GTM)).
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push({
+      event: 'modal_tab_change',
+      modal_name: 'login',
+      tab_name: 'register',
+      page_location: window.location.href 
+    });
 });
 // If click on forgot password
 forgotPasswordBtn.addEventListener("click", () => {
     deselectLoginOptions()
     forgotPasswordForm.classList.remove('hidden')
+    
+    // Push login event to Google Tag Manager (GTM)).
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push({
+      event: 'modal_tab_change',
+      modal_name: 'login',
+      tab_name: 'forgot_password',
+      page_location: window.location.href 
+    });
 });
 
 
 // OPEN LOGIN MODAL
 const authModalParent = document.getElementById('auth-modal-parent')
-
 
 // Btn from navbar to open login modal
 const navOpenLoginModal = document.getElementById('nav-open-login-modal')
@@ -63,6 +89,14 @@ navOpenLoginModal?.addEventListener("click", () => {
 
   authModalParent.classList.remove('hidden');
   authModalParent.setAttribute('data-modal-id', modalDataset); // explicit
+
+  // Push login event to Google Tag Manager (GTM)).
+  window.dataLayer = window.dataLayer || [];
+  window.dataLayer.push({
+    event: 'modal_open',
+    modal_name: 'login',
+    page_location: window.location.href 
+  });
 });
 
 
@@ -77,7 +111,7 @@ navLogout?.addEventListener('click', () => {
 // LOGIC TO HELP USER WITH USERNAME/PASSWORD CRITERIA + CONFIRM PASSWORD
 document.addEventListener('DOMContentLoaded', () => {
   // Elements
-  const form = document.getElementById('register-form');
+  const form = document.getElementById('register-form-div');
   const emailInput = document.getElementById('register-username');
   const fnameInput = document.getElementById('register-fname');
   const fnameFeedback = document.getElementById('register-fname-feedback');
@@ -215,7 +249,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 // Login form (on submission)
-document.querySelector('#login-form').addEventListener('submit', e => {
+document.querySelector('#login-form-div').addEventListener('submit', e => {
   addReturnToField(e.target)
 });
 

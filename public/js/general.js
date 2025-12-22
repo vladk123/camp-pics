@@ -1,3 +1,18 @@
+////// GA4 Google Analytics - Any redirectedFlash data to push through Tag Manager when page loads
+// window.__GA4_EVENT from boilerplate file
+if (window.__GA4_EVENT__) {
+  window.dataLayer = window.dataLayer || [];
+  window.dataLayer.push({
+    event: window.__GA4_EVENT__.event,
+    user_id: window.__GA4_EVENT__.user_id,
+    page_location: window.location.href
+  });
+
+  // Safety: prevent accidental reuse
+  window.__GA4_EVENT__ = null;
+}
+
+
 ////// SOCIAL MEDIA
 const isProbablyMobile =
   window.matchMedia('(pointer: coarse)').matches &&

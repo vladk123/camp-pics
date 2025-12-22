@@ -254,7 +254,12 @@ app.use(async(req, res, next) => {
 	} catch(err){
 		res.locals.ip = null
 	}
-	
+
+	// Google Analytics/Tag Manager( GA4)
+	res.locals.GA4_EVENT = req.session.__GA4_EVENT__ || null;
+	// Clear it so it fires once
+	delete req.session.__GA4_EVENT__;
+
 	next();
 })
 
