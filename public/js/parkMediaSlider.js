@@ -137,6 +137,14 @@ function initializeParkSlider() {
         if (iframe) iframe.src = iframe.src;
         openFullscreenVideo(slide.dataset.url, slide.querySelector(".caption")?.innerText);
     }
+    // Push login event to Google Tag Manager (GTM)).
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push({
+      event: 'media_fullscreen_view',
+      media_type: slide.dataset.type,
+      content_level: 'park',
+      page_location: window.location.href 
+    });
   });
 }
 
@@ -193,6 +201,14 @@ function updateParkSlider(mediaItems) {
                 const res = await fetch(url, { method: "DELETE" });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || 'Delete failed');
+                // Push login event to Google Tag Manager (GTM)).
+                window.dataLayer = window.dataLayer || [];
+                window.dataLayer.push({
+                    event: 'media_delete',
+                    media_type: type,
+                    content_level: 'park',
+                    page_location: window.location.href 
+                });
 
                 createFlashMsg('success', 'Deleted successfully.', 'delete-media-success', 5);
                 await refreshParkMedia();

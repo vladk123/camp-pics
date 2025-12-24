@@ -416,12 +416,29 @@ document.addEventListener('DOMContentLoaded', async() => {
     parkPhotoForm.addEventListener('submit', e => {
       e.preventDefault();
       submitForm(parkPhotoForm, `/camp/park/${parkSlug}/photo`, { isFile: true, refresh: 'park' });
+      // Push login event to Google Tag Manager (GTM)).
+      window.dataLayer = window.dataLayer || [];
+      window.dataLayer.push({
+        event: 'media_upload',
+        media_type: 'photo',
+        content_level: 'park',
+        page_location: window.location.href 
+      });
     });
   }
   if (parkVideoForm) {
     parkVideoForm.addEventListener('submit', e => {
+      console.log(parkVideoForm)
       e.preventDefault();
       submitForm(parkVideoForm, `/camp/park/${parkSlug}/video`, { refresh: 'park' });
+      // Push login event to Google Tag Manager (GTM)).
+      window.dataLayer = window.dataLayer || [];
+      window.dataLayer.push({
+        event: 'media_upload',
+        media_type: 'video',
+        content_level: 'park',
+        page_location: window.location.href 
+      });
     });
   }
   if (parkReviewForm) {
@@ -450,8 +467,24 @@ document.addEventListener('DOMContentLoaded', async() => {
 
     if (form.classList.contains('campsite-photo-form')) {
       submitForm(form, `${base}/photo`, { isFile: true, refresh: 'campsite' });
+        // Push login event to Google Tag Manager (GTM)).
+        window.dataLayer = window.dataLayer || [];
+        window.dataLayer.push({
+          event: 'media_upload',
+          media_type: 'photo',
+          content_level: 'campsite',
+          page_location: window.location.href 
+        });
     } else if (form.classList.contains('campsite-video-form')) {
       submitForm(form, `${base}/video`, { refresh: 'campsite' });
+      // Push login event to Google Tag Manager (GTM)).
+      window.dataLayer = window.dataLayer || [];
+      window.dataLayer.push({
+        event: 'media_upload',
+        media_type: 'video',
+        content_level: 'campsite',
+        page_location: window.location.href 
+      });
     } else if (form.classList.contains('campsite-review-form')) {
       submitForm(form, `${base}/review`, { refresh: 'campsite' });
     }
@@ -701,6 +734,16 @@ async function deleteMedia(item, parentData) {
     const res = await fetch(url, { method: 'DELETE' });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Delete failed');
+
+    // Push login event to Google Tag Manager (GTM)).
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push({
+      event: 'media_delete',
+      media_type: item.type,
+      content_level: campsiteSlug ? 'campsite' : 'park',
+      page_location: window.location.href 
+    });
+
     createFlashMsg('success', 'Deleted media!', 'delete-media-success', 5)
     await refreshCampsitePopup();
   } catch (err) {
@@ -762,6 +805,15 @@ document.addEventListener('click', e => {
   overlay.style.cursor = 'zoom-out';
   overlay.innerHTML = overlayContent;
 
+  // Push login event to Google Tag Manager (GTM)).
+  window.dataLayer = window.dataLayer || [];
+  window.dataLayer.push({
+    event: 'media_fullscreen_view',
+    media_type: img ? 'photo' : 'video',
+    content_level: 'campsite',
+    page_location: window.location.href 
+  });
+
   overlay.addEventListener('click', () => overlay.remove());
   document.body.appendChild(overlay);
 });
@@ -809,6 +861,15 @@ function reportBtn(e) {
     campground = campsiteModal.dataset.cgSlug;
     campsite = campsiteModal.dataset.campsiteSlug;
   }
+
+  // Push login event to Google Tag Manager (GTM)).
+  window.dataLayer = window.dataLayer || [];
+  window.dataLayer.push({
+    event: 'press_report_btn',
+    content_level: campsite ? 'campsite': 'park',
+    campsite,
+    page_location: window.location.href 
+  });
 
   window.open(
     `/other/contact?email_subject=Report Image: ${park ? `[${park}]` : `${window.PARK.slug}`}${campground ? `[${campground}]` : ''}${campsite ? `[${campsite}]` : ''}`,

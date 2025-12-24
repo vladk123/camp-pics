@@ -188,7 +188,8 @@ export const verify =  async(req, res, next) => {
             return redirectedFlash(req, res, 'success', 'Your account is verified and you can now sign in and upload photos and videos!', '/login',
                 {GA4:{
                     event: 'user_verified',
-                    method: 'email_verification_code'
+                    method: 'email_verification_code',
+                    user_id: user._id
                 }}
             )
         }
@@ -213,9 +214,19 @@ export const resendVerification = async(req, res, next) => {
 
         // When they're on their on their last allowed verification email
         if(req.user.token_counter == 2){
-            return redirectedFlash(req, res, 'info', 'That was the last verification email sent! Contact us if you still did not receive it.', '/user/account')
+            return redirectedFlash(req, res, 'info', 'That was the last verification email sent! Contact us if you still did not receive it.', '/user/account',
+                {GA4:{
+                    event: 'new_verification_request',
+                    user_id: req.user._id,
+                }}
+            )
         } else if (req.user.token_counter < 2){
-            return redirectedFlash(req, res, 'info', 'You were just sent the verification email again - check your spam! Click the link in the email to verify.', '/user/account')
+            return redirectedFlash(req, res, 'info', 'You were just sent the verification email again - check your spam! Click the link in the email to verify.', '/user/account',
+                {GA4:{
+                    event: 'new_verification_request',
+                    user_id: req.user._id,                    
+                }}
+            )
         } else {
             return redirectedFlash(req, res, 'error', 'You can no longer verify through the website; please contact us.', '/user/account')
         }
@@ -274,7 +285,12 @@ export const forgotPassword = async(req, res, next) => {
             userId,
         })
 
-        return redirectedFlash(req, res, 'success', 'Please check your email inbox (and spam) and click the link to reset your password.', '/')
+        return redirectedFlash(req, res, 'success', 'Please check your email inbox (and spam) and click the link to reset your password.', '/',
+            {GA4:{
+                event: 'reset_password_request',
+                user_id: req.user._id,
+            }}
+        )
     } catch (e) {
         next(e)
     }
@@ -485,7 +501,12 @@ export const deleteAccount = async (req, res, next) => {
 
     // Log the user out & redirect
     req.logout(() => {
-        return redirectedFlash(req, res, 'success', 'Account deleted!', '/');
+        return redirectedFlash(req, res, 'success', 'Account deleted!', '/',
+            {GA4:{
+                event: 'delete_account',
+                user_id: req.user._id,
+            }}
+        );
     });
 
   } catch (err) {

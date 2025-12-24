@@ -61,7 +61,11 @@ export const submitContactForm = async (req, res, next) => {
         })
 
         // console.log('sendEmail')
-        return redirectedFlash(req, res, 'success', 'Message sent, thanks for reaching out! We will try our best to get back to you within a few business days.', '/')
+        return redirectedFlash(req, res, 'success', 'Message sent, thanks for reaching out! We will try our best to get back to you within a few business days.', '/',
+            {GA4:{
+                event: 'contact_submit',
+            }}
+        )
     } catch (e) {
         next(e)
     }
