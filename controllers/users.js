@@ -188,7 +188,8 @@ export const verify =  async(req, res, next) => {
             return redirectedFlash(req, res, 'success', 'Your account is verified and you can now sign in and upload photos and videos!', '/login',
                 {GA4:{
                     event: 'user_verified',
-                    method: 'email_verification_code'
+                    method: 'email_verification_code',
+                    user_id: user._id
                 }}
             )
         }

@@ -428,16 +428,17 @@ document.addEventListener('DOMContentLoaded', async() => {
   }
   if (parkVideoForm) {
     parkVideoForm.addEventListener('submit', e => {
+      console.log(parkVideoForm)
       e.preventDefault();
       submitForm(parkVideoForm, `/camp/park/${parkSlug}/video`, { refresh: 'park' });
-    });
-    // Push login event to Google Tag Manager (GTM)).
-    window.dataLayer = window.dataLayer || [];
-    window.dataLayer.push({
-      event: 'media_upload',
-      media_type: 'video',
-      content_level: 'park',
-      page_location: window.location.href 
+      // Push login event to Google Tag Manager (GTM)).
+      window.dataLayer = window.dataLayer || [];
+      window.dataLayer.push({
+        event: 'media_upload',
+        media_type: 'video',
+        content_level: 'park',
+        page_location: window.location.href 
+      });
     });
   }
   if (parkReviewForm) {
