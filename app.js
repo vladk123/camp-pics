@@ -34,19 +34,30 @@ import { initializeParkSearchCache } from './utils/cacheSearch.js';
 import flash from 'connect-flash';
 import { redirectedFlash } from './utils/redirectedFlash.js';
 
+// Skip rate limiting if loading public files
+const skipPublicFiles = (req) => {
+  return (
+    req.path === '/favicon.ico' ||
+    req.path.startsWith('/css/') ||
+    req.path.startsWith('/js/') ||
+    req.path.startsWith('/images/') ||
+    req.path.startsWith('/font/') 
+  );
+};
+
 // Doing overall limiting on all requests
 const rateLimiterLong = rateLimiting({
-	windowMs: 5 * 60 * 1000, // 5 min
-	max: process.env.FIVE_MIN_NUM_REQ_BEFORE_LIMIT || 500, // Limit to 100 requests in the the windowMs time period
-	message: 'Too many requests, please try again later.'
-})
+  windowMs: 5 * 60 * 1000,
+  max: process.env.FIVE_MIN_NUM_REQ_BEFORE_LIMIT || 100,
+  message: 'Too many requests, please try again later.',
+  skip: skipPublicFiles,
+});
 const speedLimiterLong = speedLimiting({
-	windowMs: 1 * 60 * 1000, // 1 min
-	delayAfter: process.env.ONE_MIN_NUM_REQ_BEFORE_SLOWDOWN || 200, // Slow down after 50 requests in the windowMs time period
-	delayMs: (hits) => hits * 1 * 1000, // Slow down request by an additional 1 second for each request after limit reached
-})
-// Skip rate limiting if loading public files
-app.use(['/public', '/favicon.ico'], (req, res, next) => next())
+  windowMs: 1 * 60 * 1000,
+  delayAfter: process.env.ONE_MIN_NUM_REQ_BEFORE_SLOWDOWN || 50,
+  delayMs: (hits) => hits * 1 * 1000,
+  skip: skipPublicFiles,
+});
 app.use(rateLimiterLong)
 app.use(speedLimiterLong)
 
