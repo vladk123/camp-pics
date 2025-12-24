@@ -37,12 +37,12 @@ import { redirectedFlash } from './utils/redirectedFlash.js';
 // Doing overall limiting on all requests
 const rateLimiterLong = rateLimiting({
 	windowMs: 5 * 60 * 1000, // 5 min
-	max: 100, // Limit to 100 requests in the the windowMs time period
+	max: process.env.FIVE_MIN_NUM_REQ_BEFORE_LIMIT || 500, // Limit to 100 requests in the the windowMs time period
 	message: 'Too many requests, please try again later.'
 })
 const speedLimiterLong = speedLimiting({
 	windowMs: 1 * 60 * 1000, // 1 min
-	delayAfter: 50, // Slow down after 50 requests in the windowMs time period
+	delayAfter: process.env.ONE_MIN_NUM_REQ_BEFORE_SLOWDOWN || 200, // Slow down after 50 requests in the windowMs time period
 	delayMs: (hits) => hits * 1 * 1000, // Slow down request by an additional 1 second for each request after limit reached
 })
 // Skip rate limiting if loading public files
