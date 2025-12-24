@@ -137,7 +137,7 @@ function initializeParkSlider() {
         if (iframe) iframe.src = iframe.src;
         openFullscreenVideo(slide.dataset.url, slide.querySelector(".caption")?.innerText);
     }
-    // Push login event to Google Tag Manager (GTM)).
+    // Push event to Google Tag Manager (GTM)).
     window.dataLayer = window.dataLayer || [];
     window.dataLayer.push({
       event: 'media_fullscreen_view',
@@ -201,7 +201,7 @@ function updateParkSlider(mediaItems) {
                 const res = await fetch(url, { method: "DELETE" });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || 'Delete failed');
-                // Push login event to Google Tag Manager (GTM)).
+                // Push event to Google Tag Manager (GTM)).
                 window.dataLayer = window.dataLayer || [];
                 window.dataLayer.push({
                     event: 'media_delete',

@@ -26,7 +26,7 @@ loginToggleBtn.addEventListener("click", () => {
     loginToggleBtn.classList.add('selected')
     loginForm.classList.remove('hidden')
     
-    // Push login event to Google Tag Manager (GTM)).
+    // Push event to Google Tag Manager (GTM)).
     window.dataLayer = window.dataLayer || [];
     window.dataLayer.push({
       event: 'modal_tab_change',
@@ -41,7 +41,7 @@ registerToggleBtn.addEventListener("click", () => {
     registerToggleBtn.classList.add('selected')
     registerForm.classList.remove('hidden')
     
-    // Push login event to Google Tag Manager (GTM)).
+    // Push event to Google Tag Manager (GTM)).
     window.dataLayer = window.dataLayer || [];
     window.dataLayer.push({
       event: 'modal_tab_change',
@@ -55,7 +55,7 @@ forgotPasswordBtn.addEventListener("click", () => {
     deselectLoginOptions()
     forgotPasswordForm.classList.remove('hidden')
     
-    // Push login event to Google Tag Manager (GTM)).
+    // Push event to Google Tag Manager (GTM)).
     window.dataLayer = window.dataLayer || [];
     window.dataLayer.push({
       event: 'modal_tab_change',
@@ -90,7 +90,7 @@ navOpenLoginModal?.addEventListener("click", () => {
   authModalParent.classList.remove('hidden');
   authModalParent.setAttribute('data-modal-id', modalDataset); // explicit
 
-  // Push login event to Google Tag Manager (GTM)).
+  // Push event to Google Tag Manager (GTM)).
   window.dataLayer = window.dataLayer || [];
   window.dataLayer.push({
     event: 'modal_open',

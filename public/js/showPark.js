@@ -34,6 +34,16 @@ parkCampsitesDiv.addEventListener('click', async e => {
 
   try {
     const res = await fetch(url);
+
+    // Push event to Google Tag Manager (GTM)).
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push({
+      event: 'modal_open',
+      modal_name: 'campsite',
+      campsite: campsiteSlug,
+      page_location: window.location.href 
+    });
+
     if (!res.ok) throw new Error('Not found');
     const data = await res.json();
     showCampsitePopup(data);
@@ -416,7 +426,7 @@ document.addEventListener('DOMContentLoaded', async() => {
     parkPhotoForm.addEventListener('submit', e => {
       e.preventDefault();
       submitForm(parkPhotoForm, `/camp/park/${parkSlug}/photo`, { isFile: true, refresh: 'park' });
-      // Push login event to Google Tag Manager (GTM)).
+      // Push event to Google Tag Manager (GTM)).
       window.dataLayer = window.dataLayer || [];
       window.dataLayer.push({
         event: 'media_upload',
@@ -431,7 +441,7 @@ document.addEventListener('DOMContentLoaded', async() => {
       console.log(parkVideoForm)
       e.preventDefault();
       submitForm(parkVideoForm, `/camp/park/${parkSlug}/video`, { refresh: 'park' });
-      // Push login event to Google Tag Manager (GTM)).
+      // Push event to Google Tag Manager (GTM)).
       window.dataLayer = window.dataLayer || [];
       window.dataLayer.push({
         event: 'media_upload',
@@ -467,7 +477,7 @@ document.addEventListener('DOMContentLoaded', async() => {
 
     if (form.classList.contains('campsite-photo-form')) {
       submitForm(form, `${base}/photo`, { isFile: true, refresh: 'campsite' });
-        // Push login event to Google Tag Manager (GTM)).
+        // Push event to Google Tag Manager (GTM)).
         window.dataLayer = window.dataLayer || [];
         window.dataLayer.push({
           event: 'media_upload',
@@ -477,7 +487,7 @@ document.addEventListener('DOMContentLoaded', async() => {
         });
     } else if (form.classList.contains('campsite-video-form')) {
       submitForm(form, `${base}/video`, { refresh: 'campsite' });
-      // Push login event to Google Tag Manager (GTM)).
+      // Push event to Google Tag Manager (GTM)).
       window.dataLayer = window.dataLayer || [];
       window.dataLayer.push({
         event: 'media_upload',
@@ -735,7 +745,7 @@ async function deleteMedia(item, parentData) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Delete failed');
 
-    // Push login event to Google Tag Manager (GTM)).
+    // Push event to Google Tag Manager (GTM)).
     window.dataLayer = window.dataLayer || [];
     window.dataLayer.push({
       event: 'media_delete',
@@ -805,7 +815,7 @@ document.addEventListener('click', e => {
   overlay.style.cursor = 'zoom-out';
   overlay.innerHTML = overlayContent;
 
-  // Push login event to Google Tag Manager (GTM)).
+  // Push event to Google Tag Manager (GTM)).
   window.dataLayer = window.dataLayer || [];
   window.dataLayer.push({
     event: 'media_fullscreen_view',
@@ -862,7 +872,7 @@ function reportBtn(e) {
     campsite = campsiteModal.dataset.campsiteSlug;
   }
 
-  // Push login event to Google Tag Manager (GTM)).
+  // Push event to Google Tag Manager (GTM)).
   window.dataLayer = window.dataLayer || [];
   window.dataLayer.push({
     event: 'press_report_btn',
@@ -951,6 +961,14 @@ openUploadParkMediaModalBtn?.addEventListener('click', () => {
 
   parkMediaUploadParent.classList.remove('hidden');
   parkMediaUploadParent.setAttribute('data-modal-id', modalDataset); // explicit
+
+  // Push event to Google Tag Manager (GTM)).
+  window.dataLayer = window.dataLayer || [];
+  window.dataLayer.push({
+    event: 'modal_open',
+    modal_name: 'park_media_upload',
+    page_location: window.location.href 
+  });
 })
 
 // Campsite modal closing logic

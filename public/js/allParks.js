@@ -588,7 +588,7 @@ function selectProvince(provinceData) {
   document.getElementById("park-list")
       .scrollIntoView({ behavior: "smooth", block: "start" });
 
-  // Push login event to Google Tag Manager (GTM)).
+  // Push event to Google Tag Manager (GTM)).
   window.dataLayer = window.dataLayer || [];
   window.dataLayer.push({
     event: 'province_select',

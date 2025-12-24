@@ -65,7 +65,7 @@ darkModeToggleBtn.addEventListener('click', () => {
 
   document.documentElement.dataset.theme = next;
   localStorage.setItem('theme', next);
-  // Push login event to Google Tag Manager (GTM)).
+  // Push event to Google Tag Manager (GTM)).
   window.dataLayer = window.dataLayer || [];
   window.dataLayer.push({
     event: 'theme_change',
