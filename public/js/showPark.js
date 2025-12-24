@@ -867,6 +867,7 @@ function reportBtn(e) {
   window.dataLayer.push({
     event: 'press_report_btn',
     content_level: campsite ? 'campsite': 'park',
+    campsite,
     page_location: window.location.href 
   });
 
