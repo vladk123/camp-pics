@@ -47,8 +47,8 @@ const speedLimiterLong = speedLimiting({
 })
 // Skip rate limiting if loading public files
 app.use(['/public', '/favicon.ico'], (req, res, next) => next())
-// app.use(rateLimiterLong)
-// app.use(speedLimiterLong)
+app.use(rateLimiterLong)
+app.use(speedLimiterLong)
 
 //TO USE ON EVERY ROUTE
 app.engine('ejs', ejsMate); //telling app to use this engine instead of default one
