@@ -13,5 +13,19 @@
         </div> -->
     </div>
 </form>
+<script>
+  const input = document.getElementById("search-input-box");
+
+  function updatePlaceholder() {
+    input.placeholder =
+      window.innerWidth <= 775
+        ? "Search for a park."
+        : "Search for a national or provincial park.";
+  }
+
+  updatePlaceholder();
+  window.addEventListener("resize", updatePlaceholder);
+</script>
+
 
 <!--  -->

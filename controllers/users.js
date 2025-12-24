@@ -189,7 +189,7 @@ export const verify =  async(req, res, next) => {
                 {GA4:{
                     event: 'user_verified',
                     method: 'email_verification_code',
-                    user_id: user._id
+                    // user_id: user._id
                 }}
             )
         }
@@ -288,7 +288,7 @@ export const forgotPassword = async(req, res, next) => {
         return redirectedFlash(req, res, 'success', 'Please check your email inbox (and spam) and click the link to reset your password.', '/',
             {GA4:{
                 event: 'reset_password_request',
-                user_id: req.user._id,
+                // user_id: req.user._id,
             }}
         )
     } catch (e) {
@@ -504,7 +504,7 @@ export const deleteAccount = async (req, res, next) => {
         return redirectedFlash(req, res, 'success', 'Account deleted!', '/',
             {GA4:{
                 event: 'delete_account',
-                user_id: req.user._id,
+                user_id: null,
             }}
         );
     });
