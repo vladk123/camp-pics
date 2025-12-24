@@ -967,6 +967,7 @@ openUploadParkMediaModalBtn?.addEventListener('click', () => {
   window.dataLayer.push({
     event: 'modal_open',
     modal_name: 'park_media_upload',
+    campsite: null,
     page_location: window.location.href 
   });
 })

@@ -132,11 +132,11 @@ export const login = async(req, res, next) => {
         return redirectedFlash(req, res, 'success', 'Logged In!', redirectUrl,
             {GA4:{
                 event: 'login',
-                user_id: newUser._id
+                user_id: req.user._id
             }}
         );
     } catch (err) {
-        next()
+        next(err)
     }
 
 }
