@@ -27,7 +27,6 @@ loginToggleBtn.addEventListener("click", () => {
     loginForm.classList.remove('hidden')
     
     // Push login event to Google Tag Manager (GTM)).
-    console.log('pushing login modal tba')
     window.dataLayer = window.dataLayer || [];
     window.dataLayer.push({
       event: 'modal_tab_change',
