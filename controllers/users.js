@@ -23,6 +23,7 @@ export const register = async(req, res, next) => {
         console.warn('Bot registration attempt detected.');
         return res.status(400).send('No.');
     }
+    console.log('1')
 
     // Other bot check
     const handsCheck = hands_check.trim().toLowerCase()
@@ -30,20 +31,24 @@ export const register = async(req, res, next) => {
         console.warn('Bot registration attempt detected.');
         return res.status(400).send('No.');
     }
+    console.log('2')
 
-    if(username.length < 3 || username.length > 15 || username.includes('admin') || username.includes('moderator')){
+    if(username.length < 3 || username.length > 150){
         return redirectedFlash(req, res, 'error', `Oops! An error has occurred.`, '/')
     }
+    console.log('3')
 
     // Verify password
     if (!passwordRegex.test(password)) {
         return redirectedFlash(req, res, 'error', `Oops! An error has occurred.`, '/')
     }
+    console.log('4')
 
     // Proceed adding to DB
     let newUser 
     try {
         const user = new User({ username:username.toLowerCase().trim(), fname});
+        console.log('5')
 
         // Store the IP
         user.ip_address_registered = res.locals.ip
