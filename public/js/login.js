@@ -150,8 +150,8 @@ document.addEventListener('DOMContentLoaded', () => {
       emailValid = false;
     } else if (value.includes('outlook') || value.includes('hotmail')) {
       emailFeedback.textContent = 'Please note that Outlook and Hotmail does not always receive our emails (for verifying accounts) - try using Gmail or another email if possible.';
-      emailFeedback.style.color = '#dc3545';
-      emailValid = false;
+      emailFeedback.style.color = 'blue';
+      emailValid = true;
     } else {
       emailFeedback.textContent = 'Valid email.';
       emailFeedback.style.color = '#28a745';
