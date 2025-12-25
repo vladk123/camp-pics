@@ -9,6 +9,9 @@ import { redirectedFlash } from '../utils/redirectedFlash.js';
 router.route('/register')
     .post(isLoggedOut, catchAsyncErrors(users.register));
 
+router.route('/registered')
+  .get(users.registered)
+
 router.post(
   '/login',
   isLoggedOut,
@@ -38,6 +41,9 @@ router.route('/logout')
 // When user clicks on verification code in email
 router.route('/verify/:code')
   .get(catchAsyncErrors(users.verify))
+
+router.route('/verified')
+  .get(users.verified)
 
 // When unverified user clicks 'resend' in account pg
 router.route('/resend-verification')

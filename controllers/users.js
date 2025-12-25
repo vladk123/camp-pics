@@ -59,7 +59,7 @@ export const register = async(req, res, next) => {
         // Generate and email them the verification code
         await createNewUserVerify(req, res, next, user._id, user.username)
 
-        return redirectedFlash(req, res, 'success', `Registered! Please check your inbox to verify your email (link expires soon!).`, '/',
+        return redirectedFlash(req, res, 'success', `Registered! Please check your inbox to verify your email (link expires soon!).`, '/user/registered',
             {GA4:{
                 event: 'sign_up',
                 user_id: newUser._id
@@ -82,6 +82,19 @@ export const register = async(req, res, next) => {
         }
         
     }
+}
+
+export const registered = async(req, res, next) => {
+    return res.render(
+        'user/registered', 
+        {
+            meta: {
+				title: 'Registered', 
+			}, 
+            data: { }
+        }
+
+    ); // data obj to avoid crashes
 }
 
 export const login = async(req, res, next) => {
@@ -167,7 +180,7 @@ export const logout =  (req, res, next) => {
 }
 
 export const verify =  async(req, res, next) => {
-    const expiredLinkRedirect = () => redirectedFlash(req, res, 'error', 'Sorry, that link is invalid or has expired...please try re-verifying.', '/')
+    const expiredLinkRedirect = () => redirectedFlash(req, res, 'error', 'Sorry, that link is invalid or has expired...please try re-verifying by logging in and going to your Account settings.', '/')
     try {
         // Check token
         const codeToCheck = crypto.createHash("sha256").update(req.params.code).digest("hex");
@@ -190,7 +203,7 @@ export const verify =  async(req, res, next) => {
         } else {
             await user.updateOne({$set: {email_verified: true}})
             await Token.findOneAndDelete({ _id: token._id })
-            return redirectedFlash(req, res, 'success', 'Your account is verified and you can now sign in and upload photos and videos!', '/login',
+            return redirectedFlash(req, res, 'success', 'Your account is verified and you can now sign in and upload photos and videos!', '/user/verified',
                 {GA4:{
                     event: 'user_verified',
                     method: 'email_verification_code',
@@ -203,6 +216,19 @@ export const verify =  async(req, res, next) => {
         next(e)
     }
 
+}
+
+export const verified = async(req, res, next) => {
+    return res.render(
+        'user/verified', 
+        {
+            meta: {
+				title: 'Verified', 
+			}, 
+            data: { }
+        }
+
+    ); // data obj to avoid crashes
 }
 
 

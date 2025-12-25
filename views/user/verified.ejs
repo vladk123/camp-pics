@@ -1,0 +1,19 @@
+<% layout('/layouts/boilerplate') %>
+<div class="general-max-width margin-auto p50 p0-top account">
+  <h1>Account Verified</h1>
+  
+  <div class="flex-column">
+    <% if (currentUser) { %>
+        <%- include('../partials/search') %>
+        <p>Thanks for verifying your account - you're good to go! Start by searching for a park.</p>
+    <% } else { %>
+        <p>Thanks for verifying your account - you're good to go! Start by logging in and then looking for a park.</p>
+    <% } %>
+  </div>
+  
+
+</div>
+
+
+
+ <script type="text/javascript" src="/js/account.js"></script>

@@ -70,7 +70,9 @@
     </form> -->
 
     <!-- Delete Account button -->
-    <button id="delete-account-btn" class="btn btn-primary danger margin-auto">Delete Account</button>
+    <% if (!currentUser?.isAdmin){ %>
+      <button id="delete-account-btn" class="btn btn-primary danger margin-auto">Delete Account</button>
+    <% } %>
 
     <!-- Delete Account modals insert point -->
     <div id="delete-account-modal-backdrop-insert"></div>
