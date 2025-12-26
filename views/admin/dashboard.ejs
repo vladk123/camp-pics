@@ -170,7 +170,7 @@ async function fetchMoreUsers() {
   data.users.forEach(u => {
     const el = document.createElement('div');
     el.className = 'user-item';
-    el.innerHTML = `<strong>${u.fname}</strong> — ${u.username} (joined ${new Date(u.date_created).toLocaleDateString()})`;
+    el.innerHTML = `[${u.email_verified}] - <strong>${u.fname}</strong> — ${u.username} (joined ${new Date(u.date_created).toLocaleDateString()})`;
     usersDiv.appendChild(el);
   });
   if (!data.hasMoreUsers) document.getElementById('loadMoreUsers')?.remove();
