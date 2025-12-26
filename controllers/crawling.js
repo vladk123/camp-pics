@@ -5,7 +5,7 @@ export const sitemapXml = async (req, res, next) => {
     const parks = await Park.find({}, 'slug updatedAt').lean();
 
     const staticUrls = [
-      { loc: 'https://camppics.ca/' },
+      { loc: 'https://camppics.ca' },
       { loc: 'https://camppics.ca/camp/all-parks' },
       { loc: 'https://camppics.ca/other/faq' },
       { loc: 'https://camppics.ca/other/contact' },

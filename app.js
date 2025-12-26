@@ -70,6 +70,15 @@ app.use(express.urlencoded({ extended: true, limit: '10kb' })); //express's pars
 app.use(express.json({limit: '10kb'})) // To parse the incoming requests with JSON payloads (found on SOF) - useful when passing data from fetch to route to use when POSTing
 app.use(express.static(path.join(__dirname, 'public'))); //telling it to serve "public" directory (the public folder we created).
 
+// CANONICAL URL middleware (must run before routes, for Google indexing) - works with the "canonicalUrl" in boilerplate.ejs
+app.use((req, res, next) => {
+  // Force canonical host + protocol
+  const CANONICAL_HOST = 'https://www.camppics.ca';
+  // req.path already excludes query string and hash
+  res.locals.canonicalUrl = CANONICAL_HOST + req.path;
+  next();
+});
+
 // If in production, check that it's on https (otherwise redirect to https)
 if(process.env.NODE_ENV === 'production') {
     app.use((req, res, next) => {
