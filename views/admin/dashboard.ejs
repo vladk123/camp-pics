@@ -44,7 +44,7 @@
   <div id="users">
     <% users.forEach(u => { %>
       <div class="user-item">
-        [${u.email_verified}] - 
+        [<%= u.email_verified %>] - 
         <strong><%= u.fname %></strong> — <%= u.username %> 
         (joined <%= new Date(u.date_created).toLocaleDateString() %>)
         
