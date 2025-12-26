@@ -5,11 +5,11 @@ export const sitemapXml = async (req, res, next) => {
     const parks = await Park.find({}, 'slug updatedAt').lean();
 
     const staticUrls = [
-      { loc: 'https://camppics.ca/' },
-      { loc: 'https://camppics.ca/camp/all-parks' },
-      { loc: 'https://camppics.ca/other/faq' },
-      { loc: 'https://camppics.ca/other/contact' },
-      { loc: 'https://camppics.ca/other/privacy-and-terms' }
+      { loc: 'https://www.camppics.ca/' },
+      { loc: 'https://www.camppics.ca/camp/all-parks' },
+      { loc: 'https://www.camppics.ca/other/faq' },
+      { loc: 'https://www.camppics.ca/other/contact' },
+      { loc: 'https://www.camppics.ca/other/privacy-and-terms' }
     ];
   
     const staticXml = staticUrls.map(u => {
@@ -23,7 +23,7 @@ export const sitemapXml = async (req, res, next) => {
     const parkXml = parks.map(p => {
       return `
         <url>
-          <loc>https://camppics.ca/camp/park/${p.slug}</loc>
+          <loc>https://www.camppics.ca/camp/park/${p.slug}</loc>
           <lastmod>${p.updatedAt.toISOString()}</lastmod>
         </url>
       `;
