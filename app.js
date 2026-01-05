@@ -73,17 +73,18 @@ app.use(express.static(path.join(__dirname, 'public'))); //telling it to serve "
 // CANONICAL URL middleware (must run before routes, for Google indexing) - works with the "canonicalUrl" in boilerplate.ejs
 app.use((req, res, next) => {
   // Force canonical host + protocol
-  const CANONICAL_HOST = 'https://www.camppics.ca';
+  const CANONICAL_HOST = 'https://camppics.ca';
   // req.path already excludes query string and hash
   res.locals.canonicalUrl = CANONICAL_HOST + req.path;
   next();
 });
 
 // If in production, check that it's on https (otherwise redirect to https)
+
 if(process.env.NODE_ENV === 'production') {
     app.use((req, res, next) => {
       if (req.headers['x-forwarded-proto']?.split(',')[0] !== 'https')
-        res.redirect(`https://${req.header('host')}${req.url}`)
+        res.redirect(`https://camppics.ca${req.url}`)
       else
         next()
     })
@@ -339,8 +340,14 @@ app.all('/{*any}', (req, res, next) => {
         logger(null, null, 'error', { message: `Non-existent route visited: ${req.originalUrl}`, severity: 1 });
     }
 	
-	// return redirectedFlash(req, res, 'error', `That page does not exist, sorry.`, '/')
-	return res.redirect('/')
+	// return redirectedFlash(req, res, 'error', `That page does not exist, sorry.`, '/') <- NO, this causes issues with Google search crawler
+	return res.status(404).render('404', {
+		meta: {
+			title: 'Page not found',
+			description: 'This page does not exist.',
+		},
+        data:{}
+	});
 
 })
 

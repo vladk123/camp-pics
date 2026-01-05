@@ -322,7 +322,13 @@ export const showPark = async (req, res, next) => {
 
     if (!park) {
 
-      return redirectedFlash(req, res, 'error', `That page does not exist, sorry.`, '/')
+      return res.status(404).render('404', {
+        meta: {
+          title: 'Page not found',
+          description: 'This page does not exist.',
+        },
+        data:{}
+      });
     }
 
     // Add counts/flags for campsites inside campgrounds
