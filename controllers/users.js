@@ -142,9 +142,11 @@ export const login = async(req, res, next) => {
         let redirectUrl
         if(!req.user.email_verified) {
             redirectUrl = '/user/account';
-        } else {
-            // Return where they originally were
+        // Return where they originally were as long as it's not any login/register page
+        } else if (!req.originalUrl.includes('login') && !req.originalUrl.includes('register')) {
             redirectUrl = req.originalUrl || '/';
+        } else {
+            redirectUrl = '/'
         }
 
         return redirectedFlash(req, res, 'success', 'Logged In!', redirectUrl,
