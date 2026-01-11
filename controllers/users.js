@@ -144,7 +144,7 @@ export const login = async(req, res, next) => {
             redirectUrl = '/user/account';
         } else {
             // Return where they originally were
-            redirectUrl = req.body.returnTo || '/';
+            redirectUrl = req.originalUrl || '/';
         }
 
         return redirectedFlash(req, res, 'success', 'Logged In!', redirectUrl,

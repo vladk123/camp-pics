@@ -104,7 +104,6 @@ navOpenLoginModal?.addEventListener("click", () => {
 const navLogout = document.getElementById('nav-logout');
 navLogout?.addEventListener('click', () => {
   const logoutForm = document.getElementById('logout-form')
-  addReturnToField(logoutForm)
   logoutForm.submit();
 });
 
@@ -250,17 +249,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Login form (on submission)
 document.querySelector('#login-form-div').addEventListener('submit', e => {
-  addReturnToField(e.target)
-});
 
-function addReturnToField (form) {
-    // On submit, add a hidden "returnto" field so page goes back there
-    const returnField = document.createElement('input');
-    returnField.type = 'hidden';
-    returnField.name = 'returnTo';
-    returnField.value = window.location.pathname + window.location.search;
-    form.appendChild(returnField);
-}
+});
 
 
 // Close the login popup
