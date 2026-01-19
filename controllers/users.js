@@ -78,7 +78,7 @@ export const register = async(req, res, next) => {
         } else {
             console.log(err)
             await logger(null,null,'error', {message: `User wasn't able to be created.`});
-            return redirectedFlash(req, res, 'error', `Something went wrong when trying to register a new user...please contact us if this keeps happening: ${err?.name}`, '/')
+            return redirectedFlash(req, res, 'error', `Something went wrong when trying to register a new user...please contact us if this keeps happening.`, '/')
         }
         
     }
