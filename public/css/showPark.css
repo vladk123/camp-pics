@@ -401,6 +401,20 @@
   pointer-events: none;
 }
 
+.video-play-control {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  pointer-events: auto;
+  z-index: 2;
+}
+
+.video-play-control:focus-visible {
+  outline: 3px solid var(--orange);
+  outline-offset: 3px;
+}
+
 /* PARK MEDIA UPLOAD */
 .park-media-upload-modal{
   background: var(--eggshell);

@@ -6,6 +6,7 @@ import { Park } from '../models/park.js';
 import { toSlug } from '../utils/general.js'
 import { isArray } from 'util';
 import { redirectedFlash } from '../utils/redirectedFlash.js';
+import { serializeForInlineScript } from '../utils/serializeForInlineScript.js';
 
 
 const router = express.Router();
@@ -263,8 +264,9 @@ export const showAllParks = async (req, res, next) => {
 				description: 'Find Canadian national, provincial, and territorial parks that offer camping to share and see campsite photos and videos.',
 				url: `${process.env.CC_DOMAIN}/camp/all-parks`,
         image: `https://camppics.ca/images/images/home-hero-autumn.jpg`,
-			},
+      },
       parks,
+      parksJson: serializeForInlineScript(parks),
       data: { currentPath: req.originalUrl }
     });
   } catch (err) {
@@ -384,8 +386,12 @@ export const showPark = async (req, res, next) => {
 				description: `See and share photos and videos of campsites in ${park.name} in ${park.province}.`,
 				url: `${process.env.CC_DOMAIN}/camp/park/${parkSlug}`,
         image: ogImage,
-			},
+      },
       park, 
+      parkPageJson: serializeForInlineScript({
+        slug: park.slug,
+        name: park.name,
+      }),
       data:{} 
     
     }); // data obj to avoid crashes

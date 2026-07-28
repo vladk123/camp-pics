@@ -19,13 +19,15 @@
           <% if (u.campsiteName) { %> | Site: <%= u.campsiteName %><% } %>
         </div>
 
-        <% if (u.mediaType === 'photo' && u.cloudinaryId) { %>
-            <a href="<%= u.cloudinaryId %>" target="_blank">
-                <img src="<%= u.cloudinaryId %>" class="thumb" alt="photo thumbnail">
+        <% const safePhotoUrl = getSafeHttpUrl(u.cloudinaryId); %>
+        <% const youtubeVideoId = extractYouTubeVideoId(u.youtubeId); %>
+        <% if (u.mediaType === 'photo' && safePhotoUrl) { %>
+            <a href="<%= safePhotoUrl %>" target="_blank" rel="noopener noreferrer">
+                <img src="<%= safePhotoUrl %>" class="thumb" alt="photo thumbnail">
             </a>
-        <% } else if (u.mediaType === 'video' && u.youtubeId) { %>
-            <a href="<%= u.youtubeId %>" target="_blank">
-                <img src="https://img.youtube.com/vi/<%= u.youtubeId.split('v=')[1]?.substring(0,11) %>/hqdefault.jpg" class="thumb" alt="YouTube thumbnail">
+        <% } else if (u.mediaType === 'video' && youtubeVideoId) { %>
+            <a href="https://www.youtube.com/watch?v=<%= youtubeVideoId %>" target="_blank" rel="noopener noreferrer">
+                <img src="https://img.youtube.com/vi/<%= youtubeVideoId %>/hqdefault.jpg" class="thumb" alt="YouTube thumbnail">
             </a>
         <% } %>
 
@@ -49,11 +51,11 @@
         (joined <%= new Date(u.date_created).toLocaleDateString() %>)
         
         <% if (u.blocked) { %>
-          <form action="/a/user/<%= u._id %>/unblock" method="POST" class="inline-form" onsubmit="return confirm('Unblock this user?')">
+          <form action="/a/user/<%= u._id %>/unblock" method="POST" class="inline-form user-status-form" data-action="unblock">
             <button type="submit" class="unblock-btn">Unblock</button>
           </form>
         <% } else { %>
-          <form action="/a/user/<%= u._id %>/block" method="POST" class="inline-form" onsubmit="return confirm('Block this user?')">
+          <form action="/a/user/<%= u._id %>/block" method="POST" class="inline-form user-status-form" data-action="block">
             <button type="submit" class="block-btn">Block</button>
           </form>
         <% } %>
@@ -118,9 +120,89 @@
 
 </style>
 
+<script src="/js/mediaRendering.js"></script>
 <script>
 let uploadPage = <%= uploadPage %>;
 let userPage = <%= userPage %>;
+const adminMediaRendering = window.CampPicsMedia;
+
+function createAdminMediaLink(upload) {
+  let href;
+  let thumbnailUrl;
+  let alt;
+
+  if (upload.mediaType === 'photo') {
+    href = adminMediaRendering.getSafeHttpUrl(upload.cloudinaryId);
+    thumbnailUrl = href;
+    alt = 'photo thumbnail';
+  } else if (upload.mediaType === 'video') {
+    const videoId = adminMediaRendering.extractYouTubeId(upload.youtubeId);
+    if (videoId) {
+      href = `https://www.youtube.com/watch?v=${videoId}`;
+      thumbnailUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+      alt = 'YouTube thumbnail';
+    }
+  }
+
+  if (!href || !thumbnailUrl) return null;
+
+  const link = document.createElement('a');
+  link.href = href;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  link.appendChild(adminMediaRendering.createImageElement({
+    src: thumbnailUrl,
+    alt,
+    className: 'thumb',
+    fallbackSrc: '',
+  }));
+  return link;
+}
+
+function createUploadRow(upload) {
+  const row = document.createElement('div');
+  row.className = 'upload-item';
+
+  const summary = document.createElement('div');
+  const mediaType = document.createElement('strong');
+  mediaType.textContent = upload.mediaType == null ? '' : String(upload.mediaType);
+  summary.append(
+    mediaType,
+    document.createTextNode(
+      ` by ${upload.userId?.fname || 'Unknown'} ` +
+      `(${upload.userId?.username || ''}) \u2014 ` +
+      new Date(upload.createdAt).toLocaleString()
+    ),
+  );
+
+  const location = document.createElement('div');
+  location.textContent =
+    `Park: ${upload.parkName || 'N/A'}` +
+    `${upload.campgroundName ? ` | CG: ${upload.campgroundName}` : ''}` +
+    `${upload.campsiteName ? ` | Site: ${upload.campsiteName}` : ''}`;
+
+  row.append(summary, location);
+  const mediaLink = createAdminMediaLink(upload);
+  if (mediaLink) row.appendChild(mediaLink);
+  return row;
+}
+
+function createUserRow(user) {
+  const row = document.createElement('div');
+  row.className = 'user-item';
+
+  const name = document.createElement('strong');
+  name.textContent = user.fname == null ? '' : String(user.fname);
+  row.append(
+    document.createTextNode(`[${user.email_verified}] - `),
+    name,
+    document.createTextNode(
+      ` \u2014 ${user.username || ''} ` +
+      `(joined ${new Date(user.date_created).toLocaleDateString()})`
+    ),
+  );
+  return row;
+}
 
 async function fetchMoreUploads() {
   uploadPage++;
@@ -130,32 +212,8 @@ async function fetchMoreUploads() {
   const data = await res.json();
   const uploadsDiv = document.getElementById('uploads');
 
-  data.uploads.forEach(u => {
-    const wrap = document.createElement('div');
-    wrap.className = 'upload-item';
-    const parkName = u.parkName || 'N/A';
-    const cgName = u.campgroundName ? ` | CG: ${u.campgroundName}` : '';
-    const csName = u.campsiteName ? ` | Site: ${u.campsiteName}` : '';
-
-    const thumbHTML =
-        u.mediaType === 'photo' && u.cloudinaryId
-            ? `<a href="${u.cloudinaryId}" target="_blank">
-                <img src="${u.cloudinaryId}" class="thumb">
-            </a>`
-            : u.mediaType === 'video' && u.youtubeId
-            ? `<a href="${u.youtubeId}" target="_blank">
-                <img src="https://img.youtube.com/vi/${u.youtubeId.split('v=')[1]?.substring(0,11)}/hqdefault.jpg" class="thumb">
-            </a>`
-            : '';
-
-
-    wrap.innerHTML = `
-      <div><strong>${u.mediaType}</strong> by ${u.userId?.fname || 'Unknown'} (${u.userId?.username})
-        — ${new Date(u.createdAt).toLocaleString()}</div>
-      <div>Park: ${parkName}${cgName}${csName}</div>
-      ${thumbHTML}
-    `;
-    uploadsDiv.appendChild(wrap);
+  data.uploads.forEach(upload => {
+    uploadsDiv.appendChild(createUploadRow(upload));
   });
 
   if (!data.hasMoreUploads) document.getElementById('loadMoreUploads')?.remove();
@@ -168,15 +226,19 @@ async function fetchMoreUsers() {
   });
   const data = await res.json();
   const usersDiv = document.getElementById('users');
-  data.users.forEach(u => {
-    const el = document.createElement('div');
-    el.className = 'user-item';
-    el.innerHTML = `[${u.email_verified}] - <strong>${u.fname}</strong> — ${u.username} (joined ${new Date(u.date_created).toLocaleDateString()})`;
-    usersDiv.appendChild(el);
+  data.users.forEach(user => {
+    usersDiv.appendChild(createUserRow(user));
   });
   if (!data.hasMoreUsers) document.getElementById('loadMoreUsers')?.remove();
 }
 
 document.getElementById('loadMoreUploads')?.addEventListener('click', fetchMoreUploads);
 document.getElementById('loadMoreUsers')?.addEventListener('click', fetchMoreUsers);
+document.addEventListener('submit', event => {
+  const form = event.target.closest('.user-status-form');
+  if (!form) return;
+
+  const action = form.dataset.action === 'unblock' ? 'Unblock' : 'Block';
+  if (!confirm(`${action} this user?`)) event.preventDefault();
+});
 </script>

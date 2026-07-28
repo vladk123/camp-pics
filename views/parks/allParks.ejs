@@ -8,7 +8,7 @@
 
   <script>
     // Serialize safely to avoid XSS or JSON parsing issues
-    window.ALL_PARKS = <%- JSON.stringify(parks) %>;
+    window.ALL_PARKS = <%- parksJson %>;
   </script>
 
   <link rel="stylesheet" href="/css/allParks.css">

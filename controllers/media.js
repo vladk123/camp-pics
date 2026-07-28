@@ -6,6 +6,7 @@ import { uploadMemory } from '../middleware.js'; //
 import { v2 as cloudinary } from 'cloudinary';
 import streamifier from 'streamifier';
 import sharp from "sharp";
+import { extractYouTubeVideoId } from '../utils/youtube.js';
 
 // Func to get Cloudinary url
 function extractCloudinaryId(url) {
@@ -405,8 +406,7 @@ export const addVideo = async (req, res, next) => {
     return res.status(400).json({ error: 'Missing data.' });
   }
 
-  const ytRegex = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/(watch\?v=|embed\/|v\/|shorts\/)?[A-Za-z0-9_-]{11}/;
-  if (!ytRegex.test(rawUrl)) {
+  if (!extractYouTubeVideoId(rawUrl)) {
     return res.status(400).json({ error: 'Only valid YouTube links are allowed.' });
   }
 

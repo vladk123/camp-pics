@@ -3,6 +3,7 @@ const Schema = mongoose.Schema;
 await import('dotenv/config');
 
 import { toSlug } from '../utils/general.js'
+import { isYouTubeUrl } from '../utils/youtube.js';
 
 // Subdocument Schemas
 const photoSchema = new Schema({
@@ -31,8 +32,10 @@ const videoSchema = new Schema({
     type: String, 
     required: true, 
     validate: {
-      validator: (v) =>
-        /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/(watch\?v=|embed\/|v\/|shorts\/)?[A-Za-z0-9_-]{11}/.test(v),
+      validator: function validateYouTubeUrl(value) {
+        if (!this.isNew && !this.isDirectModified('url')) return true;
+        return isYouTubeUrl(value);
+      },
       message: 'Invalid YouTube URL format',
     },  
   },

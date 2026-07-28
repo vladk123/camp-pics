@@ -1,10 +1,23 @@
 import { User } from '../models/user.js';
 import { Upload } from '../models/upload.js';
+import { extractYouTubeVideoId } from '../utils/youtube.js';
 
 // import { logger } from '../utils/logging.js'; //for logging errors
 // import { getIP } from '../utils/getIP.js'
 import { redirectedFlash } from '../utils/redirectedFlash.js';
 
+function getSafeHttpUrl(value) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:'
+      ? url.href
+      : null;
+  } catch {
+    return null;
+  }
+}
 
 export const dashboard = async (req, res, next) => {
   try {
@@ -62,6 +75,8 @@ export const dashboard = async (req, res, next) => {
       userPage,
       hasMoreUploads,
       hasMoreUsers,
+      extractYouTubeVideoId,
+      getSafeHttpUrl,
       data:{} // data obj to avoid crashes
     });
 

@@ -1,9 +1,19 @@
+const mediaRendering = window.CampPicsMedia;
+const boundCampsiteNavButtons = new WeakSet();
+
 function sortMediaByDate(items) {
   return items.sort((a, b) => {
     const dateA = a.dateTaken ? new Date(a.dateTaken) : (a.uploadedAt ? new Date(a.uploadedAt) : new Date(0));
     const dateB = b.dateTaken ? new Date(b.dateTaken) : (b.uploadedAt ? new Date(b.uploadedAt) : new Date(0));
     return dateB - dateA; // newest first
   });
+}
+
+function createInternalLink(href, text) {
+  const link = document.createElement('a');
+  link.href = href;
+  link.textContent = text;
+  return link;
 }
 
 // Listen to campsite clicks
@@ -82,8 +92,8 @@ function showCampsitePopup(data) {
   const swiperWrapper = document.getElementById('campsite-swiper-wrapper');
   const thumbsWrapper = document.getElementById('campsite-thumbs-wrapper');
 
-  swiperWrapper.innerHTML = '';
-  thumbsWrapper.innerHTML = '';
+  swiperWrapper.replaceChildren();
+  thumbsWrapper.replaceChildren();
 
   // Merge + sort media
   const photos = data.photos || [];
@@ -121,9 +131,14 @@ function showCampsitePopup(data) {
     slide.style.display = 'flex';
     slide.style.alignItems = 'center';
     slide.style.justifyContent = 'center';
-    slide.innerHTML = window.CURRENT_USER_ID
-      ? `No media uploaded for this campsite. Feel free to <a href="#modal-upload-section">contribute below.</a>`
-      : 'No media uploaded for this campsite. Log in to contribute!';
+    if (window.CURRENT_USER_ID) {
+      slide.append(
+        document.createTextNode('No media uploaded for this campsite. Feel free to '),
+        createInternalLink('#modal-upload-section', 'contribute below.'),
+      );
+    } else {
+      slide.textContent = 'No media uploaded for this campsite. Log in to contribute!';
+    }
     swiperWrapper.appendChild(slide);
   } else {
     campsiteMediaItems.forEach((item, index) => {
@@ -133,104 +148,79 @@ function showCampsitePopup(data) {
       slide.dataset.index = String(index);
 
       const slideCaption = buildCampsiteCaption(item);
+      const caption = mediaRendering.createCaptionElement({
+        tagName: 'p',
+        className: 'media-caption',
+        text: slideCaption,
+      });
 
       if (item.type === 'photo') {
-        const img = document.createElement('img');
-        img.src = item.url;
-        img.alt = item.caption || `Photo ${index + 1}`;
+        const img = mediaRendering.createImageElement({
+          src: item.url,
+          alt: item.caption || `Photo ${index + 1}`,
+          className: 'photo',
+        });
         img.style.cursor = 'pointer';
-        img.classList.add('photo')
 
         img.addEventListener('click', () => {
-          openFullscreenImage(item.url, slideCaption);
+          openCampsiteFullscreen('photo', item.url, slideCaption);
         });
 
-        const p = document.createElement('p');
-        p.className = 'media-caption';
-        p.textContent = slideCaption;
+        const magnifying = mediaRendering.createImageElement({
+          src: '/images/icons/magnifying-glass.png',
+          alt: '',
+          className: 'magnifying',
+          fallbackSrc: '',
+        });
 
-        // Add magnifying overlay
-        const magnifying = document.createElement('img')
-        magnifying.classList.add('magnifying')
-        magnifying.src = '/images/icons/magnifying-glass.png'
-
-        slide.appendChild(img);
-        slide.appendChild(p);
-        slide.appendChild(magnifying)
+        slide.append(img, caption, magnifying);
       } else {
-        const vidId = extractYouTubeId(item.url);
-        const iframe = document.createElement('iframe');
-        iframe.src = `https://www.youtube.com/embed/${vidId}`;
-        iframe.setAttribute('frameborder', '0');
-        iframe.setAttribute('allowfullscreen', 'true');
+        const iframe = mediaRendering.createYouTubeIframe(item.url, {
+          title: item.caption || `YouTube video ${index + 1}`,
+        });
+        const video = iframe || mediaRendering.createImageElement({
+          src: mediaRendering.VIDEO_PLACEHOLDER,
+          alt: 'Video unavailable',
+          className: 'video-placeholder',
+          fallbackSrc: '',
+        });
 
-        const p = document.createElement('p');
-        p.className = 'media-caption';
-        p.textContent = slideCaption;
+        slide.append(video, caption);
 
-        slide.appendChild(iframe);
-        slide.appendChild(p);
-
-        // Optional: fullscreen click on caption
-        p.style.cursor = 'pointer';
-        p.addEventListener('click', () => {
-          openFullscreenVideo(item.url, slideCaption);
+        caption.style.cursor = 'pointer';
+        caption.addEventListener('click', () => {
+          openCampsiteFullscreen('video', item.url, slideCaption);
         });
       }
 
       swiperWrapper.appendChild(slide);
 
-      // --- Thumbnail ---
-      const thumbWrapper = document.createElement('div');
-      thumbWrapper.className = 'thumb-wrapper media-thumb-div';
-      thumbWrapper.dataset.index = String(index);
-      thumbWrapper.dataset.url = item.url;
-      thumbWrapper.dataset.caption = slideCaption;
-      thumbWrapper.dataset.id = item._id;
-      thumbWrapper.dataset.type = item.type;
-
-      const thumbImg = document.createElement('img');
-
-      if (item.type === 'photo') {
-        thumbImg.src = item.url;
-        thumbImg.alt = item.caption || `Photo ${index + 1}`;
-      } else {
-        const vidId = extractYouTubeId(item.url);
-        thumbImg.src = vidId
-          ? `https://img.youtube.com/vi/${vidId}/hqdefault.jpg`
-          : '/images/icons/video-placeholder.png';
-        thumbImg.alt = item.caption || 'Video thumbnail';
-
-        const playIcon = document.createElement('div');
-        playIcon.className = 'video-play-overlay';
-        thumbWrapper.appendChild(playIcon);
-      }
-
-      thumbImg.addEventListener('click', () => {
-        if (campsiteSwiper) {
-          campsiteSwiper.slideTo(index);
-        }
-        setActiveCampsiteThumb(index);
-      });
-
-      thumbWrapper.appendChild(thumbImg);
-
-      // Delete button (owner or admin)
-      if (window.CURRENT_USER_ID && (item.user === window.CURRENT_USER_ID || window.CURRENT_USER_IS_ADMIN === true)) {
-        const delBtn = document.createElement('button');
-        delBtn.className = 'media-thumb-delete' +
-          (window.CURRENT_USER_IS_ADMIN === true && item.user !== window.CURRENT_USER_ID ? ' admin-delete' : '');
-        delBtn.title = 'Delete';
-        delBtn.textContent = '×';
-
-        delBtn.addEventListener('click', async (ev) => {
-          ev.stopPropagation();
+      const canDelete = Boolean(
+        window.CURRENT_USER_ID &&
+        (item.user === window.CURRENT_USER_ID || window.CURRENT_USER_IS_ADMIN === true)
+      );
+      const thumbWrapper = mediaRendering.createMediaThumbnail({
+        item,
+        index,
+        caption: slideCaption,
+        wrapperClassName: 'thumb-wrapper media-thumb-div',
+        canDelete,
+        isAdminDelete: Boolean(
+          window.CURRENT_USER_IS_ADMIN === true &&
+          item.user !== window.CURRENT_USER_ID
+        ),
+        onActivate: selectedIndex => {
+          if (campsiteSwiper) campsiteSwiper.slideTo(selectedIndex);
+          setActiveCampsiteThumb(selectedIndex);
+        },
+        onPlay: (videoItem, videoCaption) => {
+          openCampsiteFullscreen('video', videoItem.url, videoCaption);
+        },
+        onDelete: async mediaItem => {
           if (!confirm('Delete this media?')) return;
-          await deleteMedia(item, data);
-        });
-
-        thumbWrapper.appendChild(delBtn);
-      }
+          await deleteMedia(mediaItem, data);
+        },
+      });
 
       thumbsWrapper.appendChild(thumbWrapper);
     });
@@ -285,19 +275,8 @@ function showCampsitePopup(data) {
   const leftBtn  = modal.querySelector('.campsite-thumb-left');
   const rightBtn = modal.querySelector('.campsite-thumb-right');
 
-  leftBtn.onclick = () => {
-    if (campsiteSwiper) campsiteSwiper.slidePrev();
-  };
-
-  rightBtn.onclick = () => {
-    if (campsiteSwiper) campsiteSwiper.slideNext();
-  };
-
-  // Sync thumbs to swiper movement (like park slider)
-  campsiteSwiper.on('slideChange', () => {
-    const index = campsiteSwiper.activeIndex;
-    setActiveCampsiteThumb(index);
-  });
+  bindCampsiteNavButton(leftBtn, 'previous');
+  bindCampsiteNavButton(rightBtn, 'next');
 
 
   // Open modal
@@ -316,6 +295,20 @@ function showCampsitePopup(data) {
   // Update campsite badge count on open
   const total = (data.photos?.length || 0) + (data.videos?.length || 0);
   updateCampsiteBadge(data.slug || modalParent.dataset.campsiteSlug, total);
+}
+
+function bindCampsiteNavButton(button, direction) {
+  if (!button || boundCampsiteNavButtons.has(button)) return;
+
+  button.addEventListener('click', () => {
+    if (!campsiteSwiper) return;
+    if (direction === 'previous') {
+      campsiteSwiper.slidePrev();
+    } else {
+      campsiteSwiper.slideNext();
+    }
+  });
+  boundCampsiteNavButtons.add(button);
 }
 
 function updateCampsiteArrowState(swiper) {
@@ -374,43 +367,37 @@ function scrollCampsiteThumbIntoView(index) {
 
 // Loads preview in the right-hand column
 function loadCampsitePreview(item) {
-    const previewWrapper = document.getElementById('campsite-preview-wrapper');
-    const caption = document.getElementById('campsite-caption');
+  const previewWrapper = document.getElementById('campsite-preview-wrapper');
+  const caption = document.getElementById('campsite-caption');
+  if (!previewWrapper || !caption) return;
 
-    previewWrapper.innerHTML = '';
+  previewWrapper.replaceChildren();
 
-    if (item.type === 'photo') {
-        previewWrapper.innerHTML = `
-            <img src="${item.url}" onclick="openFullscreenImage('${item.url}', '${item.caption || ''}')" />
-        `;
-    } else {
-        const vidId = extractYouTubeId(item.url);
-        previewWrapper.innerHTML = `
-            <iframe src="https://www.youtube.com/embed/${vidId}" allowfullscreen></iframe>
-        `;
-    }
+  if (item.type === 'photo') {
+    const image = mediaRendering.createImageElement({
+      src: item.url,
+      alt: item.caption || 'Campsite photo',
+    });
+    image.addEventListener('click', () => {
+      openCampsiteFullscreen('photo', item.url, item.caption || '');
+    });
+    previewWrapper.appendChild(image);
+  } else {
+    const video = mediaRendering.createYouTubeIframe(item.url, {
+      title: item.caption || 'Campsite YouTube video',
+    }) || mediaRendering.createImageElement({
+      src: mediaRendering.VIDEO_PLACEHOLDER,
+      alt: 'Video unavailable',
+      fallbackSrc: '',
+    });
+    previewWrapper.appendChild(video);
+  }
 
-    caption.textContent =
-        `${item.caption || ''}  
-         ${item.username ? '• by ' + item.username : ''}  
-         ${item.dateTaken ? '• taken ' + formatDate(item.dateTaken) : ''}`;
-        
-
-}
-
-
-
-// Helper: extract video ID
-function extractYouTubeId(url) {
-  const match = url.match(
-    /(?:youtube\.com\/(?:.*v=|.*\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/
-  );
-  return match ? match[1] : null;
-}
-
-
-function isYouTubeUrl(url) {
-  return /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\//.test(url);
+  caption.textContent = [
+    item.caption || '',
+    item.username ? '• by ' + item.username : '',
+    item.dateTaken ? '• taken ' + formatDate(item.dateTaken) : '',
+  ].filter(Boolean).join('  ');
 }
 
 
@@ -579,9 +566,19 @@ async function refreshParkMedia() {
     sliderSection.classList.add('hidden');
 
     // Show a message (optional)
-    noMediaEl.innerHTML = window.CURRENT_USER_ID
-      ? `No one has uploaded any photos or videos of the park yet — be the first <a href="#park-media">(bottom of the page)</a>!`
-      : 'No one has uploaded any photos or videos of the park yet — log in to contribute!';
+    noMediaEl.replaceChildren();
+    if (window.CURRENT_USER_ID) {
+      noMediaEl.append(
+        document.createTextNode(
+          'No one has uploaded any photos or videos of the park yet — be the first '
+        ),
+        createInternalLink('#park-media', '(bottom of the page)'),
+        document.createTextNode('!'),
+      );
+    } else {
+      noMediaEl.textContent =
+        'No one has uploaded any photos or videos of the park yet — log in to contribute!';
+    }
 
     noMediaEl.classList.add('general-max-width', 'margin-auto', 'p50', 'p0-top')
 
@@ -641,7 +638,13 @@ async function submitForm(form, endpoint, { isFile = false, refresh = 'none' } =
   };
 
   try {
-    if (form.id?.includes('video') && !isYouTubeUrl(formData.get('url'))) {
+    const isVideoForm =
+      form.id?.includes('video') ||
+      form.classList.contains('campsite-video-form');
+    if (
+      isVideoForm &&
+      !mediaRendering.isYouTubeUrl(formData.get('url'))
+    ) {
       throw new Error('Please enter a valid YouTube link.');
     }
 
@@ -699,7 +702,7 @@ async function submitForm(form, endpoint, { isFile = false, refresh = 'none' } =
 
       // Also clear any generated previews/captions (for photo uploads)
       const previewContainer = form.querySelector('#photo-preview-container');
-      if (previewContainer) previewContainer.innerHTML = '';
+      if (previewContainer) previewContainer.replaceChildren();
 
       // Reset any counters if present
       const counter = form.querySelector('#photo-count');
@@ -763,70 +766,22 @@ async function deleteMedia(item, parentData) {
 }
 
 
-// GLOBAL FULLSCREEN MEDIA PREVIEW (images + YouTube videos)
-document.addEventListener('click', e => {
-  // Check for an image click
-  const img = e.target.closest('.media-preview img, #media-grid img');
-  const videoThumb = e.target.closest('.video-thumb img, .video-play-overlay');
+function openCampsiteFullscreen(mediaType, url, caption = '') {
+  const overlay = mediaType === 'photo'
+    ? window.openFullscreenImage(url, caption)
+    : window.openFullscreenVideo(url, caption);
+  if (!overlay) return null;
 
-  let overlayContent = '';
-  // console.log(img)
-  // console.log(videoThumb)
-
-  if (videoThumb) {
-    const videoWrapper = videoThumb.closest('.media-item, .media-thumb-div');
-    if (!videoWrapper) return;
-    const itemUrl = videoWrapper.dataset.url || '';
-    const caption = videoWrapper.dataset.caption || '';
-    const vidId = extractYouTubeId(itemUrl);
-    if (!vidId) return;
-    overlayContent = `
-      <div class="overlay-media-wrapper">
-        <iframe 
-          src="https://www.youtube.com/embed/${vidId}" 
-          frameborder="0" 
-          allowfullscreen
-          style="width:90vw;height:70vh;border-radius:8px;">
-        </iframe>
-        ${caption ? `<p class="overlay-caption">${caption}</p>` : ''}
-      </div>`;
-  } else if (img) {
-    const parent = img.closest('.media-thumb-div, .media-item');
-    const caption = parent?.dataset.caption || img.alt || '';
-    overlayContent = `
-      <div class="overlay-media-wrapper">
-        <img src="${img.src}" style="">
-        ${caption ? `<p class="overlay-caption">${caption}</p>` : ''}
-      </div>`;
-  }
-  else {
-    return; // Clicked neither image nor video
-  }
-
-  // Create overlay container
-  const overlay = document.createElement('div');
-  overlay.style.position = 'fixed';
-  overlay.style.inset = '0';
-  overlay.style.background = 'rgba(0,0,0,0.9)';
-  overlay.style.display = 'flex';
-  overlay.style.alignItems = 'center';
-  overlay.style.justifyContent = 'center';
-  overlay.style.zIndex = '9999';
-  overlay.style.cursor = 'zoom-out';
-  overlay.innerHTML = overlayContent;
-
-  // Push event to Google Tag Manager (GTM)).
   window.dataLayer = window.dataLayer || [];
   window.dataLayer.push({
     event: 'media_fullscreen_view',
-    media_type: img ? 'photo' : 'video',
+    media_type: mediaType,
     content_level: 'campsite',
-    page_location: window.location.href 
+    page_location: window.location.href,
   });
-
-  overlay.addEventListener('click', () => overlay.remove());
-  document.body.appendChild(overlay);
-});
+  return overlay;
+}
+window.openCampsiteFullscreen = openCampsiteFullscreen;
 
 // UPDATE CAMPSITE BADGE (QUANTITY OF MEDIA) ON PARK PAGE, AFTER UPLOAD/DELETION
 function updateCampsiteBadge(campsiteSlug, count) {
@@ -889,55 +844,27 @@ function reportBtn(e) {
 
 
 window.openFullscreenImage = function(src, caption = '') {
-  const overlay = document.createElement('div');
-  overlay.style.position = 'fixed';
-  overlay.style.inset = '0';
-  overlay.style.background = 'rgba(0,0,0,0.9)';
-  overlay.style.display = 'flex';
-  overlay.style.alignItems = 'center';
-  overlay.style.justifyContent = 'center';
-  overlay.style.zIndex = '9999';
-  overlay.style.cursor = 'zoom-out';
+  const overlay = mediaRendering.createFullscreenOverlay({
+    type: 'photo',
+    url: src,
+    caption,
+  });
+  if (!overlay) return null;
 
-  overlay.innerHTML = `
-    <div class="overlay-media-wrapper">
-      <img src="${src}" style="max-width:90vw;max-height:80vh;border-radius:8px;">
-      ${caption ? `<p class="overlay-caption">${caption}</p>` : ''}
-    </div>
-  `;
-
-  overlay.addEventListener('click', () => overlay.remove());
   document.body.appendChild(overlay);
+  return overlay;
 };
 
 window.openFullscreenVideo = function(url, caption = '') {
-  const vidId = extractYouTubeId(url);
-  if (!vidId) return;
+  const overlay = mediaRendering.createFullscreenOverlay({
+    type: 'video',
+    url,
+    caption,
+  });
+  if (!overlay) return null;
 
-  const overlay = document.createElement('div');
-  overlay.style.position = 'fixed';
-  overlay.style.inset = '0';
-  overlay.style.background = 'rgba(0,0,0,0.9)';
-  overlay.style.display = 'flex';
-  overlay.style.alignItems = 'center';
-  overlay.style.justifyContent = 'center';
-  overlay.style.zIndex = '9999';
-  overlay.style.cursor = 'zoom-out';
-
-  overlay.innerHTML = `
-    <div class="overlay-media-wrapper">
-      <iframe 
-        src="https://www.youtube.com/embed/${vidId}"
-        frameborder="0"
-        allowfullscreen
-        style="width:90vw;height:70vh;border-radius:8px;">
-      </iframe>
-      ${caption ? `<p class="overlay-caption">${caption}</p>` : ''}
-    </div>
-  `;
-
-  overlay.addEventListener('click', () => overlay.remove());
   document.body.appendChild(overlay);
+  return overlay;
 };
 
 // When user clicks on btn to open modal to upload park media
@@ -985,8 +912,8 @@ document.addEventListener('click', e => {
   });
 
   // Clear swiper + thumbs
-  document.getElementById('campsite-swiper-wrapper').innerHTML = '';
-  document.getElementById('campsite-thumbs-wrapper').innerHTML = '';
+  document.getElementById('campsite-swiper-wrapper').replaceChildren();
+  document.getElementById('campsite-thumbs-wrapper').replaceChildren();
 
   modal.classList.add('hidden');
 
