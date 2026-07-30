@@ -648,9 +648,17 @@ async function submitForm(form, endpoint, { isFile = false, refresh = 'none' } =
       throw new Error('Please enter a valid YouTube link.');
     }
 
-    const res = await fetch(endpoint, fetchOpts);
+    fetchOpts.headers = {
+      ...fetchOpts.headers,
+      'Accept': 'application/json',
+    };
+    const res = await window.CampPicsCsrf.fetch(endpoint, fetchOpts);
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed');
+    if (!res.ok) {
+      throw new Error(
+        window.CampPicsCsrf.responseErrorMessage(res, data, 'Upload failed.'),
+      );
+    }
 
     // Refresh the appropriate UI
     if (refresh === 'park') {
@@ -744,9 +752,16 @@ async function deleteMedia(item, parentData) {
   }
 
   try {
-    const res = await fetch(url, { method: 'DELETE' });
+    const res = await window.CampPicsCsrf.fetch(url, {
+      method: 'DELETE',
+      headers: { 'Accept': 'application/json' },
+    });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Delete failed');
+    if (!res.ok) {
+      throw new Error(
+        window.CampPicsCsrf.responseErrorMessage(res, data, 'Delete failed.'),
+      );
+    }
 
     // Push event to Google Tag Manager (GTM)).
     window.dataLayer = window.dataLayer || [];

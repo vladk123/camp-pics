@@ -56,9 +56,17 @@ router.route('/verify/:code')
 router.route('/verified')
   .get(users.verified)
 
-// When unverified user clicks 'resend' in account pg
-router.route('/resend-verification')
-  .get(isAuthenticatedForVerification, catchAsyncErrors(users.resendVerification))
+export const addVerificationResendRoutes = (
+  targetRouter,
+  resendController = users.resendVerification,
+) => {
+  targetRouter.route('/resend-verification')
+    .get((req, res) => res.redirect('/user/account'))
+    .post(isAuthenticatedForVerification, catchAsyncErrors(resendController));
+};
+
+// The POST performs the resend. GET is compatibility-only and cannot mutate state.
+addVerificationResendRoutes(router);
 
 // Clicked forgot password on website
 router.route('/forgot-password')

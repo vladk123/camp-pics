@@ -6,6 +6,7 @@
 
     <div class="upload-section">
         <form class="upload-form" id="park-photo-form" enctype="multipart/form-data">
+            <%- include('../csrfField') %>
             <h3>Upload Photo(s)</h3>
             <div>Use this form to upload beautiful photos of the park.</div>
             <br>
@@ -39,6 +40,7 @@
         </form>
 
         <form class="upload-form" id="park-video-form">
+            <%- include('../csrfField') %>
             <h3>Upload Video</h3>
             <div>Use this form is to upload a scenic video of the park.</div>
             <br>

@@ -5,6 +5,7 @@
     <p>Having issues or questions/suggestions that are not on the <a href="/other/faq">FAQ page</a>? Fill out the form below!</p>
 
     <form class="contact" action="/other/contact" method="post">
+        <%- include('../partials/csrfField') %>
         <div class="flex-column left">
             <div class="form-group">
                 <label for="fname">* First Name</label>

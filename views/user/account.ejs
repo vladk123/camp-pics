@@ -17,6 +17,7 @@
       <!-- RESET PASSWORD FORM -->
       <div class="reset-password-section">
           <form action="/user/change-password" method="post" class="auth-form" id="change-password-form">
+              <%- include('../partials/csrfField') %>
               <div class="form-group">
                 <label for="reset-original-password">Original Password</label>
                 <input type="password" id="reset-original-password" name="original_password" placeholder="" required>
@@ -54,7 +55,8 @@
       <% if(data.verificationResendsRemaining > 0){ %>
         <p>Your email still needs to be verified. If you did not receieve an email with the code, or lost it, please click the button below.</p>
         <p>You have <%= data.verificationResendsRemaining %> verification resend(s) remaining.</p>
-        <form action="/user/resend-verification" method="get">
+        <form action="/user/resend-verification" method="post">
+          <%- include('../partials/csrfField') %>
           <button id="re-verify-account-btn" class="btn btn-primary">Send New Verification Code</button>
         </form>
       <% } else { %>
@@ -100,6 +102,7 @@
         <p>All your <strong>photos and videos</strong> will be permanently deleted.</p>
         <div class="modal-actions">
           <form action="/user/delete-account" method="post">
+            <%- include('../partials/csrfField') %>
             <button type="submit" class="btn btn-secondary danger">Yes, delete everything</button>
           </form>
           <button class="btn btn-secondary delete-account-modal-close">Cancel</button>

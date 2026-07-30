@@ -52,10 +52,12 @@
         
         <% if (u.blocked) { %>
           <form action="/a/user/<%= u._id %>/unblock" method="POST" class="inline-form user-status-form" data-action="unblock">
+            <%- include('../partials/csrfField') %>
             <button type="submit" class="unblock-btn">Unblock</button>
           </form>
         <% } else { %>
           <form action="/a/user/<%= u._id %>/block" method="POST" class="inline-form user-status-form" data-action="block">
+            <%- include('../partials/csrfField') %>
             <button type="submit" class="block-btn">Block</button>
           </form>
         <% } %>

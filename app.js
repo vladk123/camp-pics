@@ -23,14 +23,17 @@ import LocalStrategy from 'passport-local'; //using local strategy i.e., not FB 
 import compression from 'compression'
 app.use(compression())
 import methodOverride from 'method-override';
-import cookieParser from 'cookie-parser';
-import csrf from 'csurf';
 import helmet from 'helmet'
 import rateLimiting from 'express-rate-limit' // For limiting how many requests made in a period of time
 import speedLimiting from 'express-slow-down' // For limiting speed depending on how many requests made in a period of time
 import { getIP } from './utils/getIP.js'
 import { initializeParkSearchCache } from './utils/cacheSearch.js';
 import { enforceSessionAuthVersion } from './middleware.js';
+import {
+	csrfErrorHandler,
+	csrfSynchronisedProtection,
+	exposeCsrfToken,
+} from './utils/csrf.js';
 
 import flash from 'connect-flash';
 import { redirectedFlash } from './utils/redirectedFlash.js';
@@ -172,7 +175,6 @@ app.use(session(sessionConfig)); //make sure this remains located before passpor
 
 app.use(flash());
 app.use(methodOverride('_method')); //using "_method" when doing POST, PUT, DELETE, which isn't recognized by default
-app.use(cookieParser(process.env.CP_SEC));
 
 // Don't enable, causes infinite errors
 // app.use(mongoSanitize({
@@ -256,14 +258,6 @@ app.use(passport.initialize());
 app.use(passport.session());
 app.use(enforceSessionAuthVersion);
 
-// // CSRF protection
-// const csrfProtection = csrf({ cookie: true });
-// app.use(csrfProtection);
-// app.use((req, res, next) => {
-//   res.locals.csrfToken = req.csrfToken();
-//   next();
-// });
-
 // GET CURRENT USER DETAILS LOCALS MIDDLEWARE, AND SET IP
 // Locals help us just write "success", "message", etc, directly in the .ejs files
 app.use(async(req, res, next) => { 
@@ -285,6 +279,11 @@ app.use(async(req, res, next) => {
 
 	next();
 })
+
+// Session-backed synchronizer-token protection. Body parsers, method override,
+// Passport, and session-auth-version enforcement must run before this point.
+app.use(csrfSynchronisedProtection);
+app.use(exposeCsrfToken);
 
 //WEBSITE-WIDE MESSAGES FROM MONGO DB
 
@@ -352,6 +351,9 @@ app.all('/{*any}', (req, res, next) => {
 	});
 
 })
+
+// Expected invalid-CSRF failures are handled without reaching the broad logger.
+app.use(csrfErrorHandler);
 
 //GENERIC ERROR HANDLER MIDDLEWARE
 //All the error handler "next"s get carried over here for finalizing - this code has to be below all other route stuff

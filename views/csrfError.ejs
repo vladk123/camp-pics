@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= meta.title %> - CampPics</title>
+    <meta name="description" content="<%= meta.description %>">
+    <link href="/css/general.css" rel="stylesheet">
+  </head>
+  <body>
+    <main class="general-max-width margin-auto p50 p0-top">
+      <h1>Security Check Failed</h1>
+      <p><%= csrfMessage %></p>
+      <p>
+        <a href="/">Return to the homepage</a>
+        <% if (currentUser) { %>
+          or <a href="/user/account">return to your account</a>
+        <% } %>
+      </p>
+    </main>
+  </body>
+</html>

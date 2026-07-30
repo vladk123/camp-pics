@@ -172,9 +172,16 @@ async function deleteParkMedia(item) {
     : `/camp/park/${window.PARK.slug}/video/${item._id}`;
 
   try {
-    const response = await fetch(url, { method: 'DELETE' });
+    const response = await window.CampPicsCsrf.fetch(url, {
+      method: 'DELETE',
+      headers: { 'Accept': 'application/json' },
+    });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Delete failed');
+    if (!response.ok) {
+      throw new Error(
+        window.CampPicsCsrf.responseErrorMessage(response, data, 'Delete failed.'),
+      );
+    }
 
     window.dataLayer = window.dataLayer || [];
     window.dataLayer.push({
@@ -187,7 +194,7 @@ async function deleteParkMedia(item) {
     createFlashMsg('success', 'Deleted successfully.', 'delete-media-success', 5);
     await refreshParkMedia();
   } catch (error) {
-    createFlashMsg('error', 'Error deleting.', 'delete-media-error', 10);
+    createFlashMsg('error', error.message || 'Error deleting.', 'delete-media-error', 10);
   }
 }
 

@@ -39,6 +39,7 @@
         <% if (currentUser && currentUser.email_verified) { %>
             <div class="upload-section" id="modal-upload-section">
             <form class="campsite-photo-form upload-form" enctype="multipart/form-data">
+                <%- include('../csrfField') %>
                 <h3>Upload Photo(s)</h3>
 
                 <div class="form-group">
@@ -69,6 +70,7 @@
             </form>
 
             <form class="campsite-video-form upload-form">
+                <%- include('../csrfField') %>
                 <h3>Upload Video</h3>
 
                 <div class="form-group">
