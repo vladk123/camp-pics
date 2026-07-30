@@ -30,6 +30,7 @@ import rateLimiting from 'express-rate-limit' // For limiting how many requests 
 import speedLimiting from 'express-slow-down' // For limiting speed depending on how many requests made in a period of time
 import { getIP } from './utils/getIP.js'
 import { initializeParkSearchCache } from './utils/cacheSearch.js';
+import { enforceSessionAuthVersion } from './middleware.js';
 
 import flash from 'connect-flash';
 import { redirectedFlash } from './utils/redirectedFlash.js';
@@ -253,6 +254,7 @@ passport.deserializeUser(User.deserializeUser());
 
 app.use(passport.initialize());
 app.use(passport.session());
+app.use(enforceSessionAuthVersion);
 
 // // CSRF protection
 // const csrfProtection = csrf({ cookie: true });

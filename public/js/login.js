@@ -125,10 +125,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const ruleLength = document.getElementById('rule-length');
   const ruleUpper = document.getElementById('rule-upper');
   const ruleLower = document.getElementById('rule-lower');
+  const ruleNumber = document.getElementById('rule-number');
 
   // Regex
   const emailRegex = /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/;
-  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z]).{8,30}$/;
+  const passwordPolicy = window.CampPicsPasswordPolicy;
 
   // Flags
   let emailValid = false;
@@ -184,21 +185,24 @@ document.addEventListener('DOMContentLoaded', () => {
   passwordInput.addEventListener('input', () => {
     const val = passwordInput.value;
 
-    ruleLength.className = val.length >= 8 && val.length <= 30 ? 'valid' : 'invalid';
-    ruleUpper.className = /[A-Z]/.test(val) ? 'valid' : 'invalid';
-    ruleLower.className = /[a-z]/.test(val) ? 'valid' : 'invalid';
+    passwordPolicy.updateRules(val, {
+      length: ruleLength,
+      uppercase: ruleUpper,
+      lowercase: ruleLower,
+      number: ruleNumber,
+    });
 
     if (val === '') {
       passwordFeedback.textContent = '';
       passwordValid = false;
-    } else if (passwordRegex.test(val)) {
+    } else if (passwordPolicy.isValidPassword(val)) {
       // passwordFeedback.textContent = 'Password looks good!';
       // passwordFeedback.style.color = '#28a745';
       passwordValid = true;
     } else {
       // passwordFeedback.textContent = 'Password does not meet all requirements.';
       // passwordFeedback.style.color = '#dc3545';
-      // passwordValid = false;
+      passwordValid = false;
     }
 
     checkPasswordsMatch();

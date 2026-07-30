@@ -3,6 +3,7 @@ import speedLimiting from 'express-slow-down' // For limiting speed depending on
 import mongoose from 'mongoose';
 import { logger } from './utils/logging.js'
 import { redirectedFlash } from './utils/redirectedFlash.js';
+import { sessionAuthVersionMatches } from './utils/authLifecycle.js';
 
 import multer from 'multer';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
@@ -57,6 +58,42 @@ export const isLoggedIn = async (req, res, next) => {
 
     next();
 }
+
+// Check authentication without requiring email verification.
+export const isAuthenticatedForVerification = (req, res, next) => {
+    if (!req.isAuthenticated()) {
+        req.session.returnTo = req.originalUrl;
+        return redirectedFlash(req, res, 'error', 'Please log in first!', '/');
+    }
+
+    if (req.user?.blocked) {
+        return req.logout(err => {
+            if (err) return next(err);
+            delete req.session.auth_version;
+            return redirectedFlash(req, res, 'error', 'Hmm...an error has occurred.', '/');
+        });
+    }
+
+    next();
+};
+
+export const enforceSessionAuthVersion = (req, res, next) => {
+    if (!req.user || !req.isAuthenticated()) {
+        return next();
+    }
+
+    if (sessionAuthVersionMatches(req.session?.auth_version, req.user.auth_version)) {
+        return next();
+    }
+
+    return req.logout(err => {
+        if (err) return next(err);
+        if (req.session) {
+            delete req.session.auth_version;
+        }
+        return next();
+    });
+};
 
 // API check if logged in
 export const isLoggedInAPI = (req, res, next) => {

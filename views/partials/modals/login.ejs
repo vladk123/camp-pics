@@ -52,19 +52,30 @@
 
                 <div class="form-group">
                     <label for="register-password">* Password</label>
-                    <input type="password" id="register-password" name="password" placeholder="" required>
+                    <input
+                        type="password"
+                        id="register-password"
+                        name="password"
+                        placeholder=""
+                        required
+                        minlength="8"
+                        maxlength="30"
+                        pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,30}"
+                        title="8-30 characters, at least one uppercase letter, one lowercase letter, and one number"
+                    >
                     <div id="register-password-feedback" class="feedback"></div>
 
                     <ul id="register-password-rules" class="password-rules">
                         <li id="rule-length">8–30 characters</li>
                         <li id="rule-upper">At least one uppercase letter</li>
                         <li id="rule-lower">At least one lowercase letter</li>
+                        <li id="rule-number">At least one number</li>
                     </ul>
                 </div>
 
                 <div class="form-group">
                     <label for="register-password-confirm">* Confirm Password</label>
-                    <input type="password" id="register-password-confirm" placeholder="" required>
+                    <input type="password" id="register-password-confirm" name="password_repeat" placeholder="" required>
                     <div id="register-confirm-feedback" class="feedback"></div>
                 </div>
 

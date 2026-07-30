@@ -1,49 +1,80 @@
-import { redirectedFlash } from './redirectedFlash.js';
 import { Token } from '../models/token.js';
-import { sendEmail } from "./sendEmail.js";
-import crypto from "crypto";
+import {
+    EMAIL_VERIFICATION_TOKEN_TTL_MS,
+    generateAuthenticationToken,
+    hashAuthenticationToken,
+} from './authTokens.js';
+import { logger } from './logging.js';
 
-export const createNewUserVerify = async (req, res, next, userId, username) => {
+const reportExpiredTokenCleanupFailure = () => logger(null, null, 'error', {
+    message: 'Expired email-verification tokens could not be removed after successful delivery.',
+});
+
+export const createNewUserVerify = async ({
+    userId,
+    username,
+    TokenModel = Token,
+    send,
+    now = new Date(),
+    cleanupNow,
+    onExpiredTokenCleanupError = reportExpiredTokenCleanupFailure,
+}) => {
+    if (typeof send !== 'function') {
+        throw new TypeError('A verification email sender is required.');
+    }
+
+    const rawToken = generateAuthenticationToken();
+    const emailVerificationCode = hashAuthenticationToken(rawToken);
+    const token = new TokenModel({
+        email_verification_code: emailVerificationCode,
+        email_verification_expiry: new Date(
+            now.getTime() + EMAIL_VERIFICATION_TOKEN_TTL_MS,
+        ),
+        user_id: userId,
+    });
+
+    await token.save();
+
     try {
-        // Create new token for email verification
-        const generatedCode = stringGen(60); //Generate verification code
-        const email_verification_code = crypto.createHash("sha256").update(generatedCode).digest("hex"); //simple hash
-        const user_id = userId //required for the token schema model
-        const token = new Token({email_verification_code, user_id})
-        await token.save()
-
-        //send email
-        // await sendEmail(undefined,username,"Please Verify Your Email - CampPics", "emails/users/verify_email.ejs", {req, generatedCode, req}, user_id)
-
-        await sendEmail({
+        await send({
             to: username,
-            subject: "Verify your account - CampPics",
-            template: "verify-account",
-            templateData: { generatedCode },
-            userId
+            subject: 'Verify your account - CampPics',
+            template: 'verify-account',
+            templateData: { verificationToken: rawToken },
+            userId,
         });
-        // console.log('sendEmail')
-        return
-        
-    } catch (e) {
-        if (e.name == "UserExistsError"){return redirectedFlash(req, res, 'error', "Hm, that email already exists...perhaps try 'Forgot Password' on the Login page.", '/') }
-        next(e)
-    }
-
-
-
-}
-
-
-function stringGen (length) {
-    const generate = length => {
-        var result           = '';
-        var characters       = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-        var charactersLength = characters.length;
-        for ( var i = 0; i < length; i++ ) {
-          result += characters.charAt(Math.floor(Math.random() * charactersLength));
+    } catch (error) {
+        if (token._id != null) {
+            await TokenModel.deleteOne({ _id: token._id }).catch(() => {});
         }
-        return result
+        throw error;
     }
-    return generate(length)
-}
+
+    const expiredTokenCleanupTime = cleanupNow ?? new Date();
+
+    try {
+        await TokenModel.deleteMany({
+            user_id: userId,
+            _id: { $ne: token._id },
+            email_verification_expiry: { $lte: expiredTokenCleanupTime },
+        });
+    } catch {
+        if (typeof onExpiredTokenCleanupError === 'function') {
+            try {
+                await onExpiredTokenCleanupError();
+            } catch {
+                // Delivery succeeded, so operational logging must not invalidate it.
+            }
+        }
+
+        return {
+            delivered: true,
+            expiredTokenCleanupSucceeded: false,
+        };
+    }
+
+    return {
+        delivered: true,
+        expiredTokenCleanupSucceeded: true,
+    };
+};

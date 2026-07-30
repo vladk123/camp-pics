@@ -16,7 +16,7 @@
       <h2>Password Reset</h2>
       <!-- RESET PASSWORD FORM -->
       <div class="reset-password-section">
-          <form action="/user/change-password" method="post" class="auth-form">
+          <form action="/user/change-password" method="post" class="auth-form" id="change-password-form">
               <div class="form-group">
                 <label for="reset-original-password">Original Password</label>
                 <input type="password" id="reset-original-password" name="original_password" placeholder="" required>
@@ -30,8 +30,10 @@
                   name="new_password"
                   placeholder=""
                   required
-                  pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d@$!%*?&]{8,30}"
-                  title="8–30 characters, at least one uppercase, one lowercase, and one number"
+                  minlength="8"
+                  maxlength="30"
+                  pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,30}"
+                  title="8-30 characters, at least one uppercase letter, one lowercase letter, and one number"
                 />
               </div>
 
@@ -40,7 +42,7 @@
                 <input type="password" id="reset-new-repeat-password" name="new_password_repeat" placeholder="" required>
               </div>
 
-              <p>Must meet the criteria: 8-30 characters, at least one uppercase letter, one lowercase letter and one number</p>
+              <p>Must be 8-30 characters and include at least one uppercase letter, one lowercase letter, and one number.</p>
               <button class="btn btn-primary">Reset Password</button>
           </form>
           <p class="forgot-text">
@@ -49,9 +51,9 @@
       </div>
     <% } else { %>
       <h2>Verify Your Account Email</h2>
-      <% if(currentUser?.token_counter < 2){ %>
+      <% if(data.verificationResendsRemaining > 0){ %>
         <p>Your email still needs to be verified. If you did not receieve an email with the code, or lost it, please click the button below.</p>
-        <p>You have <%= 2 - currentUser?.token_counter %> more attempt(s) before your account is locked (contact us if this occurs or if you're not receiving the emails).</p>
+        <p>You have <%= data.verificationResendsRemaining %> verification resend(s) remaining.</p>
         <form action="/user/resend-verification" method="get">
           <button id="re-verify-account-btn" class="btn btn-primary">Send New Verification Code</button>
         </form>

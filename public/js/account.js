@@ -4,6 +4,12 @@ const modal2 = document.getElementById('delete-account-modal-2');
 const confirmStep1 = document.getElementById('confirm-step1');
 const deleteAccountModalBackdropInsertPoint = document.getElementById('delete-account-modal-backdrop-insert');
 
+window.CampPicsPasswordPolicy.bindPasswordForm({
+  form: document.getElementById('change-password-form'),
+  passwordInput: document.getElementById('reset-new-password'),
+  confirmationInput: document.getElementById('reset-new-repeat-password'),
+});
+
 // helper: open modal
 function openModal(modalEl) {
   modalEl.classList.remove('hidden');

@@ -5,7 +5,7 @@
       Welcome to CampPics.ca!<br>
       You're on your way to share photos and videos of Canadian campsites with other campers.
     </p>
-    <a href="<%= process.env.CC_DOMAIN %>/user/verify/<%=generatedCode %>"><strong>Click here to verify your email.</strong></a>
+    <a href="<%= process.env.CC_DOMAIN %>/user/verify/<%= encodeURIComponent(verificationToken) %>"><strong>Click here to verify your email.</strong></a>
     <%- include('./partials/signature') %>
   </body>
 </html>

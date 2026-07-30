@@ -26,6 +26,11 @@ const UserSchema = new Schema({
         type: Boolean,
         default: false
     },
+    auth_version: {
+        type: Number,
+        default: 0,
+        min: 0,
+    },
     fname: { // Nickname
         type: String,
         required: true,
@@ -89,10 +94,8 @@ const UserSchema = new Schema({
     other_login: {
         // Passwords
         reset_password_code: String,
-        reset_password_expiry: {
-            type: Date,
-            default: () => Date.now() + 15*60*1000 // 15 min from now
-        },
+        reset_password_expiry: Date,
+        reset_password_claim: String,
         reset_password_counter: {
             type: Number,
             default: 0

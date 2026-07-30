@@ -3,86 +3,141 @@ import { Upload } from '../models/upload.js';
 import { Park } from '../models/park.js';
 import { Token } from '../models/token.js';
 import { logger } from '../utils/logging.js'; //for logging errors
-import crypto from 'crypto'
 import { v2 as cloudinary } from 'cloudinary';
 // import { getIP } from '../utils/getIP.js'
 import { redirectedFlash } from '../utils/redirectedFlash.js';
 import { createNewUserVerify } from '../utils/createNewUserVerify.js'
-import { stringGen } from '../utils/general.js'
 import { sendEmail } from "../utils/sendEmail.js";
+import {
+    consumeVerificationToken,
+    effectiveAuthVersion,
+    finalizePasswordResetRequest,
+    findValidPasswordReset,
+    MAX_VERIFICATION_RESENDS,
+    reservePasswordResetRequest,
+    reserveVerificationResend,
+    resetPasswordWithClaim,
+    rollbackPasswordResetRequest,
+    rollbackVerificationResend,
+    storeSessionAuthVersion,
+} from '../utils/authLifecycle.js';
+import {
+    PASSWORD_CONFIRMATION_MESSAGE,
+    validatePassword,
+} from '../utils/passwordPolicy.js';
 
-// Minimum eight characters, at least one uppercase letter, one lowercase letter and one number
-const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z]).{8,30}$/;
+const GENERIC_RESET_REQUEST_MESSAGE =
+    'If you have an account with us, you will receive an email shortly to reset your password.';
+const INVALID_RESET_LINK_MESSAGE =
+    'Sorry, that password-reset link is invalid or has expired. Please request a new one.';
 
+export const validateRegistrationPassword = (password, passwordRepeat) => {
+    if (typeof passwordRepeat !== 'string') {
+        return {
+            valid: false,
+            message: PASSWORD_CONFIRMATION_MESSAGE,
+        };
+    }
 
-export const register = async(req, res, next) => {
-    const { username, password, fname, website_user, hands_check } = req.body
+    return validatePassword(password, passwordRepeat);
+};
+
+export const createRegisterController = ({
+    UserModel = User,
+    TokenModel = Token,
+    createVerification = createNewUserVerify,
+    emailSender = sendEmail,
+    log = logger,
+    redirectWithFlash = redirectedFlash,
+} = {}) => async(req, res, next) => {
+    const {
+        username,
+        password,
+        password_repeat,
+        fname,
+        website_user,
+        hands_check,
+    } = req.body
 
     // Honeypot check
     if (website_user) {
         console.warn('Bot registration attempt detected.');
         return res.status(400).send('No.');
     }
-    console.log('1')
 
     // Other bot check
-    const handsCheck = hands_check.trim().toLowerCase()
+    const handsCheck = typeof hands_check === 'string'
+        ? hands_check.trim().toLowerCase()
+        : '';
     if (handsCheck != '5' && handsCheck !='five') {
         console.warn('Bot registration attempt detected.');
         return res.status(400).send('No.');
     }
-    console.log('2')
 
-    if(username.length < 3 || username.length > 150){
-        return redirectedFlash(req, res, 'error', `Oops! An error has occurred.`, '/')
+    if(typeof username !== 'string' || username.length < 3 || username.length > 150){
+        return redirectWithFlash(req, res, 'error', `Oops! An error has occurred.`, '/')
     }
-    console.log('3')
 
     // Verify password
-    if (!passwordRegex.test(password)) {
-        return redirectedFlash(req, res, 'error', `Oops! An error has occurred.`, '/')
+    const passwordValidation = validateRegistrationPassword(
+        password,
+        password_repeat,
+    );
+    if (!passwordValidation.valid) {
+        return redirectWithFlash(req, res, 'error', passwordValidation.message, '/')
     }
-    console.log('4')
 
-    // Proceed adding to DB
-    let newUser 
+    const user = new UserModel({ username:username.toLowerCase().trim(), fname});
+
+    // Store the IP
+    user.ip_address_registered = res.locals.ip
+
+    // User creation and verification delivery are the registration rollback boundary.
+    let newUser
     try {
-        const user = new User({ username:username.toLowerCase().trim(), fname});
-        console.log('5')
-
-        // Store the IP
-        user.ip_address_registered = res.locals.ip
-
         // Save new user
-        newUser = await User.register(user, password)
+        newUser = await UserModel.register(user, password)
         
         // Generate and email them the verification code
-        await createNewUserVerify(req, res, next, user._id, user.username)
-
-        return redirectedFlash(req, res, 'success', `Registered! Please check your inbox to verify your email (link expires soon!).`, '/user/registered',
-            {GA4:{
-                event: 'sign_up',
-                user_id: newUser._id
-            }}
-        )
+        await createVerification({
+            userId: newUser._id,
+            username: newUser.username,
+            send: emailSender,
+        })
     } catch (err) {
-        // console.error(err.errors)
-        
-        // Delete user if was created
+        // Roll back both records created by this registration attempt.
         if(newUser){
-            await User.findByIdAndDelete(newUser._id)
+            const rollbackResults = await Promise.allSettled([
+                TokenModel.deleteMany({ user_id: newUser._id }),
+                UserModel.findByIdAndDelete(newUser._id),
+            ]);
+
+            if (rollbackResults.some(result => result.status === 'rejected')) {
+                await log(null, null, 'error', {
+                    message: 'A failed registration could not be fully rolled back.',
+                });
+            }
         }
         
         if(err?.name === 'UserExistsError'){
-            return redirectedFlash(req, res, 'error', `User already exists.`, '/')
+            return redirectWithFlash(req, res, 'error', `User already exists.`, '/')
         } else {
-            console.log(err)
-            await logger(null,null,'error', {message: `User wasn't able to be created.`});
-            return redirectedFlash(req, res, 'error', `Something went wrong when trying to register a new user...please contact us if this keeps happening.`, '/')
+            await log(null,null,'error', {message: `User wasn't able to be created.`});
+            return redirectWithFlash(req, res, 'error', `Something went wrong when trying to register a new user...please contact us if this keeps happening.`, '/')
         }
         
     }
+
+    // Delivery succeeded. Response/session/analytics failures must not roll it back.
+    return redirectWithFlash(req, res, 'success', `Registered! Please check your inbox to verify your email (link expires soon!).`, '/user/registered',
+        {GA4:{
+            event: 'sign_up',
+            user_id: newUser._id
+        }}
+    )
 }
+
+export const register = createRegisterController();
 
 export const registered = async(req, res, next) => {
     return res.render(
@@ -104,18 +159,11 @@ export const login = async(req, res, next) => {
 
         // If they're blocked, don't allow login
         if(req.user.blocked){
-            req.logout();
-            return redirectedFlash(req, res, 'error', 'An error occurred.', '/');
-        }
-
-        // If they've tried to login the 2nd time without verifying, it will not allow them any more.
-        if (req.user.token_counter > 2) {
-            let userId = req.user.username
-            //get rid of existing token in db, if exists..?
-            await Token.findOneAndDelete({user_id: req.user._id }) 
-            req.logout();
-            // errLogging(req, res, '', `Too many attempts by ${userId} to login without verifying account.`)
-            throw new Error (`Something is not right, ${userId} - too many attempts to login without verifying this account. Please contact us to fix this issue.`)
+            return req.logout(err => {
+                if (err) return next(err);
+                delete req.session.auth_version;
+                return redirectedFlash(req, res, 'error', 'An error occurred.', '/');
+            });
         }
         
         // Update date last logged in (for tracking old inactive accounts during cleanup process) w/ IP to ensure not a bot that's changing IPs, and reset loginNoticeSent
@@ -131,8 +179,7 @@ export const login = async(req, res, next) => {
                 },
                 $set: {
                     loginNoticeSent: false,
-                    'other_login.last_login': new Date(),
-                    'other_login.reset_password_counter' : 0
+                    'other_login.last_login': new Date()
                 }
                 
             }
@@ -162,8 +209,7 @@ export const login = async(req, res, next) => {
 }
 
 export const logout =  (req, res, next) => {
-    const userId = req.user._id
-    req.logout(async function (err){
+    req.logout(function (err){
         if(err) return next(err)
         req.session.regenerate((err => {
             if (err) return next(err);
@@ -184,38 +230,27 @@ export const logout =  (req, res, next) => {
 export const verify =  async(req, res, next) => {
     const expiredLinkRedirect = () => redirectedFlash(req, res, 'error', 'Sorry, that link is invalid or has expired...please try re-verifying by logging in and going to your Account settings.', '/')
     try {
-        // Check token
-        const codeToCheck = crypto.createHash("sha256").update(req.params.code).digest("hex");
-        const token = await Token.findOne({email_verification_code: codeToCheck});
-        if(!token) {
-            return expiredLinkRedirect()
-        };
-        const userId = token.user_id
-        // If expired, delete and redirect
-        if (token.email_verification_expiry < Date.now()) {
-            await Token.findOneAndDelete({token})
-            return expiredLinkRedirect()
+        const result = await consumeVerificationToken({
+            TokenModel: Token,
+            UserModel: User,
+            rawToken: req.params.code,
+        });
+
+        if (result.status !== 'verified') {
+            return expiredLinkRedirect();
         }
-        // Check user and make sure token does not match
-        const user = await User.findById(userId);
-        if(!user || codeToCheck !== token.email_verification_code) {
-            await Token.findOneAndDelete({ _id: token._id })
-            return expiredLinkRedirect()
-        // If token matches
-        } else {
-            await user.updateOne({$set: {email_verified: true}})
-            await Token.findOneAndDelete({ _id: token._id })
-            return redirectedFlash(req, res, 'success', 'Your account is verified and you can now sign in and upload photos and videos!', '/user/verified',
-                {GA4:{
-                    event: 'user_verified',
-                    method: 'email_verification_code',
-                    // user_id: user._id
-                }}
-            )
-        }
+
+        return redirectedFlash(req, res, 'success', 'Your account is verified and you can now sign in and upload photos and videos!', '/user/verified',
+            {GA4:{
+                event: 'user_verified',
+                method: 'email_verification_code',
+            }}
+        )
     } catch(e) {
-        if (e.name == 'TypeError') {return expiredLinkRedirect()} 
-        next(e)
+        await logger(null, null, 'error', {
+            message: 'An email-verification link could not be processed.',
+        });
+        return expiredLinkRedirect();
     }
 
 }
@@ -234,250 +269,358 @@ export const verified = async(req, res, next) => {
 }
 
 
-export const resendVerification = async(req, res, next) => {
-    if(req.user.email_verified == false) {
-
-        //increment the counter
-        await User.findByIdAndUpdate({_id: req.user._id },{$inc: {token_counter: 1}})
-        //delete current token
-        await Token.findOneAndDelete({user_id: req.user._id })
-        //send email again with verification link
-        await createNewUserVerify(req, res, next, req.user._id, req.user.username)
-        // req.logout();
-
-        // When they're on their on their last allowed verification email
-        if(req.user.token_counter == 2){
-            return redirectedFlash(req, res, 'info', 'That was the last verification email sent! Contact us if you still did not receive it.', '/user/account',
-                {GA4:{
-                    event: 'new_verification_request',
-                    user_id: req.user._id,
-                }}
-            )
-        } else if (req.user.token_counter < 2){
-            return redirectedFlash(req, res, 'info', 'You were just sent the verification email again - check your spam! Click the link in the email to verify.', '/user/account',
-                {GA4:{
-                    event: 'new_verification_request',
-                    user_id: req.user._id,                    
-                }}
-            )
-        } else {
-            return redirectedFlash(req, res, 'error', 'You can no longer verify through the website; please contact us.', '/user/account')
-        }
-        
+export const createResendVerificationController = ({
+    UserModel = User,
+    createVerification = createNewUserVerify,
+    emailSender = sendEmail,
+    reserveResend = reserveVerificationResend,
+    rollbackResend = rollbackVerificationResend,
+    log = logger,
+    redirectWithFlash = redirectedFlash,
+    maxVerificationResends = MAX_VERIFICATION_RESENDS,
+} = {}) => async(req, res, next) => {
+    if (req.user.email_verified) {
+        return res.redirect('/user/account');
     }
+
+    const reservedUser = await reserveResend({
+        UserModel,
+        userId: req.user._id,
+    });
+
+    if (!reservedUser) {
+        const currentUser = await UserModel.findById(req.user._id);
+        if (currentUser?.email_verified) {
+            return res.redirect('/user/account');
+        }
+
+        return redirectWithFlash(req, res, 'error', 'You have used all available verification resends. Please contact us if you still need help.', '/user/account');
+    }
+
+    try {
+        await createVerification({
+            userId: reservedUser._id,
+            username: reservedUser.username,
+            send: emailSender,
+        });
+    } catch {
+        await rollbackResend({
+            UserModel,
+            userId: reservedUser._id,
+        }).catch(() => {});
+        await log(null, null, 'error', {
+            message: 'A verification resend could not be completed.',
+        });
+        return redirectWithFlash(req, res, 'error', 'The verification email could not be sent. Please try again.', '/user/account');
+    }
+
+    if (reservedUser.token_counter >= maxVerificationResends) {
+        return redirectWithFlash(req, res, 'info', 'That was the last verification email resend available. Contact us if you still did not receive it.', '/user/account',
+            {GA4:{
+                event: 'new_verification_request',
+                user_id: reservedUser._id,
+            }}
+        )
+    }
+
+    return redirectWithFlash(req, res, 'info', 'You were just sent the verification email again - check your spam! Click the link in the email to verify.', '/user/account',
+        {GA4:{
+            event: 'new_verification_request',
+            user_id: reservedUser._id,
+        }}
+    )
 }
+
+export const resendVerification = createResendVerificationController();
 
 // Clicked forgot password
 export const forgotPassword = async(req, res, next) => {
-    try{ 
-        let username = req.body.forgot_username;
-        //check username was filled out
-        if(!username) {
-            return redirectedFlash(req, res, 'error', 'Please fill out the email field.', '/')
+    const username = typeof req.body.forgot_username === 'string'
+        ? req.body.forgot_username.toLowerCase().trim()
+        : '';
+    let emailDelivered = false;
+
+    try {
+        const user = username
+            ? await User.findOne({ username }).select('+hash +salt')
+            : null;
+        const reservation = user
+            ? await reservePasswordResetRequest({
+                UserModel: User,
+                user,
+            })
+            : null;
+
+        if (reservation) {
+            const userId = reservation.user._id;
+            try {
+                await sendEmail({
+                    to: reservation.user.username,
+                    subject: 'Your Password Reset Link - CampPics',
+                    template: 'reset-password',
+                    templateData: {
+                        code: reservation.rawToken,
+                        userId,
+                    },
+                    userId,
+                });
+
+                emailDelivered = await finalizePasswordResetRequest({
+                    UserModel: User,
+                    userId,
+                    tokenDigest: reservation.tokenDigest,
+                    requestClaimDigest: reservation.requestClaimDigest,
+                    expiresAt: reservation.expiresAt,
+                });
+            } catch {
+                emailDelivered = false;
+            }
+
+            if (!emailDelivered) {
+                await rollbackPasswordResetRequest({
+                    UserModel: User,
+                    userId,
+                    tokenDigest: reservation.tokenDigest,
+                    requestClaimDigest: reservation.requestClaimDigest,
+                    expiresAt: reservation.expiresAt,
+                    previousState: reservation.previousState,
+                }).catch(() => {});
+                await logger(null, null, 'error', {
+                    message: 'A password-reset email request could not be completed.',
+                });
+            }
         }
-        username = username.toLowerCase();
-        //get what the user account
-        const user = await User.findOne({"username": username}).exec()
-
-        // check if not 1 result, send bot false msg, in case someone trying to hack in
-        if(!user){
-            return redirectedFlash(req, res, 'success', 'If you have an account with us, you will receive an email shortly to reset your password.', '/')
-        }
-
-        // Increase counter
-        if(typeof user.other_login.reset_password_counter !== "undefined" && user.other_login.reset_password_counter !== ""){
-            user.other_login.reset_password_counter ++
-        } else {
-            user.other_login.reset_password_counter = 1
-        }
-
-        // If reset password too many times...without actually resetting it
-        if(user.other_login.reset_password_counter > 3){
-            return redirectedFlash(req, res, 'error', "You have attempted resetting your password too many times. Please contact us.", '/')
-        }
-      
-        //generate random code 15-characters long
-        const code = stringGen(15)
-        //hash the code
-        const hashedCode = crypto.createHash("sha256").update(code).digest("hex"); //simple hash
-
-        // set the reset_password_code 
-        user.other_login.reset_password_code = hashedCode
-        user.other_login.reset_password_expiry = Date.now() + 15*60*1000 
-
-        await user.save()
-
-        // userId to pass to the email
-        const userId = user._id
-        // send user email with link
-        await sendEmail({
-            to: user.username,
-            subject: "Your Password Reset Link - CampPics",
-            template: "reset-password",
-            templateData: {code, userId},
-            userId,
-        })
-
-        return redirectedFlash(req, res, 'success', 'Please check your email inbox (and spam) and click the link to reset your password.', '/',
-            {GA4:{
-                event: 'reset_password_request',
-                // user_id: req.user._id,
-            }}
-        )
-    } catch (e) {
-        next(e)
+    } catch {
+        await logger(null, null, 'error', {
+            message: 'A password-reset request could not be processed.',
+        });
     }
+
+    return redirectedFlash(
+        req,
+        res,
+        'success',
+        GENERIC_RESET_REQUEST_MESSAGE,
+        '/',
+        emailDelivered
+            ? { GA4: { event: 'reset_password_request' } }
+            : {},
+    );
 }
 
 // Clicked the reset link in email after clicking Forgot Password on website
 export const renderForgotPasswordReset = async(req, res, next) => {
-    try{ 
-        // Log the user out & redirect
+    const invalidLinkRedirect = () =>
+        redirectedFlash(req, res, 'error', INVALID_RESET_LINK_MESSAGE, '/');
+
+    try {
         const {userId, code} = req.params;
-        if(!userId || !code){
-            return redirectedFlash(req, res, 'error', 'Hm, are you sure you clicked the correct link?', '/')
-        }
-        req.logout(() => {
-            return res.render(
-                'user/forgotPassword', 
-                {
-                    meta: {
-                        title: 'Reset Password', 
-                    }, 
-                    userId, 
-                    code, 
-                    data:{}
-                }
-            ) // data obj to avoid crashes
+        const user = await findValidPasswordReset({
+            UserModel: User,
+            userId,
+            rawToken: code,
         });
-        
-    } catch (e) {
-        next(e)
+
+        if (!user) {
+            return invalidLinkRedirect();
+        }
+
+        return res.render(
+            'user/forgotPassword',
+            {
+                meta: {
+                    title: 'Reset Password',
+                },
+                encodedUserId: encodeURIComponent(userId),
+                encodedCode: encodeURIComponent(code),
+                data:{}
+            }
+        )
+    } catch {
+        await logger(null, null, 'error', {
+            message: 'A password-reset link could not be validated.',
+        });
+        return invalidLinkRedirect();
     }
 }
 
 // User submitted to reset forgotten password
 export const updateForgotPasswordReset = async(req, res, next) => {
-    try{ 
+    const invalidLinkRedirect = () =>
+        redirectedFlash(req, res, 'error', INVALID_RESET_LINK_MESSAGE, '/');
+
+    try {
         const {userId, code} = req.params;
-        const { new_password } = req.body;
-        if(!userId || !code || !new_password){
-            return redirectedFlash(req, res, 'error', 'Hm, are you sure you clicked the correct link and filled all the fields?', '/')
-        }
-        // Verify password
-        if (!passwordRegex.test(new_password)) {
-            return redirectedFlash(req, res, 'error', `Oops! An error has occurred.`, '/')
-        }
-
-        //Get user (by param since not logged in)
-        const user = await User.findById(req.userId)
-
-        // If user not found
-        if (!user) {
-            return redirectedFlash(req, res, 'error', `Oops! An error has occurred.`, '/')
+        const { new_password, new_password_repeat } = req.body;
+        if (
+            typeof userId !== 'string' ||
+            typeof code !== 'string' ||
+            typeof new_password !== 'string' ||
+            typeof new_password_repeat !== 'string'
+        ) {
+            return invalidLinkRedirect();
         }
 
-        // Check code to make sure it matches
-        const hashedCode = crypto.createHash("sha256").update(code).digest("hex"); //simple hash
-
-        // If password reset code doesn't match what it should be
-        if(hashedCode != user?.other_login?.reset_password_code){
-            return redirectedFlash(req, res, 'error', 'Something went wrong. Please ensure your passwords match and that you clicked the correct email link.', '/')
+        const validReset = await findValidPasswordReset({
+            UserModel: User,
+            userId,
+            rawToken: code,
+        });
+        if (!validReset) {
+            return invalidLinkRedirect();
         }
 
-        // Update user
-        try { // <- seems without nested try/catch, it does not catch errors for this level of code?
-            // Attempt to set new password
-            user.setPassword(new_password, function(setPasswordErr, user) {
-                if (setPasswordErr) { return redirectedFlash(req, res, 'error', setPasswordErr, '/'); }
-                user.save(function(saveErr) {
-                    if (saveErr) { return redirectedFlash(req, res, 'error', saveErr, '/'); }
-                    return redirectedFlash(req, res, 'success', 'Password Updated! You can log in with your new password.', '/')
-                });
-            });      
-        } catch(e) {
-            return redirectedFlash(req, res, 'error', e.message, '/')
+        const passwordValidation = validatePassword(
+            new_password,
+            new_password_repeat,
+        );
+        if (!passwordValidation.valid) {
+            const resetUrl = `/user/forgot-password/${encodeURIComponent(userId)}/${encodeURIComponent(code)}`;
+            return redirectedFlash(
+                req,
+                res,
+                'error',
+                passwordValidation.message,
+                resetUrl,
+            );
         }
 
-        return res.render(
-            'user/forgotPassword', 
-            {
-                meta: {
-                    title: 'Reset Password', 
-                }, 
-                userId, 
-                code, 
-                data:{}
-            }
-        ) // data obj to avoid crashes
-    } catch (e) {
-        next(e)
+        const result = await resetPasswordWithClaim({
+            UserModel: User,
+            userId,
+            rawToken: code,
+            newPassword: new_password,
+        });
+
+        if (result.status === 'invalid') {
+            return invalidLinkRedirect();
+        }
+
+        if (result.status !== 'success') {
+            await logger(null, null, 'error', {
+                message: 'A claimed password reset could not be saved.',
+            });
+            const resetUrl = `/user/forgot-password/${encodeURIComponent(userId)}/${encodeURIComponent(code)}`;
+            return redirectedFlash(
+                req,
+                res,
+                'error',
+                'The password could not be updated. Please try again.',
+                resetUrl,
+            );
+        }
+
+        return redirectedFlash(req, res, 'success', 'Password Updated! You can log in with your new password.', '/')
+    } catch {
+        await logger(null, null, 'error', {
+            message: 'A password-reset submission could not be processed.',
+        });
+        return invalidLinkRedirect();
     }
 }
 
 // Filled out the "reset password" form on the account page
 export const changePassword = async(req, res, next) => {
-    try{ //even though we have the .catch middleware for this async function, here we're checking for errors within the passport submission
-        const {original_password, new_password, new_password_repeat} = req.body;
+    const {original_password, new_password, new_password_repeat} = req.body;
 
-        //check if exists
-        if(!original_password || !new_password) {
-            return redirectedFlash(req, res, 'error', 'Please fill out all password fields.', '/user/account')
-        }
-        
-        // Verify password
-        if (!passwordRegex.test(new_password)) {
-            return redirectedFlash(req, res, 'error', `Invalid password per the requirements (8-30 characters, at least one uppercase letter, one lowercase letter and one number).`, '/user/account')
+    if (
+        typeof original_password !== 'string' ||
+        typeof new_password !== 'string' ||
+        typeof new_password_repeat !== 'string'
+    ) {
+        return redirectedFlash(req, res, 'error', 'Please fill out all password fields.', '/user/account')
+    }
+
+    const passwordValidation = validatePassword(
+        new_password,
+        new_password_repeat,
+    );
+    if (!passwordValidation.valid) {
+        return redirectedFlash(req, res, 'error', passwordValidation.message, '/user/account')
+    }
+
+    try {
+        const user = await User.findById(req.user.id).select('+hash +salt');
+        if (!user) {
+            return redirectedFlash(req, res, 'error', 'The password could not be updated.', '/user/account');
         }
 
-        //checking that passwords match
-        if (new_password_repeat !== new_password) { 
-            return redirectedFlash(req, res, 'error', 'Passwords do not match! Make sure you type your password correctly!', '/user/account')
-        } else {
-            //get what the details should be
-            const user = await User.findById(req.user.id)
-
-            //update user
-            try { // <- seems without nested try/catch, it does not catch errors for this level of code?
-                // checking that current password is correct
-                await new Promise((resolve, reject) => {
-                    user.authenticate(original_password, (err, authenticated) => {
-                      if (err) return reject(err);
-                      if (!authenticated)
-                        return reject(new Error('Current password does not seem to be correct.'));
-                  
-                        user.setPassword(new_password, async (setErr) => {
-                            if (setErr) return reject(setErr);
-                            try {
-                                await user.save(); // ✅ no callback
-                                resolve();
-                            } catch (saveErr) {
-                                reject(saveErr);
-                            }
-                        });
-                    });
-                });                  
-                  
-                  return redirectedFlash(req, res, 'success', 'Password updated successfully!', '/user/account');
-                  
-            } catch(e) {
-                return redirectedFlash(req, res, 'error', e.message, '/user/account')
-            }
+        let authentication;
+        try {
+            authentication = await user.authenticate(original_password);
+        } catch {
+            await logger(null, null, 'error', {
+                message: 'A logged-in password change could not authenticate the current credential.',
+            });
+            return redirectedFlash(req, res, 'error', 'The password could not be updated.', '/user/account');
         }
-    } catch (e) {
-        next(e)
+
+        if (!authentication.user) {
+            return redirectedFlash(req, res, 'error', 'The current password is incorrect.', '/user/account');
+        }
+
+        const credentialUser = authentication.user;
+        const previousHash = credentialUser.hash;
+        const previousSalt = credentialUser.salt;
+        await credentialUser.setPassword(new_password);
+
+        const updatedUser = await User.findOneAndUpdate(
+            {
+                _id: credentialUser._id,
+                hash: previousHash,
+                salt: previousSalt,
+            },
+            {
+                $set: {
+                    hash: credentialUser.hash,
+                    salt: credentialUser.salt,
+                    attempts: 0,
+                    'other_login.reset_password_counter': 0,
+                },
+                $unset: {
+                    'other_login.reset_password_code': 1,
+                    'other_login.reset_password_expiry': 1,
+                    'other_login.reset_password_claim': 1,
+                },
+                $inc: { auth_version: 1 },
+            },
+            { new: true },
+        );
+
+        if (!updatedUser) {
+            return redirectedFlash(req, res, 'error', 'The password could not be updated. Please try again.', '/user/account');
+        }
+
+        storeSessionAuthVersion(req, updatedUser);
+        req.user.auth_version = effectiveAuthVersion(updatedUser);
+        return redirectedFlash(req, res, 'success', 'Password updated successfully!', '/user/account');
+    } catch {
+        await logger(null, null, 'error', {
+            message: 'A logged-in password change could not be saved.',
+        });
+        return redirectedFlash(req, res, 'error', 'The password could not be updated. Please try again.', '/user/account');
     }
 }
 
 
 export const getAccount = (req, res, next) => {
+    const resendCount = Number.isSafeInteger(req.user?.token_counter)
+        ? req.user.token_counter
+        : 0;
+
     return res.render(
         'user/account', 
         {
             meta: {
 				title: 'Account', 
 			}, 
-            data: { currentPath: req.originalUrl }
+            data: {
+                currentPath: req.originalUrl,
+                verificationResendsRemaining: Math.max(
+                    0,
+                    MAX_VERIFICATION_RESENDS - resendCount,
+                ),
+            }
         }
     ); // data obj to avoid crashes
 }
