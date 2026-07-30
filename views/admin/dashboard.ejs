@@ -19,11 +19,10 @@
           <% if (u.campsiteName) { %> | Site: <%= u.campsiteName %><% } %>
         </div>
 
-        <% const safePhotoUrl = getSafeHttpUrl(u.cloudinaryId); %>
         <% const youtubeVideoId = extractYouTubeVideoId(u.youtubeId); %>
-        <% if (u.mediaType === 'photo' && safePhotoUrl) { %>
-            <a href="<%= safePhotoUrl %>" target="_blank" rel="noopener noreferrer">
-                <img src="<%= safePhotoUrl %>" class="thumb" alt="photo thumbnail">
+        <% if (u.mediaType === 'photo' && u.adminPhotoUrl) { %>
+            <a href="<%= u.adminPhotoUrl %>" target="_blank" rel="noopener noreferrer">
+                <img src="<%= u.adminPhotoUrl %>" class="thumb" alt="photo thumbnail">
             </a>
         <% } else if (u.mediaType === 'video' && youtubeVideoId) { %>
             <a href="https://www.youtube.com/watch?v=<%= youtubeVideoId %>" target="_blank" rel="noopener noreferrer">
@@ -134,7 +133,7 @@ function createAdminMediaLink(upload) {
   let alt;
 
   if (upload.mediaType === 'photo') {
-    href = adminMediaRendering.getSafeHttpUrl(upload.cloudinaryId);
+    href = adminMediaRendering.getSafeHttpUrl(upload.adminPhotoUrl);
     thumbnailUrl = href;
     alt = 'photo thumbnail';
   } else if (upload.mediaType === 'video') {

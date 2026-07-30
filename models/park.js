@@ -10,6 +10,7 @@ const photoSchema = new Schema({
   user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   likedBy: [{ type: Schema.Types.ObjectId, ref: 'User' }],
   url: { type: String, required: true },
+  cloudinaryPublicId: String,
   caption: {
     type: String,
     maxlength: 50,

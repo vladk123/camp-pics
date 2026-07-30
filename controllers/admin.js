@@ -6,17 +6,35 @@ import { extractYouTubeVideoId } from '../utils/youtube.js';
 // import { getIP } from '../utils/getIP.js'
 import { redirectedFlash } from '../utils/redirectedFlash.js';
 
-function getSafeHttpUrl(value) {
+export function getSafeHttpUrl(value) {
   if (typeof value !== 'string' || !value.trim()) return null;
 
   try {
     const url = new URL(value);
-    return url.protocol === 'http:' || url.protocol === 'https:'
+    return (
+      (url.protocol === 'http:' || url.protocol === 'https:') &&
+      !url.username &&
+      !url.password
+    )
       ? url.href
       : null;
   } catch {
     return null;
   }
+}
+
+export function getAdminPhotoUrl(upload) {
+  return getSafeHttpUrl(upload?.cloudinaryUrl) ||
+    getSafeHttpUrl(upload?.cloudinaryId);
+}
+
+export function serializeAdminUpload(upload) {
+  return {
+    ...upload,
+    adminPhotoUrl: upload?.mediaType === 'photo'
+      ? getAdminPhotoUrl(upload)
+      : null,
+  };
 }
 
 export const dashboard = async (req, res, next) => {
@@ -31,7 +49,7 @@ export const dashboard = async (req, res, next) => {
     const skipUsers = (userPage - 1) * limitUsers;
 
     // Get most recent uploads (10 per page)
-    const uploads = await Upload.find({})
+    const uploadRecords = await Upload.find({})
         .sort({ createdAt: -1 })
         .skip(skipUploads)
         .limit(limitUploads)
@@ -40,6 +58,7 @@ export const dashboard = async (req, res, next) => {
         // .populate('campgroundId', 'name slug') // only filled if campground exists
         // .populate('campsiteId', 'siteNumber slug') // only filled if campsite exists
         .lean();
+    const uploads = uploadRecords.map(serializeAdminUpload);
 
     const totalUploads = await Upload.countDocuments();
     const hasMoreUploads = totalUploads > uploadPage * limitUploads;
@@ -76,7 +95,6 @@ export const dashboard = async (req, res, next) => {
       hasMoreUploads,
       hasMoreUsers,
       extractYouTubeVideoId,
-      getSafeHttpUrl,
       data:{} // data obj to avoid crashes
     });
 

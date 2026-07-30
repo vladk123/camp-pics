@@ -66,6 +66,7 @@ const UserSchema = new Schema({
             // The _id inside park.photos[] or park.videos[]
 
             cloudinaryUrl: String,       // for photos
+            cloudinaryPublicId: String,  // for photos
             youtubeUrl: String,          // for videos
 
             parkId: { type: mongoose.Schema.Types.ObjectId, required: true },

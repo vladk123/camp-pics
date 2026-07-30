@@ -4,19 +4,19 @@ import { User } from "../models/user.js"; // ensure correct path
 // import cloudinary from '../config/cloudinary.js';
 import { uploadMemory } from '../middleware.js'; //
 import { v2 as cloudinary } from 'cloudinary';
+import mongoose from 'mongoose';
 import streamifier from 'streamifier';
 import sharp from "sharp";
 import { extractYouTubeVideoId } from '../utils/youtube.js';
 import {
+  normalizeCloudinaryPublicId,
+  parseCloudinaryDeliveryUrl,
+  resolveCloudinaryPhotoIdentity,
+} from '../utils/cloudinaryPhotoIdentity.js';
+import {
   resolveCampsiteTarget,
   sendCampsiteTargetError,
 } from '../utils/campsiteTarget.js';
-
-// Func to get Cloudinary url
-function extractCloudinaryId(url) {
-  const match = url.match(/\/upload\/(?:v\d+\/)?(.+)\.[^.]+$/);
-  return match ? match[1] : null;
-}
 
 // Function to validate images being uploaded
 export async function validateImageBuffer(buffer) {
@@ -76,8 +76,8 @@ async function addUserUploadEntry({
   mediaType,
   mediaId,
   cloudinaryUrl,
+  cloudinaryPublicId,
   youtubeUrl,
-  cloudinaryId,
 
   park,
   location,
@@ -96,8 +96,8 @@ async function addUserUploadEntry({
           mediaId,
 
           cloudinaryUrl: cloudinaryUrl || null,
+          ...(cloudinaryPublicId ? { cloudinaryPublicId } : {}),
           youtubeUrl: youtubeUrl || null,
-          cloudinaryId: cloudinaryId || null,
 
           ...metadata,
 
@@ -259,6 +259,7 @@ async function uploadPhotoHandler(req, res, next, dependencies) {
 
     // Upload each allowed file to Cloudinary
     for (const file of allowedFiles) {
+      const mediaId = new mongoose.Types.ObjectId();
 
       const watermarkText = 'CampPics.ca';
       const uploadResult = await new Promise((resolve, reject) => {
@@ -306,11 +307,39 @@ async function uploadPhotoHandler(req, res, next, dependencies) {
         streamifier.createReadStream(file.buffer).pipe(stream);
       });
 
-      uploadedCloudinary.push(extractCloudinaryId(uploadResult.secure_url)); // used to be: 
+      const cloudinaryPublicId = normalizeCloudinaryPublicId(
+        uploadResult?.public_id,
+      );
+      if (!cloudinaryPublicId) {
+        throw new Error('Cloudinary upload returned an invalid public ID');
+      }
+
+      const uploadedAsset = {
+        mediaId,
+        publicId: cloudinaryPublicId,
+        url: null,
+      };
+      uploadedCloudinary.push(uploadedAsset);
+
+      const cloudinaryUrl = typeof uploadResult?.secure_url === 'string'
+        ? uploadResult.secure_url.trim()
+        : '';
+      const parsedDeliveryUrl = parseCloudinaryDeliveryUrl(cloudinaryUrl);
+      if (
+        !cloudinaryUrl ||
+        !parsedDeliveryUrl ||
+        !cloudinaryUrl.toLowerCase().startsWith('https://') ||
+        parsedDeliveryUrl.publicId !== cloudinaryPublicId
+      ) {
+        throw new Error('Cloudinary upload returned an invalid secure URL');
+      }
+      uploadedAsset.url = cloudinaryUrl;
 
       uploadedPhotos.push({
+        _id: mediaId,
         user: userId,
-        url: uploadResult.secure_url,
+        url: cloudinaryUrl,
+        cloudinaryPublicId,
         caption: req.body.caption || '',
         showUsername: req.body.showUsername === 'true' || req.body.showUsername === true,
         username: req.body.showUsername ? req.user.fname : null,
@@ -325,18 +354,22 @@ async function uploadPhotoHandler(req, res, next, dependencies) {
     // Update park's Updated Time
     await ParkModel.findByIdAndUpdate(park._id, { updatedAt: new Date() });
 
-    // Find the just-saved photo subdocs by matching URLs
-    const justAdded = target.photos.filter(p =>
-      uploadedPhotos.some(up => up.url === p.url)
-    );
+    // Use the preassigned media IDs to preserve each URL/public-ID pairing.
+    const justAdded = uploadedCloudinary.map(asset => {
+      const photo = target.photos.id(asset.mediaId);
+      if (!photo) throw new Error('Saved photo could not be matched by media ID');
+      return { asset, photo };
+    });
 
     // Add Upload records
-    for (const photo of justAdded) {
+    for (const { asset, photo } of justAdded) {
       const metadata = buildMediaLocationMetadata(park, location);
-      await UploadModel.create({
+      const uploadDoc = await UploadModel.create({
         mediaType: 'photo',
         mediaId: photo._id, // now guaranteed to exist
-        cloudinaryId: photo.url,
+        cloudinaryUrl: asset.url,
+        cloudinaryPublicId: asset.publicId,
+        cloudinaryId: asset.url,
         parkId: metadata.parkId,
         parkName: metadata.parkName,
         campgroundId: metadata.campgroundId,
@@ -345,17 +378,18 @@ async function uploadPhotoHandler(req, res, next, dependencies) {
         campsiteName: metadata.campsiteName,
         userId,
       });
+      createdUploads.push(uploadDoc._id);
     }
 
     // Add upload record to the User document
-    for (const photo of justAdded) {
+    for (const { asset, photo } of justAdded) {
       await addUserUploadEntry({
         UserModel,
         userId,
         mediaType: "photo",
         mediaId: photo._id,
-        cloudinaryUrl: photo.url,
-        cloudinaryId: extractCloudinaryId(photo.url),
+        cloudinaryUrl: asset.url,
+        cloudinaryPublicId: asset.publicId,
 
         park,
         location,
@@ -388,15 +422,17 @@ async function uploadPhotoHandler(req, res, next, dependencies) {
   }
 
   await Promise.all(
-    uploadedCloudinary.map(id =>
-      cloudinaryClient.uploader.destroy(id).catch(() => null)
+    uploadedCloudinary.map(asset =>
+      cloudinaryClient.uploader.destroy(asset.publicId).catch(() => null)
     )
   );
 
   if (park && target) {
-    const toRemove = uploadedCloudinary.map(id => `/${id}`);
+    const uploadedMediaIds = new Set(
+      uploadedCloudinary.map(asset => asset.mediaId.toString()),
+    );
     target.photos = target.photos.filter(
-      p => !toRemove.some(r => p.url.includes(r))
+      photo => !uploadedMediaIds.has(photo._id.toString())
     );
     await park.save().catch(() => null);
   }
@@ -486,7 +522,6 @@ async function addVideoHandler(req, res, next, dependencies) {
 
       youtubeUrl: rawUrl,
       cloudinaryUrl: null,
-      cloudinaryId: null,
 
       park,
       location,
@@ -570,18 +605,34 @@ async function deletePhotoHandler(req, res, next, dependencies) {
       return res.status(403).json({ error: 'Not authorized to delete this photo' });
     }
 
+    const uploadRecord = await UploadModel.findOne({
+      mediaType: 'photo',
+      mediaId: photo._id,
+    });
+    const identity = resolveCloudinaryPhotoIdentity({
+      photo,
+      upload: uploadRecord,
+    });
+
+    if (identity.conflict) {
+      return res.status(409).json({
+        error: 'Photo identity conflict.',
+        code: 'CLOUDINARY_IDENTITY_CONFLICT',
+      });
+    }
+    if (!identity.publicId) {
+      return res.status(409).json({
+        error: 'Photo identity could not be resolved.',
+        code: 'PHOTO_IDENTITY_UNRESOLVED',
+      });
+    }
+
     // Delete from Cloudinary first..
     let deletionResult;
     try {
-      // Extract Cloudinary public_id from full URL
-      const match = photo.url.match(/\/upload\/(?:v\d+\/)?(.+)\.[^.]+$/);
-      if (!match || !match[1]) {
-        return res.status(400).json({ error: 'Invalid Cloudinary URL format.' });
-      }
-      const publicId = match[1]; // everything after "upload/" and before ".ext"
-
-      // Request deletion
-      deletionResult = await cloudinaryClient.uploader.destroy(publicId);
+      deletionResult = await cloudinaryClient.uploader.destroy(
+        identity.publicId,
+      );
     } catch (err) {
       console.error('Cloudinary deletion failed:', err);
       return res.status(500).json({ error: 'Failed to contact Cloudinary.' });
@@ -590,7 +641,7 @@ async function deletePhotoHandler(req, res, next, dependencies) {
     // Verify Cloudinary response
     if (deletionResult.result !== 'ok' && deletionResult.result !== 'not found') {
       // If Cloudinary explicitly says "error" or unknown result
-      console.error('Unexpected Cloudinary response:', deletionResult);
+      console.error('Unexpected Cloudinary photo deletion response');
       return res.status(500).json({ error: 'Cloudinary deletion unsuccessful.' });
     }
 

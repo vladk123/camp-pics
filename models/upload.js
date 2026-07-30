@@ -11,7 +11,10 @@ const uploadSchema = new Schema({
     // required: true
   },
   mediaId: { type: Schema.Types.ObjectId }, // the _id of the photo/video inside Park
-  cloudinaryId: String, // optional, for photos only
+  // Legacy compatibility: this may contain a delivery URL or an older public ID.
+  cloudinaryId: String,
+  cloudinaryUrl: String,
+  cloudinaryPublicId: String,
   youtubeId: String,
   parkId: { type: Schema.Types.ObjectId, ref: 'Park', required: true },
   parkName: String ,

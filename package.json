@@ -6,6 +6,8 @@
   "type": "module",
   "scripts": {
     "test": "node --test",
+    "media:audit-identifiers": "node scripts/reconcileMediaIdentifiers.js",
+    "media:backfill-identifiers": "node scripts/reconcileMediaIdentifiers.js --apply",
     "start": "node app.js"
   },
   "repository": {
