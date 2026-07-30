@@ -1,4 +1,6 @@
 const mediaRendering = window.CampPicsMedia;
+const campsiteLocation = window.CampPicsCampsiteLocation;
+const campsiteRequests = window.CampPicsCampsiteRequests.createCoordinator();
 const boundCampsiteNavButtons = new WeakSet();
 
 function sortMediaByDate(items) {
@@ -25,41 +27,36 @@ parkCampsitesDiv.addEventListener('click', async e => {
   const parkSlug = window.PARK.slug;
   const campsiteSlug = csEl.dataset.csSlug;
   const hasCg = csEl.dataset.hasCg === "true";
-  const cgSlug = csEl.dataset.cgSlug || '';
+  const campgroundSlug = hasCg ? csEl.dataset.cgSlug : null;
+  const requestedLocation = {
+    parkSlug,
+    campsiteSlug,
+    campgroundSlug,
+  };
 
-  // Stash metadata for later submits/refreshes
+  // Clear the previously opened target while the new API location is unresolved.
   const modalParent = document.getElementById('campsite-modal-parent');
   modalParent.dataset.parkSlug = parkSlug;
-  modalParent.dataset.campsiteSlug = campsiteSlug;
-  modalParent.dataset.cgSlug = hasCg ? cgSlug : '';
-  modalParent.dataset.hasCg = String(hasCg);
-
-  // Build API URL
-  let url;
-  if (hasCg) {
-    url = `/camp/park/${parkSlug}/campground/${cgSlug}/campsite/${campsiteSlug}`;
-  } else {
-    url = `/camp/park/${parkSlug}/campsite/${campsiteSlug}`;
-  }
+  campsiteLocation.clearCanonicalLocation(modalParent);
 
   try {
-    const res = await fetch(url);
-
-    // Push event to Google Tag Manager (GTM)).
-    window.dataLayer = window.dataLayer || [];
-    window.dataLayer.push({
-      event: 'modal_open',
-      modal_name: 'campsite',
-      campsite: campsiteSlug,
-      page_location: window.location.href 
+    await campsiteRequests.openLatest(requestedLocation, {
+      onSuccess(data) {
+        window.dataLayer = window.dataLayer || [];
+        window.dataLayer.push({
+          event: 'modal_open',
+          modal_name: 'campsite',
+          campsite: campsiteSlug,
+          page_location: window.location.href,
+        });
+        showCampsitePopup(data);
+      },
+      onError() {
+        createFlashMsg('error', 'Could not load campsite details.', 'campsite-loading-error', 10);
+      },
     });
-
-    if (!res.ok) throw new Error('Not found');
-    const data = await res.json();
-    showCampsitePopup(data);
-  } catch (err) {
+  } catch {
     createFlashMsg('error', 'Could not load campsite details.', 'campsite-loading-error', 10)
-
   }
 });
 
@@ -69,6 +66,7 @@ let campsiteMediaItems = []; // keep around for delete / fullscreen if needed
 
 function showCampsitePopup(data) {
   const modalParent = document.getElementById('campsite-modal-parent');
+  const canonicalLocation = campsiteLocation.applyCanonicalLocation(modalParent, data);
   
   // Scroll to top of modal in case lasdt time was scrolled down
   const campsiteModalWrapper = modalParent.querySelector('.campsite-modal-wrapper')
@@ -85,9 +83,6 @@ function showCampsitePopup(data) {
   // Title
   const title = document.getElementById('campsite-modal-title');
   title.textContent = `Site #${data.siteNumber || ''}`;
-
-  // DO NOT overwrite modalParent.dataset here.
-  // It was set correctly in the click handler and is used by submitForm/refreshCampsitePopup.
 
   const swiperWrapper = document.getElementById('campsite-swiper-wrapper');
   const thumbsWrapper = document.getElementById('campsite-thumbs-wrapper');
@@ -218,7 +213,7 @@ function showCampsitePopup(data) {
         },
         onDelete: async mediaItem => {
           if (!confirm('Delete this media?')) return;
-          await deleteMedia(mediaItem, data);
+          await deleteMedia(mediaItem);
         },
       });
 
@@ -294,7 +289,7 @@ function showCampsitePopup(data) {
 
   // Update campsite badge count on open
   const total = (data.photos?.length || 0) + (data.videos?.length || 0);
-  updateCampsiteBadge(data.slug || modalParent.dataset.campsiteSlug, total);
+  updateCampsiteBadge(canonicalLocation, total);
 }
 
 function bindCampsiteNavButton(button, direction) {
@@ -454,16 +449,29 @@ document.addEventListener('DOMContentLoaded', async() => {
     e.preventDefault();
 
     const popup = document.getElementById('campsite-modal-parent');
-    const campsiteSlug = popup.dataset.campsiteSlug;
-    const cgSlug = popup.dataset.cgSlug;
-    const hasCg = popup.dataset.hasCg === 'true';
-
-    let base = `/camp/park/${parkSlug}`;
-    if (hasCg) base += `/campground/${cgSlug}`;
-    base += `/campsite/${campsiteSlug}`;
+    let location;
+    try {
+      location = campsiteLocation.readCanonicalLocation(popup, parkSlug);
+    } catch {
+      createFlashMsg(
+        'error',
+        'Could not determine the campsite location. Please reopen the campsite.',
+        'campsite-location-error',
+        10,
+      );
+      return;
+    }
 
     if (form.classList.contains('campsite-photo-form')) {
-      submitForm(form, `${base}/photo`, { isFile: true, refresh: 'campsite' });
+      submitForm(
+        form,
+        campsiteLocation.photoUploadUrl(location),
+        {
+          isFile: true,
+          refresh: 'campsite',
+          campsiteTarget: location,
+        },
+      );
         // Push event to Google Tag Manager (GTM)).
         window.dataLayer = window.dataLayer || [];
         window.dataLayer.push({
@@ -473,7 +481,14 @@ document.addEventListener('DOMContentLoaded', async() => {
           page_location: window.location.href 
         });
     } else if (form.classList.contains('campsite-video-form')) {
-      submitForm(form, `${base}/video`, { refresh: 'campsite' });
+      submitForm(
+        form,
+        campsiteLocation.videoUploadUrl(location),
+        {
+          refresh: 'campsite',
+          campsiteTarget: location,
+        },
+      );
       // Push event to Google Tag Manager (GTM)).
       window.dataLayer = window.dataLayer || [];
       window.dataLayer.push({
@@ -483,7 +498,14 @@ document.addEventListener('DOMContentLoaded', async() => {
         page_location: window.location.href 
       });
     } else if (form.classList.contains('campsite-review-form')) {
-      submitForm(form, `${base}/review`, { refresh: 'campsite' });
+      submitForm(
+        form,
+        `${campsiteLocation.apiUrl(location)}/review`,
+        {
+          refresh: 'campsite',
+          campsiteTarget: location,
+        },
+      );
     }
   });
 
@@ -594,34 +616,53 @@ async function refreshParkMedia() {
 
 
 // Refresh the currently open campsite popup
-async function refreshCampsitePopup() {
+function currentModalCampsiteLocation() {
   const popup = document.getElementById('campsite-modal-parent');
-  const parkSlug = window.PARK.slug;
-  const campsiteSlug = popup.dataset.campsiteSlug;
-  const cgSlug = popup.dataset.cgSlug;
-  const hasCg = popup.dataset.hasCg === 'true';
+  if (!popup || popup.classList.contains('hidden')) return null;
 
-  let url;
-  // console.log(hasCg)
-  if (hasCg) {
-    url = `/camp/park/${parkSlug}/campground/${cgSlug}/campsite/${campsiteSlug}`;
-  } else {
-    url = `/camp/park/${parkSlug}/campsite/${campsiteSlug}`;
+  try {
+    return campsiteLocation.readCanonicalLocation(popup, window.PARK.slug);
+  } catch {
+    return null;
   }
-
-  const res = await fetch(url);
-  if (!res.ok) return createFlashMsg('error', 'Could not refresh campsite - please refresh the page.', 'refresh-campsite-error', 15);
-  const data = await res.json();
-
-  // Re-render the popup
-  showCampsitePopup(data);
-
-  // Update the badge on the park page’s campsite button
-  const total = (data.photos?.length || 0) + (data.videos?.length || 0);
-  updateCampsiteBadge(campsiteSlug, total);
 }
 
-async function submitForm(form, endpoint, { isFile = false, refresh = 'none' } = {}) {
+function modalIsDisplayingCampsite(location) {
+  return campsiteLocation.sameLocation(
+    currentModalCampsiteLocation(),
+    location,
+  );
+}
+
+async function refreshCampsiteTarget(location, options = {}) {
+  return campsiteRequests.refreshTarget(location, {
+    getCurrentLocation: currentModalCampsiteLocation,
+    onBadge(canonicalLocation, data) {
+      const total =
+        (data.photos?.length || 0) +
+        (data.videos?.length || 0);
+      updateCampsiteBadge(canonicalLocation, total);
+    },
+    onRender(data) {
+      showCampsitePopup(data);
+    },
+    onError() {
+      if (options.showError === false) return;
+      createFlashMsg(
+        'error',
+        'Could not refresh campsite - please refresh the page.',
+        'refresh-campsite-error',
+        15,
+      );
+    },
+  });
+}
+
+async function submitForm(form, endpoint, {
+  isFile = false,
+  refresh = 'none',
+  campsiteTarget = null,
+} = {}) {
   const overlay = document.getElementById('main-loading-overlay');
   const btn = form.querySelector('button');
   const originalText = btn.textContent;
@@ -664,7 +705,7 @@ async function submitForm(form, endpoint, { isFile = false, refresh = 'none' } =
     if (refresh === 'park') {
       await refreshParkMedia();
     } else if (refresh === 'campsite') {
-      await refreshCampsitePopup();
+      await refreshCampsiteTarget(campsiteTarget);
     }
 
     // If it's a park media upload, after upload, close modal and scroll user to top of page
@@ -685,7 +726,11 @@ async function submitForm(form, endpoint, { isFile = false, refresh = 'none' } =
     }
 
     // If it's a campsite media upload, after upload, scroll user to top of modal
-    if (refresh === 'campsite') {
+    const campsiteStillCurrent =
+      refresh !== 'campsite' ||
+      modalIsDisplayingCampsite(campsiteTarget);
+
+    if (refresh === 'campsite' && campsiteStillCurrent) {
       const modalParent = document.getElementById('campsite-modal-parent');
       const wrapper = modalParent?.querySelector('.campsite-modal-wrapper > div');
 
@@ -701,10 +746,13 @@ async function submitForm(form, endpoint, { isFile = false, refresh = 'none' } =
 
     // Clear inputs after success (photo/video forms)
     if (
-      form.classList.contains('campsite-photo-form') ||
-      form.classList.contains('campsite-video-form') ||
-      form.id === 'park-photo-form' ||
-      form.id === 'park-video-form'
+      campsiteStillCurrent &&
+      (
+        form.classList.contains('campsite-photo-form') ||
+        form.classList.contains('campsite-video-form') ||
+        form.id === 'park-photo-form' ||
+        form.id === 'park-video-form'
+      )
     ) {
       form.reset();
 
@@ -734,22 +782,26 @@ async function submitForm(form, endpoint, { isFile = false, refresh = 'none' } =
   }
 }
 
-async function deleteMedia(item, parentData) {
+async function deleteMedia(item) {
   const parkSlug = window.PARK.slug;
-  const campsiteSlug = parentData.slug;
-  const cgSlug = parentData.cgSlug;
-  const hasCg = !!cgSlug;
-  let url;
-
-  if (item.type === 'photo') {
-    url = hasCg
-      ? `/camp/park/${parkSlug}/campground/${cgSlug}/campsite/${campsiteSlug}/photo/${item._id}`
-      : `/camp/park/${parkSlug}/campsite/${campsiteSlug}/photo/${item._id}`;
-  } else {
-    url = hasCg
-      ? `/camp/park/${parkSlug}/campground/${cgSlug}/campsite/${campsiteSlug}/video/${item._id}`
-      : `/camp/park/${parkSlug}/campsite/${campsiteSlug}/video/${item._id}`;
+  const popup = document.getElementById('campsite-modal-parent');
+  let location;
+  try {
+    location = campsiteLocation.readCanonicalLocation(popup, parkSlug);
+  } catch {
+    createFlashMsg(
+      'error',
+      'Could not determine the campsite location. Please reopen the campsite.',
+      'campsite-location-error',
+      10,
+    );
+    return;
   }
+  const campsiteSlug = location.campsiteSlug;
+
+  const url = item.type === 'photo'
+    ? campsiteLocation.photoDeleteUrl(location, item._id)
+    : campsiteLocation.videoDeleteUrl(location, item._id);
 
   try {
     const res = await window.CampPicsCsrf.fetch(url, {
@@ -773,7 +825,7 @@ async function deleteMedia(item, parentData) {
     });
 
     createFlashMsg('success', 'Deleted media!', 'delete-media-success', 5)
-    await refreshCampsitePopup();
+    await refreshCampsiteTarget(location);
   } catch (err) {
     console.error(err);
     createFlashMsg('error', `Error deleting media: ${err}`, 'delete-media-error', 10)
@@ -799,29 +851,8 @@ function openCampsiteFullscreen(mediaType, url, caption = '') {
 window.openCampsiteFullscreen = openCampsiteFullscreen;
 
 // UPDATE CAMPSITE BADGE (QUANTITY OF MEDIA) ON PARK PAGE, AFTER UPLOAD/DELETION
-function updateCampsiteBadge(campsiteSlug, count) {
-  // Use CSS.escape for safety with odd slugs; fallback if not available
-  const esc = (str) => (window.CSS && CSS.escape ? CSS.escape(str) : str.replace(/"/g, '\\"'));
-
-  const li = document.querySelector(`.campsite[data-cs-slug="${esc(campsiteSlug)}"]`);
-  if (!li) return;
-
-  let badge = li.querySelector('.media-badge');
-
-  if (count > 0) {
-    if (!badge) {
-      badge = document.createElement('span');
-      badge.className = 'media-badge';
-      li.appendChild(badge);
-    }
-    badge.textContent = String(count);
-    li.classList.add('has-media');
-    li.classList.remove('no-media');
-  } else {
-    if (badge) badge.remove();
-    li.classList.add('no-media');
-    li.classList.remove('has-media');
-  }
+function updateCampsiteBadge(location, count) {
+  campsiteLocation.updateBadge(location, count, document);
 }
 
 // If user reports 
@@ -838,7 +869,7 @@ function reportBtn(e) {
   const campsiteModal = e.target.closest('#campsite-modal-parent');
   if (campsiteModal) {
     park = campsiteModal.dataset.parkSlug;
-    campground = campsiteModal.dataset.cgSlug;
+    campground = campsiteModal.dataset.campgroundSlug;
     campsite = campsiteModal.dataset.campsiteSlug;
   }
 
@@ -914,11 +945,10 @@ openUploadParkMediaModalBtn?.addEventListener('click', () => {
   });
 })
 
-// Campsite modal closing logic
-document.addEventListener('click', e => {
-  if (!e.target.closest('#close-campsite-modal')) return;
-
+function closeCampsiteModal() {
   const modal = document.getElementById('campsite-modal-parent');
+  campsiteRequests.cancelOpen();
+  campsiteLocation.clearCanonicalLocation(modal);
 
   // Clear iframe content to stop video sound
   const iframes = modal.querySelectorAll('iframe');
@@ -935,6 +965,17 @@ document.addEventListener('click', e => {
   // Remove backdrop
   const backdrop = document.querySelector('.modal-backdrop[data-modal-id="campsite-modal"]');
   if (backdrop) backdrop.remove();
+}
+
+// Campsite modal closing logic
+document.addEventListener('click', e => {
+  const closeButton = e.target.closest('#close-campsite-modal');
+  const backdrop = e.target.closest(
+    '.modal-backdrop[data-modal-id="campsite-modal"]',
+  );
+  if (!closeButton && !backdrop) return;
+
+  closeCampsiteModal();
 });
 
 

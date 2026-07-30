@@ -124,7 +124,7 @@
       <% }) %>
     <% } %>
 
-    <% if ((!park.campgrounds || !park.campgrounds.length) && park.campsites && park.campsites.length) { %>
+    <% if (park.campsites && park.campsites.length) { %>
       <div class="standalone-campsites">
         <h3>Individual Campsites</h3>
         <ul class="campsite-list">
@@ -132,6 +132,7 @@
             <li
               class="campsite <%= cs.hasMedia ? 'has-media' : 'no-media' %>"
               data-cs-slug="<%= cs.slug %>"
+              data-cg-slug=""
               data-has-cg="false"
             >
               Site <%= cs.siteNumber %>
@@ -221,5 +222,7 @@
 <script src="/js/swiper-bundle.min.js"></script>
 <script src="/js/mediaRendering.js"></script>
 <script src="/js/parkMediaSlider.js"></script>
+<script src="/js/campsiteLocation.js"></script>
+<script src="/js/campsiteRequests.js"></script>
 <script src="/js/showPark.js"></script>
 

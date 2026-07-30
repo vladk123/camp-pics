@@ -39,6 +39,10 @@ router.route('/park/:parkSlug/video')
 //     .post(isLoggedIn, media.addReview);
 
 // Campsite level
+router.route('/park/:parkSlug/campsite/:campsiteSlug/photo')
+    .post(isLoggedIn, catchAsyncErrors(media.uploadPhoto));
+router.route('/park/:parkSlug/campsite/:campsiteSlug/video')
+    .post(isLoggedIn, catchAsyncErrors(media.addVideo));
 router.route('/park/:parkSlug/campground/:campgroundSlug/campsite/:campsiteSlug/photo')
     .post(isLoggedIn, catchAsyncErrors(media.uploadPhoto));
 router.route('/park/:parkSlug/campground/:campgroundSlug/campsite/:campsiteSlug/video')
@@ -60,6 +64,12 @@ router.route('/park/:parkSlug/campsite/:campsiteSlug/photo/:photoId')
   .delete(isLoggedIn, media.deletePhoto);
 
 router.route('/park/:parkSlug/campsite/:campsiteSlug/video/:videoId')
+  .delete(isLoggedIn, media.deleteVideo);
+
+router.route('/park/:parkSlug/campground/:campgroundSlug/campsite/:campsiteSlug/photo/:photoId')
+  .delete(isLoggedIn, media.deletePhoto);
+
+router.route('/park/:parkSlug/campground/:campgroundSlug/campsite/:campsiteSlug/video/:videoId')
   .delete(isLoggedIn, media.deleteVideo);
 
 

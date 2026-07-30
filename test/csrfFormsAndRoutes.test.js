@@ -212,16 +212,20 @@ const mutationInventory = [
   ['POST', '/other/contact', 'form'],
   ['POST', '/camp/park/:parkSlug/photo', 'fetch-helper'],
   ['POST', '/camp/park/:parkSlug/video', 'fetch-helper'],
+  ['POST', '/camp/park/:parkSlug/campsite/:campsiteSlug/photo', 'fetch-helper'],
+  ['POST', '/camp/park/:parkSlug/campsite/:campsiteSlug/video', 'fetch-helper'],
   ['POST', '/camp/park/:parkSlug/campground/:campgroundSlug/campsite/:campsiteSlug/photo', 'fetch-helper'],
   ['POST', '/camp/park/:parkSlug/campground/:campgroundSlug/campsite/:campsiteSlug/video', 'fetch-helper'],
   ['DELETE', '/camp/park/:parkSlug/photo/:photoId', 'fetch-helper'],
   ['DELETE', '/camp/park/:parkSlug/video/:videoId', 'fetch-helper'],
   ['DELETE', '/camp/park/:parkSlug/campsite/:campsiteSlug/photo/:photoId', 'fetch-helper'],
   ['DELETE', '/camp/park/:parkSlug/campsite/:campsiteSlug/video/:videoId', 'fetch-helper'],
+  ['DELETE', '/camp/park/:parkSlug/campground/:campgroundSlug/campsite/:campsiteSlug/photo/:photoId', 'fetch-helper'],
+  ['DELETE', '/camp/park/:parkSlug/campground/:campgroundSlug/campsite/:campsiteSlug/video/:videoId', 'fetch-helper'],
 ];
 
 test('the current mutation inventory is complete and each browser mutation has a protection path', async () => {
-  assert.equal(mutationInventory.length, 20);
+  assert.equal(mutationInventory.length, 24);
   assert.ok(mutationInventory.every(([, , protection]) =>
     ['form', 'fetch-helper', 'global-middleware'].includes(protection)));
 

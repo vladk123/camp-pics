@@ -144,6 +144,8 @@ describe('browser media rendering', () => {
 
     await import('../public/js/mediaRendering.js');
     await import('../public/js/parkMediaSlider.js');
+    await import('../public/js/campsiteLocation.js');
+    await import('../public/js/campsiteRequests.js');
     await import('../public/js/showPark.js');
     mediaRendering = window.CampPicsMedia;
   });

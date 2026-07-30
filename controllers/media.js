@@ -7,6 +7,10 @@ import { v2 as cloudinary } from 'cloudinary';
 import streamifier from 'streamifier';
 import sharp from "sharp";
 import { extractYouTubeVideoId } from '../utils/youtube.js';
+import {
+  resolveCampsiteTarget,
+  sendCampsiteTargetError,
+} from '../utils/campsiteTarget.js';
 
 // Func to get Cloudinary url
 function extractCloudinaryId(url) {
@@ -45,7 +49,29 @@ export async function validateImageBuffer(buffer) {
 }
 
 // Func to add uploaded media to user's history
+export function buildMediaLocationMetadata(park, location) {
+  return {
+    parkId: park._id,
+    parkSlug: park.slug,
+    parkName: park.name,
+
+    campgroundId: location?.campground?._id ?? null,
+    campgroundSlug: location?.campgroundSlug ?? null,
+    campgroundName: location?.campground?.name ?? null,
+
+    campsiteId: location?.campsite?._id ?? null,
+    campsiteSlug: location?.campsiteSlug ?? null,
+    campsiteName: location?.campsite?.siteNumber ?? null,
+  };
+}
+
+function resolveMediaLocation(park, { campgroundSlug, campsiteSlug }) {
+  if (campgroundSlug == null && campsiteSlug == null) return null;
+  return resolveCampsiteTarget(park, { campgroundSlug, campsiteSlug });
+}
+
 async function addUserUploadEntry({
+  UserModel,
   userId,
   mediaType,
   mediaId,
@@ -54,24 +80,14 @@ async function addUserUploadEntry({
   cloudinaryId,
 
   park,
-  target,         // campsite or park
-  campgroundSlug,
-  campsiteSlug,
+  location,
 
   caption,
   dateTaken
 }) {
-  const campground = campgroundSlug
-    ? park.campgrounds.find(cg => cg.slug === campgroundSlug)
-    : null;
+  const metadata = buildMediaLocationMetadata(park, location);
 
-  const campsite = campsiteSlug
-    ? (campground 
-        ? campground.campsites.find(cs => cs.slug === campsiteSlug)
-        : (park.campsites?.find(cs => cs.slug === campsiteSlug)))
-    : null;
-
-  await User.findByIdAndUpdate(
+  await UserModel.findByIdAndUpdate(
     userId,
     {
       $push: {
@@ -83,17 +99,7 @@ async function addUserUploadEntry({
           youtubeUrl: youtubeUrl || null,
           cloudinaryId: cloudinaryId || null,
 
-          parkId: park._id,
-          parkSlug: park.slug,
-          parkName: park.name,
-
-          campgroundId: campground?._id || null,
-          campgroundSlug: campground?.slug || null,
-          campgroundName: campground?.name || null,
-
-          campsiteId: campsite?._id || null,
-          campsiteSlug: campsite?.slug || null,
-          campsiteName: campsite?.siteNumber || null,
+          ...metadata,
 
           caption,
           dateTaken
@@ -122,16 +128,30 @@ export function isValidNonFutureDate(dateStr) {
 }
 
 
-export const uploadPhoto = async (req, res, next) => {
+async function uploadPhotoHandler(req, res, next, dependencies) {
+  const {
+    ParkModel,
+    UploadModel,
+    UserModel,
+    cloudinaryClient,
+    uploadMiddleware,
+    validateImage,
+  } = dependencies;
   const uploadedCloudinary = [];
   const createdUploads = [];
-  let park, target;
+  let park, target, location;
 
   const { parkSlug, campgroundSlug, campsiteSlug } = req.params;
   const userId = req.user._id;
 
   if (!parkSlug || !userId) {
     return res.status(400).json({ error: 'Missing data.' });
+  }
+  if (campgroundSlug != null && campsiteSlug == null) {
+    return res.status(400).json({
+      error: 'Invalid campsite location.',
+      code: 'CONTRADICTORY_LOCATION',
+    });
   }
 
   try {
@@ -146,7 +166,7 @@ export const uploadPhoto = async (req, res, next) => {
     //   });
     // });
     await new Promise((resolve) => {
-      uploadMemory.array('photos', 5)(req, res, (err) => {
+      uploadMiddleware.array('photos', 5)(req, res, (err) => {
         if (!err) return resolve();
 
         // HANDLE MULTER ERRORS HERE
@@ -194,13 +214,18 @@ export const uploadPhoto = async (req, res, next) => {
     }
 
     // Find park and determine target
-    park = await Park.findOne({ slug: parkSlug });
+    park = await ParkModel.findOne({ slug: parkSlug });
     if (!park) return res.status(404).json({ error: 'Park not found' });
 
     let limit = 0
     if (campsiteSlug) {
-      target = findCampsite(park, campsiteSlug);
-      if (!target) return res.status(404).json({ error: 'Campsite not found' });
+      try {
+        location = resolveMediaLocation(park, { campgroundSlug, campsiteSlug });
+      } catch (error) {
+        if (sendCampsiteTargetError(res, error)) return;
+        throw error;
+      }
+      target = location.target;
       limit = 5 // Max 5 pics per campsite
     } else {
       target = park;
@@ -220,7 +245,7 @@ export const uploadPhoto = async (req, res, next) => {
 
     // Validate all files BEFORE uploading anything
     for (const file of files) {
-      const result = await validateImageBuffer(file.buffer);
+      const result = await validateImage(file.buffer);
       if (!result.valid) {
         return res.status(400).json({ error: result.error });
       }
@@ -237,7 +262,7 @@ export const uploadPhoto = async (req, res, next) => {
 
       const watermarkText = 'CampPics.ca';
       const uploadResult = await new Promise((resolve, reject) => {
-        const stream = cloudinary.uploader.upload_stream(
+        const stream = cloudinaryClient.uploader.upload_stream(
           {
             folder: 'camp-parks',
             allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
@@ -298,7 +323,7 @@ export const uploadPhoto = async (req, res, next) => {
     await park.save();
 
     // Update park's Updated Time
-    await Park.findByIdAndUpdate(park._id, { updatedAt: new Date() });
+    await ParkModel.findByIdAndUpdate(park._id, { updatedAt: new Date() });
 
     // Find the just-saved photo subdocs by matching URLs
     const justAdded = target.photos.filter(p =>
@@ -307,21 +332,17 @@ export const uploadPhoto = async (req, res, next) => {
 
     // Add Upload records
     for (const photo of justAdded) {
-      const campsiteId = campsiteSlug ? target._id : null;
-      const campgroundId = campgroundSlug
-        ? park.campgrounds.find(cg => cg.slug === campgroundSlug)?._id
-        : null;
-
-      await Upload.create({
+      const metadata = buildMediaLocationMetadata(park, location);
+      await UploadModel.create({
         mediaType: 'photo',
         mediaId: photo._id, // now guaranteed to exist
         cloudinaryId: photo.url,
-        parkId: park._id,
-        parkName: park?.name,
-        campgroundId,
-        campgroundName: park.campgrounds.find(cg => cg._id.equals(campgroundId))?.name || null,
-        campsiteId,
-        campsiteName: target?.siteNumber || null,
+        parkId: metadata.parkId,
+        parkName: metadata.parkName,
+        campgroundId: metadata.campgroundId,
+        campgroundName: metadata.campgroundName,
+        campsiteId: metadata.campsiteId,
+        campsiteName: metadata.campsiteName,
         userId,
       });
     }
@@ -329,6 +350,7 @@ export const uploadPhoto = async (req, res, next) => {
     // Add upload record to the User document
     for (const photo of justAdded) {
       await addUserUploadEntry({
+        UserModel,
         userId,
         mediaType: "photo",
         mediaId: photo._id,
@@ -336,9 +358,7 @@ export const uploadPhoto = async (req, res, next) => {
         cloudinaryId: extractCloudinaryId(photo.url),
 
         park,
-        target,
-        campgroundSlug,
-        campsiteSlug,
+        location,
 
         caption: photo.caption,
         dateTaken: photo.dateTaken
@@ -364,12 +384,12 @@ export const uploadPhoto = async (req, res, next) => {
 
   // Cleanup (safe)
   if (createdUploads.length) {
-    await Upload.deleteMany({ _id: { $in: createdUploads } });
+    await UploadModel.deleteMany({ _id: { $in: createdUploads } });
   }
 
   await Promise.all(
     uploadedCloudinary.map(id =>
-      cloudinary.uploader.destroy(id).catch(() => null)
+      cloudinaryClient.uploader.destroy(id).catch(() => null)
     )
   );
 
@@ -388,22 +408,33 @@ export const uploadPhoto = async (req, res, next) => {
   });
 }
 
-};
+}
 
 
-export const addVideo = async (req, res, next) => {
+async function addVideoHandler(req, res, next, dependencies) {
+  const {
+    ParkModel,
+    UploadModel,
+    UserModel,
+  } = dependencies;
   const { parkSlug, campgroundSlug, campsiteSlug } = req.params;
-  const rawUrl = req.body.url?.trim();
-  const caption = req.body.caption || '';
-  const showUsername = req.body.showUsername
+  const rawUrl = req.body?.url?.trim();
+  const caption = req.body?.caption || '';
+  const showUsername = req.body?.showUsername
   const username = showUsername ? req.user.fname : null
-  const dateTaken = req.body.dateTaken
+  const dateTaken = req.body?.dateTaken
   const userId = req.user._id
   const createdUploads = []; // in case of error catching
-  let park, target;
+  let park, target, location;
 
-  if(!parkSlug, !campsiteSlug, !userId, !dateTaken ){
+  if (!parkSlug || !userId || !dateTaken || !rawUrl) {
     return res.status(400).json({ error: 'Missing data.' });
+  }
+  if (campgroundSlug != null && campsiteSlug == null) {
+    return res.status(400).json({
+      error: 'Invalid campsite location.',
+      code: 'CONTRADICTORY_LOCATION',
+    });
   }
 
   if (!extractYouTubeVideoId(rawUrl)) {
@@ -413,18 +444,22 @@ export const addVideo = async (req, res, next) => {
   const video = { user: req.user._id, url: rawUrl, caption, showUsername, username, dateTaken };
 
   // If date is after today + 1 (future)
-  if(!isValidNonFutureDate(req.body.dateTaken)){
+  if(!isValidNonFutureDate(dateTaken)){
     return res.status(400).json({ error: 'Date cannot be in the future.' });
   }
 
   try {
-    park = await Park.findOne({ slug: parkSlug });
+    park = await ParkModel.findOne({ slug: parkSlug });
     if (!park) return res.status(404).json({ error: 'Park not found' });
 
-    target;
     if (campsiteSlug) {
-      target = findCampsite(park, campsiteSlug);
-      if (!target) return res.status(404).json({ error: 'Campsite not found' });
+      try {
+        location = resolveMediaLocation(park, { campgroundSlug, campsiteSlug });
+      } catch (error) {
+        if (sendCampsiteTargetError(res, error)) return;
+        throw error;
+      }
+      target = location.target;
     } else {
       target = park;
     }
@@ -439,11 +474,12 @@ export const addVideo = async (req, res, next) => {
     await park.save();
 
     // UPDATE PARK UPDATED TIME
-    await Park.findByIdAndUpdate(park._id, { updatedAt: new Date() });
+    await ParkModel.findByIdAndUpdate(park._id, { updatedAt: new Date() });
 
     const addedVideo = target.videos.find(v => v.url === rawUrl && v.user.equals(userId));
 
     await addUserUploadEntry({
+      UserModel,
       userId,
       mediaType: "video",
       mediaId: addedVideo._id,
@@ -453,9 +489,7 @@ export const addVideo = async (req, res, next) => {
       cloudinaryId: null,
 
       park,
-      target,
-      campgroundSlug,
-      campsiteSlug,
+      location,
 
       caption: caption,
       dateTaken: dateTaken
@@ -463,20 +497,19 @@ export const addVideo = async (req, res, next) => {
 
 
     // Add photos to Mongo Upload modal
-    const campsiteId = campsiteSlug ? target._id : null;
-    const campgroundId = campgroundSlug ? park.campgrounds.find(cg => cg.slug === campgroundSlug)?._id : null;
+    const metadata = buildMediaLocationMetadata(park, location);
     // Find the newly added video
     try {
-      const uploadDoc = await Upload.create({
+      const uploadDoc = await UploadModel.create({
         mediaType: 'video',
         mediaId: addedVideo._id,
         youtubeId: video.url,
-        parkId: park._id,
-        parkName: park?.name,
-        campgroundId,
-        campgroundName: park.campgrounds.find(cg => cg._id.equals(campgroundId))?.name || null,
-        campsiteId,
-        campsiteName: target?.siteNumber,
+        parkId: metadata.parkId,
+        parkName: metadata.parkName,
+        campgroundId: metadata.campgroundId,
+        campgroundName: metadata.campgroundName,
+        campsiteId: metadata.campsiteId,
+        campsiteName: metadata.campsiteName,
         userId,
       });
       
@@ -492,66 +525,42 @@ export const addVideo = async (req, res, next) => {
     return res.json({ success: true, addedVideo });
   } catch (err) {
     if (createdUploads.length) {
-      await Upload.deleteMany({ _id: { $in: createdUploads } });
+      await UploadModel.deleteMany({ _id: { $in: createdUploads } });
     }
     next(err);
   }
-};
-
-
-
-// export const addReview = async (req, res, next) => {
-//   const { parkSlug, campsiteSlug } = req.params;
-//   const review = {
-//     user: req.user._id,
-//     rating: req.body.rating,
-//     text: req.body.text.trim()
-//   };
-
-//   try {
-//     const park = await Park.findOne({ slug: parkSlug });
-//     if (!park) return res.status(404).json({ error: 'Park not found' });
-
-//     let target;
-//     if (campsiteSlug) {
-//       target = findCampsite(park, campsiteSlug);
-//       if (!target) return res.status(404).json({ error: 'Campsite not found' });
-//     } else {
-//       target = park;
-//     }
-
-//     target.reviews.push(review);
-//     await park.save();
-
-//     res.json({ success: true, review });
-//   } catch (err) {
-//     next(err);
-//   }
-// };
-
-
-// Func to find campsite
-function findCampsite(park, campsiteSlug) {
-  // Check within campgrounds
-  for (const cg of park.campgrounds || []) {
-    const found = cg.campsites.find(cs => cs.slug === campsiteSlug);
-    if (found) return found;
-  }
-
-  // Check park-level campsites (standalone)
-  return (park.campsites || []).find(cs => cs.slug === campsiteSlug);
 }
 
+async function deletePhotoHandler(req, res, next, dependencies) {
+  const {
+    ParkModel,
+    UploadModel,
+    UserModel,
+    cloudinaryClient,
+  } = dependencies;
+  const { parkSlug, campgroundSlug, campsiteSlug, photoId } = req.params;
 
+  if (campgroundSlug != null && campsiteSlug == null) {
+    return res.status(400).json({
+      error: 'Invalid campsite location.',
+      code: 'CONTRADICTORY_LOCATION',
+    });
+  }
 
-export const deletePhoto = async (req, res, next) => {
-  const { parkSlug, campsiteSlug, photoId } = req.params;
   try {
-    const park = await Park.findOne({ slug: parkSlug });
+    const park = await ParkModel.findOne({ slug: parkSlug });
     if (!park) return res.status(404).json({ error: 'Park not found' });
 
-    const target = campsiteSlug ? findCampsite(park, campsiteSlug) : park;
-    if (!target) return res.status(404).json({ error: 'Target not found' });
+    let location = null;
+    if (campsiteSlug) {
+      try {
+        location = resolveMediaLocation(park, { campgroundSlug, campsiteSlug });
+      } catch (error) {
+        if (sendCampsiteTargetError(res, error)) return;
+        throw error;
+      }
+    }
+    const target = location?.target || park;
 
     const photo = target.photos.find(p => p._id.toString() === photoId);
     if (!photo) return res.status(404).json({ error: 'Photo not found' });
@@ -572,7 +581,7 @@ export const deletePhoto = async (req, res, next) => {
       const publicId = match[1]; // everything after "upload/" and before ".ext"
 
       // Request deletion
-      deletionResult = await cloudinary.uploader.destroy(publicId);
+      deletionResult = await cloudinaryClient.uploader.destroy(publicId);
     } catch (err) {
       console.error('Cloudinary deletion failed:', err);
       return res.status(500).json({ error: 'Failed to contact Cloudinary.' });
@@ -590,10 +599,10 @@ export const deletePhoto = async (req, res, next) => {
     await park.save();
 
     // Remove from Upload collection
-    await Upload.deleteOne({ mediaType: 'photo', mediaId: photo._id });
+    await UploadModel.deleteOne({ mediaType: 'photo', mediaId: photo._id });
 
     const ownerId = photo.user;  // In case admin deletes it
-    await User.updateOne(
+    await UserModel.updateOne(
       { _id: ownerId, "uploads.mediaId": photo._id },
       { $set: { "uploads.$.status": "removed" } }
     );
@@ -602,18 +611,39 @@ export const deletePhoto = async (req, res, next) => {
   } catch (err) {
     next(err);
   }
-};
+}
 
 
 
-export const deleteVideo = async (req, res, next) => {
-  const { parkSlug, campsiteSlug, videoId } = req.params;
+async function deleteVideoHandler(req, res, next, dependencies) {
+  const {
+    ParkModel,
+    UploadModel,
+    UserModel,
+  } = dependencies;
+  const { parkSlug, campgroundSlug, campsiteSlug, videoId } = req.params;
+
+  if (campgroundSlug != null && campsiteSlug == null) {
+    return res.status(400).json({
+      error: 'Invalid campsite location.',
+      code: 'CONTRADICTORY_LOCATION',
+    });
+  }
+
   try {
-    const park = await Park.findOne({ slug: parkSlug });
+    const park = await ParkModel.findOne({ slug: parkSlug });
     if (!park) return res.status(404).json({ error: 'Park not found' });
 
-    const target = campsiteSlug ? findCampsite(park, campsiteSlug) : park;
-    if (!target) return res.status(404).json({ error: 'Target not found' });
+    let location = null;
+    if (campsiteSlug) {
+      try {
+        location = resolveMediaLocation(park, { campgroundSlug, campsiteSlug });
+      } catch (error) {
+        if (sendCampsiteTargetError(res, error)) return;
+        throw error;
+      }
+    }
+    const target = location?.target || park;
 
     const video = target.videos.find(v => v._id.toString() === videoId);
     if (!video) return res.status(404).json({ error: 'Video not found' });
@@ -629,10 +659,10 @@ export const deleteVideo = async (req, res, next) => {
     await park.save();
 
     // Remove from Upload model
-    await Upload.deleteOne({ mediaType: 'video', mediaId: video._id });
+    await UploadModel.deleteOne({ mediaType: 'video', mediaId: video._id });
 
     const ownerId = video.user; // In case admin deletes it
-    await User.updateOne(
+    await UserModel.updateOne(
       { _id: ownerId, "uploads.mediaId": video._id },
       { $set: { "uploads.$.status": "removed" } }
     );
@@ -643,5 +673,34 @@ export const deleteVideo = async (req, res, next) => {
   } catch (err) {
     next(err);
   }
-};
+}
+
+export function createMediaHandlers(overrides = {}) {
+  const dependencies = {
+    ParkModel: overrides.ParkModel || Park,
+    UploadModel: overrides.UploadModel || Upload,
+    UserModel: overrides.UserModel || User,
+    cloudinaryClient: overrides.cloudinaryClient || cloudinary,
+    uploadMiddleware: overrides.uploadMiddleware || uploadMemory,
+    validateImage: overrides.validateImage || validateImageBuffer,
+  };
+
+  return {
+    uploadPhoto: (req, res, next) =>
+      uploadPhotoHandler(req, res, next, dependencies),
+    addVideo: (req, res, next) =>
+      addVideoHandler(req, res, next, dependencies),
+    deletePhoto: (req, res, next) =>
+      deletePhotoHandler(req, res, next, dependencies),
+    deleteVideo: (req, res, next) =>
+      deleteVideoHandler(req, res, next, dependencies),
+  };
+}
+
+const mediaHandlers = createMediaHandlers();
+
+export const uploadPhoto = mediaHandlers.uploadPhoto;
+export const addVideo = mediaHandlers.addVideo;
+export const deletePhoto = mediaHandlers.deletePhoto;
+export const deleteVideo = mediaHandlers.deleteVideo;
 

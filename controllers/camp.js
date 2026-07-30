@@ -7,6 +7,12 @@ import { toSlug } from '../utils/general.js'
 import { isArray } from 'util';
 import { redirectedFlash } from '../utils/redirectedFlash.js';
 import { serializeForInlineScript } from '../utils/serializeForInlineScript.js';
+import {
+  CampsiteTargetError,
+  resolveCampsiteTarget,
+  sendCampsiteTargetError,
+} from '../utils/campsiteTarget.js';
+import { serializeCampsiteForClient } from '../utils/campsiteSerializer.js';
 
 
 const router = express.Router();
@@ -14,8 +20,79 @@ const cacheDir = path.join(process.cwd(), 'cache');
 const cacheFile = path.join(cacheDir, 'parkSearch.json');
 const refreshIntervalHrs = 24;
 
+export const SHOW_PARK_PROJECTION = `
+  name
+  slug
+  province
+  description
+  sitesRanges
+
+  photos.url
+  photos.socialMediaApproved
+
+  campgrounds.name
+  campgrounds.slug
+  campgrounds.sitesRanges
+
+  campgrounds.campsites.siteNumber
+  campgrounds.campsites.slug
+  campgrounds.campsites.photos._id
+  campgrounds.campsites.videos._id
+
+  campsites.siteNumber
+  campsites.slug
+  campsites.photos._id
+  campsites.videos._id
+`;
+
+export const CAMPSITE_LOCATION_PROJECTION = {
+  _id: 1,
+  'campgrounds._id': 1,
+  'campgrounds.name': 1,
+  'campgrounds.slug': 1,
+  'campgrounds.campsites._id': 1,
+  'campgrounds.campsites.slug': 1,
+  'campsites._id': 1,
+  'campsites.slug': 1,
+};
+
 let memoryCache = null;
 let lastCacheTime = 0;
+
+function naturalSort(a, b) {
+  return String(a ?? '').localeCompare(String(b ?? ''), undefined, {
+    numeric: true,
+    sensitivity: 'base',
+  });
+}
+
+function addCampsiteMediaCounts(campsites) {
+  if (!Array.isArray(campsites)) return;
+
+  campsites.sort((a, b) => naturalSort(a.siteNumber, b.siteNumber));
+  for (const campsite of campsites) {
+    const photoCount = Array.isArray(campsite.photos) ? campsite.photos.length : 0;
+    const videoCount = Array.isArray(campsite.videos) ? campsite.videos.length : 0;
+    campsite.photoCount = photoCount;
+    campsite.videoCount = videoCount;
+    campsite.mediaCount = photoCount + videoCount;
+    campsite.hasMedia = campsite.mediaCount > 0;
+    delete campsite.photos;
+    delete campsite.videos;
+  }
+}
+
+export function prepareCampsiteMediaCounts(park) {
+  if (Array.isArray(park?.campgrounds)) {
+    park.campgrounds.sort((a, b) => naturalSort(a.name, b.name));
+    for (const campground of park.campgrounds) {
+      addCampsiteMediaCounts(campground.campsites);
+    }
+  }
+
+  addCampsiteMediaCounts(park?.campsites);
+  return park;
+}
 
 // Func to allow for accents and such
 function normalizeText(str = '') {
@@ -277,10 +354,6 @@ export const showAllParks = async (req, res, next) => {
 
 // Render park page
 export const showPark = async (req, res, next) => {
-  function naturalSort(a, b) {
-    return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
-  }
-
   try {
     let { parkSlug } = req.params;
     parkSlug = toSlug(parkSlug);
@@ -294,33 +367,8 @@ export const showPark = async (req, res, next) => {
     }
 
     const park = await Park.findOne({ slug: parkSlug })
-      .select(`
-        name 
-        slug 
-        province 
-        description
-        sitesRanges
-
-        photos.url
-        photos.socialMediaApproved
-
-        campgrounds.name 
-        campgrounds.slug
-        campgrounds.sitesRanges
-
-        campgrounds.campsites.siteNumber 
-        campgrounds.campsites.slug
-        campgrounds.campsites.photos._id 
-        campgrounds.campsites.videos._id
-
-        campsites.siteNumber 
-        campsites.slug
-        photos.url
-        photos.socialMediaApproved
-      `)
+      .select(SHOW_PARK_PROJECTION)
       .lean();
-
-      // Removed from above Dec 11, 2025:  campsites.photos._id  &  campsites.videos._id
 
     if (!park) {
 
@@ -333,45 +381,7 @@ export const showPark = async (req, res, next) => {
       });
     }
 
-    // Add counts/flags for campsites inside campgrounds
-    if (Array.isArray(park.campgrounds)) {
-      park.campgrounds.sort((a, b) => naturalSort(a.name, b.name));
-      for (const cg of park.campgrounds) {
-        if (!Array.isArray(cg.campsites)) continue;
-
-        // Sort alphatically and numerically
-        cg.campsites.sort((a, b) => naturalSort(a.siteNumber, b.siteNumber));
-
-        for (const cs of cg.campsites) {
-          const photoCount = Array.isArray(cs.photos) ? cs.photos.length : 0;
-          const videoCount = Array.isArray(cs.videos) ? cs.videos.length : 0;
-          cs.photoCount = photoCount;
-          cs.videoCount = videoCount;
-          cs.mediaCount = photoCount + videoCount;
-          cs.hasMedia = cs.mediaCount > 0;
-          delete cs.photos;
-          delete cs.videos;
-        }
-      }
-    }
-
-    // Add counts/flags for standalone campsites (parks without campgrounds)
-    if (Array.isArray(park.campsites)) {
-      for (const cs of park.campsites) {
-        
-        // Sort alphatically and numerically
-        park.campsites.sort((a, b) => naturalSort(a.siteNumber, b.siteNumber));
-
-        const photoCount = Array.isArray(cs.photos) ? cs.photos.length : 0;
-        const videoCount = Array.isArray(cs.videos) ? cs.videos.length : 0;
-        cs.photoCount = photoCount;
-        cs.videoCount = videoCount;
-        cs.mediaCount = photoCount + videoCount;
-        cs.hasMedia = cs.mediaCount > 0;
-        delete cs.photos;
-        delete cs.videos;
-      }
-    }
+    prepareCampsiteMediaCounts(park);
 
     // console.log(park.campgrounds[0].campsites[0])
 
@@ -426,67 +436,212 @@ export const getPark = async(req, res, next) => {
   });
 }
 
-// If it's a park with no campgrounds
-export const getCampsite = async (req, res, next) => {
-  // console.log('getCampsite')
-  const { parkSlug, campsiteSlug } = req.params;
-  try {
-    const park = await Park.findOne(
-      { slug: parkSlug, 'campsites.slug': campsiteSlug },
-      { 'campsites.$': 1 }
-    ).lean();
-    // If not found
-    if (!park) return res.status(404).json({ error: 'Not found' });
-    // Return it
-    // return res.json(park.campsites[0]);
-    const campsite = park.campsites[0]
-
-    return res.json({
-      ...campsite.toObject(),
-      photos: campsite.photos.map(p => ({
-        _id: p._id,
-        user: p.user,
-        url: p.url,
-        caption: p.caption,
-        username: p.username,
-        dateTaken: p.dateTaken
-      })),
-      videos: campsite.videos.map(v => ({
-        _id: v._id,
-        user: v.user,
-        url: v.url,
-        caption: v.caption,
-        username: v.username,
-        dateTaken: v.dateTaken
-      }))
-    });
-
-  } catch (err) { 
-    next(err); 
-  }
+function exactMediaExpression(sourcePath) {
+  return {
+    $map: {
+      input: { $ifNull: [sourcePath, []] },
+      as: 'media',
+      in: {
+        _id: '$$media._id',
+        user: '$$media.user',
+        url: '$$media.url',
+        caption: '$$media.caption',
+        username: '$$media.username',
+        dateTaken: '$$media.dateTaken',
+        uploadedAt: '$$media.uploadedAt',
+      },
+    },
+  };
 }
 
-// If it's a park with campgrounds
-export const getCampgroundCampsite = async (req, res, next) => {
-  // console.log('getCampgroundCampsite')
+function exactCampsiteExpression(sourcePath) {
+  return {
+    _id: `${sourcePath}._id`,
+    siteNumber: `${sourcePath}.siteNumber`,
+    slug: `${sourcePath}.slug`,
+    type: `${sourcePath}.type`,
+    photos: exactMediaExpression(`${sourcePath}.photos`),
+    videos: exactMediaExpression(`${sourcePath}.videos`),
+  };
+}
+
+export function buildExactCampsitePipeline(parkId, resolvedLocation) {
+  const campsiteId = resolvedLocation?.campsite?._id;
+  if (!parkId || !campsiteId) {
+    throw new CampsiteTargetError('EXACT_TARGET_NOT_FOUND');
+  }
+
+  return [
+    { $match: { _id: parkId } },
+    {
+      $project: {
+        _id: 0,
+        matches: {
+          $concatArrays: [
+            {
+              $map: {
+                input: {
+                  $filter: {
+                    input: { $ifNull: ['$campsites', []] },
+                    as: 'campsite',
+                    cond: { $eq: ['$$campsite._id', campsiteId] },
+                  },
+                },
+                as: 'campsite',
+                in: {
+                  kind: { $literal: 'standalone-campsite' },
+                  campground: null,
+                  campsite: exactCampsiteExpression('$$campsite'),
+                },
+              },
+            },
+            {
+              $reduce: {
+                input: {
+                  $map: {
+                    input: { $ifNull: ['$campgrounds', []] },
+                    as: 'campground',
+                    in: {
+                      $map: {
+                        input: {
+                          $filter: {
+                            input: {
+                              $ifNull: ['$$campground.campsites', []],
+                            },
+                            as: 'campsite',
+                            cond: {
+                              $eq: ['$$campsite._id', campsiteId],
+                            },
+                          },
+                        },
+                        as: 'campsite',
+                        in: {
+                          kind: { $literal: 'campground-campsite' },
+                          campground: {
+                            _id: '$$campground._id',
+                            slug: '$$campground.slug',
+                            name: '$$campground.name',
+                          },
+                          campsite: exactCampsiteExpression('$$campsite'),
+                        },
+                      },
+                    },
+                  },
+                },
+                initialValue: [],
+                in: { $concatArrays: ['$$value', '$$this'] },
+              },
+            },
+          ],
+        },
+      },
+    },
+    {
+      $project: {
+        _id: 0,
+        matchCount: { $size: '$matches' },
+        location: {
+          $cond: [
+            { $eq: [{ $size: '$matches' }, 1] },
+            { $arrayElemAt: ['$matches', 0] },
+            null,
+          ],
+        },
+      },
+    },
+  ];
+}
+
+export async function loadCampsiteForClient(ParkModel, {
+  parkSlug,
+  campgroundSlug,
+  campsiteSlug,
+}) {
+  const locationPark = await ParkModel.findOne(
+    { slug: parkSlug },
+    CAMPSITE_LOCATION_PROJECTION,
+  ).lean();
+
+  if (!locationPark) return null;
+
+  const resolvedLocation = resolveCampsiteTarget(locationPark, {
+    campgroundSlug,
+    campsiteSlug,
+  });
+  const pipeline = buildExactCampsitePipeline(
+    locationPark._id,
+    resolvedLocation,
+  );
+  const exactRows = await ParkModel.aggregate(pipeline);
+  const exactRow = Array.isArray(exactRows) ? exactRows[0] : null;
+  const exactMatchCount = Number(exactRow?.matchCount ?? 0);
+
+  if (exactMatchCount > 1) {
+    throw new CampsiteTargetError('DUPLICATE_EXACT_CAMPSITE_ID');
+  }
+
+  const exactLocation = exactRow?.location;
+  if (exactMatchCount !== 1 || !exactLocation?.campsite) {
+    throw new CampsiteTargetError('EXACT_TARGET_NOT_FOUND');
+  }
+
+  const { kind, campsite } = exactLocation;
+  const campground =
+    kind === 'campground-campsite' ? exactLocation.campground : null;
+
+  if (
+    !['standalone-campsite', 'campground-campsite'].includes(kind) ||
+    (kind === 'campground-campsite' && !campground)
+  ) {
+    throw new CampsiteTargetError('EXACT_TARGET_NOT_FOUND');
+  }
+
+  return {
+    kind,
+    target: campsite,
+    campsite,
+    campground,
+    campsiteSlug: campsite.slug,
+    campgroundSlug: campground?.slug ?? null,
+  };
+}
+
+async function getCampsiteByLocation(req, res, next, ParkModel) {
   const { parkSlug, campgroundSlug, campsiteSlug } = req.params;
-  // console.log({ parkSlug, campgroundSlug, campsiteSlug });
+
   try {
+    let location;
+    try {
+      location = await loadCampsiteForClient(ParkModel, {
+        parkSlug,
+        campgroundSlug,
+        campsiteSlug,
+      });
+    } catch (error) {
+      if (sendCampsiteTargetError(res, error)) return;
+      throw error;
+    }
 
-    const park = await Park.findOne(
-      { slug: parkSlug, 'campgrounds.slug': campgroundSlug },
-      { 'campgrounds.$': 1 }
-    ).lean();
-    // console.log(park)
-    if (!park || !park.campgrounds?.length) return res.status(404).json({ error: 'Not found' });
-    const campground = park.campgrounds[0];
-    const campsite = campground.campsites.find(cs => cs.slug === campsiteSlug);
-    // If not found
-    if (!campsite) return res.status(404).json({ error: 'Not found' });
-    // Return it
-    return res.json(campsite);
+    if (!location) {
+      return res.status(404).json({ error: 'Park not found.' });
+    }
 
-  } catch (err) { 
-    next(err); 
+    return res.json(serializeCampsiteForClient(location));
+  } catch (error) {
+    next(error);
   }
 }
+
+export function createCampsiteApiHandlers({ ParkModel = Park } = {}) {
+  return {
+    getCampsite: (req, res, next) =>
+      getCampsiteByLocation(req, res, next, ParkModel),
+    getCampgroundCampsite: (req, res, next) =>
+      getCampsiteByLocation(req, res, next, ParkModel),
+  };
+}
+
+const campsiteApiHandlers = createCampsiteApiHandlers();
+
+export const getCampsite = campsiteApiHandlers.getCampsite;
+export const getCampgroundCampsite = campsiteApiHandlers.getCampgroundCampsite;
