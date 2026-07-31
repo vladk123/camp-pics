@@ -8,6 +8,8 @@
     "test": "node --test",
     "media:audit-identifiers": "node scripts/reconcileMediaIdentifiers.js",
     "media:backfill-identifiers": "node scripts/reconcileMediaIdentifiers.js --apply",
+    "media:audit-cleanup": "node scripts/processMediaCleanupJobs.js",
+    "media:process-cleanup": "node scripts/processMediaCleanupJobs.js --apply",
     "start": "node app.js"
   },
   "repository": {

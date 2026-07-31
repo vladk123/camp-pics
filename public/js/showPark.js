@@ -1,4 +1,5 @@
 const mediaRendering = window.CampPicsMedia;
+const mediaDeletionResponse = window.CampPicsMediaDeletionResponse;
 const campsiteLocation = window.CampPicsCampsiteLocation;
 const campsiteRequests = window.CampPicsCampsiteRequests.createCoordinator();
 const boundCampsiteNavButtons = new WeakSet();
@@ -809,7 +810,12 @@ async function deleteMedia(item) {
       headers: { 'Accept': 'application/json' },
     });
     const data = await res.json();
-    if (!res.ok) {
+    const outcome = mediaDeletionResponse.classify(
+      res,
+      data,
+      'Deleted media!',
+    );
+    if (!outcome.success) {
       throw new Error(
         window.CampPicsCsrf.responseErrorMessage(res, data, 'Delete failed.'),
       );
@@ -824,7 +830,12 @@ async function deleteMedia(item) {
       page_location: window.location.href 
     });
 
-    createFlashMsg('success', 'Deleted media!', 'delete-media-success', 5)
+    createFlashMsg(
+      'success',
+      outcome.message,
+      'delete-media-success',
+      5,
+    )
     await refreshCampsiteTarget(location);
   } catch (err) {
     console.error(err);

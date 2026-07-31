@@ -3,6 +3,7 @@ window.updateParkSlider = updateParkSlider;
 window.buildMediaHTML = buildMediaHTML;
 
 const parkMediaRendering = window.CampPicsMedia;
+const parkDeletionResponse = window.CampPicsMediaDeletionResponse;
 const parkSlideMedia = new WeakMap();
 
 function buildParkCaption(item) {
@@ -177,7 +178,12 @@ async function deleteParkMedia(item) {
       headers: { 'Accept': 'application/json' },
     });
     const data = await response.json();
-    if (!response.ok) {
+    const outcome = parkDeletionResponse.classify(
+      response,
+      data,
+      'Deleted successfully.',
+    );
+    if (!outcome.success) {
       throw new Error(
         window.CampPicsCsrf.responseErrorMessage(response, data, 'Delete failed.'),
       );
@@ -191,7 +197,12 @@ async function deleteParkMedia(item) {
       page_location: window.location.href,
     });
 
-    createFlashMsg('success', 'Deleted successfully.', 'delete-media-success', 5);
+    createFlashMsg(
+      'success',
+      outcome.message,
+      'delete-media-success',
+      5,
+    );
     await refreshParkMedia();
   } catch (error) {
     createFlashMsg('error', error.message || 'Error deleting.', 'delete-media-error', 10);

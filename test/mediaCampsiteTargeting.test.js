@@ -89,10 +89,14 @@ function controllerHarness(park) {
         calls.uploadCreates.push(...data);
         return data;
       },
+      find: async () => [],
       deleteOne: async data => {
         calls.uploadDeletes.push(data);
       },
-      deleteMany: async () => {},
+      deleteMany: async (data, options) => {
+        assert.equal(options?.session, session);
+        calls.uploadDeletes.push(data);
+      },
     },
     UserModel: {
       updateOne: async (...args) => {

@@ -1,6 +1,7 @@
 import { Park } from '../models/park.js';
 import { Upload } from '../models/upload.js';
 import { User } from "../models/user.js"; // ensure correct path
+import { MediaCleanupJob } from '../models/mediaCleanupJob.js';
 // import cloudinary from '../config/cloudinary.js';
 import { uploadMemory } from '../middleware.js'; //
 import { v2 as cloudinary } from 'cloudinary';
@@ -11,7 +12,6 @@ import { extractYouTubeVideoId } from '../utils/youtube.js';
 import {
   normalizeCloudinaryPublicId,
   parseCloudinaryDeliveryUrl,
-  resolveCloudinaryPhotoIdentity,
 } from '../utils/cloudinaryPhotoIdentity.js';
 import {
   resolveCampsiteTarget,
@@ -25,9 +25,23 @@ import {
   MEDIA_UPLOADER_NOT_FOUND,
   createMediaPersistenceService,
 } from '../utils/mediaPersistence.js';
+import {
+  CLOUDINARY_IDENTITY_CONFLICT,
+  MEDIA_DELETE_NOT_AUTHORIZED,
+  MEDIA_DELETE_NOT_FOUND,
+  MEDIA_DELETE_PERSISTENCE_FAILED,
+  MEDIA_DELETE_TARGET_CHANGED,
+  MEDIA_DELETE_TRANSACTION_UNAVAILABLE,
+  PHOTO_IDENTITY_UNRESOLVED,
+  createMediaDeletionService,
+} from '../utils/mediaDeletion.js';
+import {
+  createMediaCleanupJobProcessor,
+} from '../utils/mediaCleanupJobs.js';
 
 export const PHOTO_UPLOAD_CLEANUP_INCOMPLETE =
   'PHOTO_UPLOAD_CLEANUP_INCOMPLETE';
+export const PHOTO_CLEANUP_PENDING = 'PHOTO_CLEANUP_PENDING';
 
 // Function to validate images being uploaded
 export async function validateImageBuffer(buffer) {
@@ -113,6 +127,60 @@ function sendMediaPersistenceError(res, error) {
   return res.status(response.status).json({
     error: response.message,
     code: response.code,
+  });
+}
+
+function mediaDeletionResponse(error) {
+  const responses = {
+    [MEDIA_DELETE_NOT_FOUND]: {
+      status: 404,
+      message: 'Media not found.',
+    },
+    [MEDIA_DELETE_NOT_AUTHORIZED]: {
+      status: 403,
+      message: 'Not authorized to delete this media.',
+    },
+    [MEDIA_DELETE_TARGET_CHANGED]: {
+      status: 409,
+      message: 'The media location changed. Refresh and try again.',
+    },
+    [CLOUDINARY_IDENTITY_CONFLICT]: {
+      status: 409,
+      message: 'Photo identity conflict.',
+    },
+    [PHOTO_IDENTITY_UNRESOLVED]: {
+      status: 409,
+      message: 'Photo identity could not be resolved.',
+    },
+    [MEDIA_DELETE_TRANSACTION_UNAVAILABLE]: {
+      status: 503,
+      message: 'Media deletion is temporarily unavailable.',
+    },
+    [MEDIA_DELETE_PERSISTENCE_FAILED]: {
+      status: 500,
+      message: 'Media deletion failed. Please try again.',
+    },
+  };
+  const code = Object.hasOwn(responses, error?.code)
+    ? error.code
+    : MEDIA_DELETE_PERSISTENCE_FAILED;
+  return { code, ...responses[code] };
+}
+
+function sendMediaDeletionError(res, error) {
+  const response = mediaDeletionResponse(error);
+  return res.status(response.status).json({
+    error: response.message,
+    code: response.code,
+  });
+}
+
+function sendPhotoCleanupPending(res) {
+  return res.status(202).json({
+    success: true,
+    cleanupPending: true,
+    code: PHOTO_CLEANUP_PENDING,
+    message: 'Photo deleted from CampPics. Storage cleanup is pending.',
   });
 }
 
@@ -550,10 +618,8 @@ async function addVideoHandler(req, res, next, dependencies) {
 
 async function deletePhotoHandler(req, res, next, dependencies) {
   const {
-    ParkModel,
-    UploadModel,
-    UserModel,
-    cloudinaryClient,
+    mediaDeletion,
+    mediaCleanupJobs,
   } = dependencies;
   const { parkSlug, campgroundSlug, campsiteSlug, photoId } = req.params;
 
@@ -564,85 +630,51 @@ async function deletePhotoHandler(req, res, next, dependencies) {
     });
   }
 
+  let committed;
   try {
-    const park = await ParkModel.findOne({ slug: parkSlug });
-    if (!park) return res.status(404).json({ error: 'Park not found' });
-
-    let location = null;
-    if (campsiteSlug) {
-      try {
-        location = resolveMediaLocation(park, { campgroundSlug, campsiteSlug });
-      } catch (error) {
-        if (sendCampsiteTargetError(res, error)) return;
-        throw error;
-      }
-    }
-    const target = location?.target || park;
-
-    const photo = target.photos.find(p => p._id.toString() === photoId);
-    if (!photo) return res.status(404).json({ error: 'Photo not found' });
-
-    // Permission check
-    if (!photo.user.equals(req.user._id) && !req.user.isAdmin) {
-      return res.status(403).json({ error: 'Not authorized to delete this photo' });
-    }
-
-    const uploadRecord = await UploadModel.findOne({
+    committed = await mediaDeletion.deleteMedia({
+      parkSlug,
+      locationInput: {
+        campgroundSlug,
+        campsiteSlug,
+      },
       mediaType: 'photo',
-      mediaId: photo._id,
+      mediaId: photoId,
+      actorUserId: req.user?._id,
+      actorIsAdmin: req.user?.isAdmin === true,
     });
-    const identity = resolveCloudinaryPhotoIdentity({
-      photo,
-      upload: uploadRecord,
-    });
+  } catch (error) {
+    return sendMediaDeletionError(res, error);
+  }
 
-    if (identity.conflict) {
-      return res.status(409).json({
-        error: 'Photo identity conflict.',
-        code: 'CLOUDINARY_IDENTITY_CONFLICT',
-      });
-    }
-    if (!identity.publicId) {
-      return res.status(409).json({
-        error: 'Photo identity could not be resolved.',
-        code: 'PHOTO_IDENTITY_UNRESOLVED',
-      });
-    }
-
-    // Delete from Cloudinary first..
-    let deletionResult;
-    try {
-      deletionResult = await cloudinaryClient.uploader.destroy(
-        identity.publicId,
-      );
-    } catch (err) {
-      console.error('Cloudinary deletion failed:', err);
-      return res.status(500).json({ error: 'Failed to contact Cloudinary.' });
-    }
-
-    // Verify Cloudinary response
-    if (deletionResult.result !== 'ok' && deletionResult.result !== 'not found') {
-      // If Cloudinary explicitly says "error" or unknown result
-      console.error('Unexpected Cloudinary photo deletion response');
-      return res.status(500).json({ error: 'Cloudinary deletion unsuccessful.' });
-    }
-
-    // Delete from Mongo
-    target.photos = target.photos.filter(p => p._id.toString() !== photoId);
-    await park.save();
-
-    // Remove from Upload collection
-    await UploadModel.deleteOne({ mediaType: 'photo', mediaId: photo._id });
-
-    const ownerId = photo.user;  // In case admin deletes it
-    await UserModel.updateOne(
-      { _id: ownerId, "uploads.mediaId": photo._id },
-      { $set: { "uploads.$.status": "removed" } }
+  let cleanupResult;
+  try {
+    cleanupResult = await mediaCleanupJobs.processJobById(
+      committed.cleanupJobId,
     );
+  } catch {
+    console.error('Post-commit photo cleanup processor failed', {
+      jobId: committed.cleanupJobId.toString(),
+      mediaId: committed.mediaId.toString(),
+    });
+    try {
+      return sendPhotoCleanupPending(res);
+    } catch (error) {
+      return next(error);
+    }
+  }
 
-    return res.json({ success: true, cloudinaryResult: deletionResult.result });
-  } catch (err) {
-    next(err);
+  try {
+    if (cleanupResult?.completed === true) {
+      return res.status(200).json({
+        success: true,
+        cleanupPending: false,
+        message: 'Photo deleted successfully.',
+      });
+    }
+    return sendPhotoCleanupPending(res);
+  } catch (error) {
+    return next(error);
   }
 }
 
@@ -650,9 +682,7 @@ async function deletePhotoHandler(req, res, next, dependencies) {
 
 async function deleteVideoHandler(req, res, next, dependencies) {
   const {
-    ParkModel,
-    UploadModel,
-    UserModel,
+    mediaDeletion,
   } = dependencies;
   const { parkSlug, campgroundSlug, campsiteSlug, videoId } = req.params;
 
@@ -664,47 +694,28 @@ async function deleteVideoHandler(req, res, next, dependencies) {
   }
 
   try {
-    const park = await ParkModel.findOne({ slug: parkSlug });
-    if (!park) return res.status(404).json({ error: 'Park not found' });
+    await mediaDeletion.deleteMedia({
+      parkSlug,
+      locationInput: {
+        campgroundSlug,
+        campsiteSlug,
+      },
+      mediaType: 'video',
+      mediaId: videoId,
+      actorUserId: req.user?._id,
+      actorIsAdmin: req.user?.isAdmin === true,
+    });
+  } catch (error) {
+    return sendMediaDeletionError(res, error);
+  }
 
-    let location = null;
-    if (campsiteSlug) {
-      try {
-        location = resolveMediaLocation(park, { campgroundSlug, campsiteSlug });
-      } catch (error) {
-        if (sendCampsiteTargetError(res, error)) return;
-        throw error;
-      }
-    }
-    const target = location?.target || park;
-
-    const video = target.videos.find(v => v._id.toString() === videoId);
-    if (!video) return res.status(404).json({ error: 'Video not found' });
-
-    // Permission check
-    if (!video.user.equals(req.user._id) && !req.user.isAdmin) {
-      return res.status(403).json({ error: 'Not authorized to delete this video' });
-    }
-
-    // Remove the video manually
-    target.videos = target.videos.filter(v => v._id.toString() !== videoId);
-
-    await park.save();
-
-    // Remove from Upload model
-    await UploadModel.deleteOne({ mediaType: 'video', mediaId: video._id });
-
-    const ownerId = video.user; // In case admin deletes it
-    await UserModel.updateOne(
-      { _id: ownerId, "uploads.mediaId": video._id },
-      { $set: { "uploads.$.status": "removed" } }
-    );
-
-
-
-    res.json({ success: true });
-  } catch (err) {
-    next(err);
+  try {
+    return res.status(200).json({
+      success: true,
+      message: 'Video deleted successfully.',
+    });
+  } catch (error) {
+    return next(error);
   }
 }
 
@@ -712,11 +723,15 @@ export function createMediaHandlers(overrides = {}) {
   const ParkModel = overrides.ParkModel || Park;
   const UploadModel = overrides.UploadModel || Upload;
   const UserModel = overrides.UserModel || User;
+  const CleanupJobModel =
+    overrides.CleanupJobModel || MediaCleanupJob;
+  const cloudinaryClient = overrides.cloudinaryClient || cloudinary;
   const dependencies = {
     ParkModel,
     UploadModel,
     UserModel,
-    cloudinaryClient: overrides.cloudinaryClient || cloudinary,
+    CleanupJobModel,
+    cloudinaryClient,
     uploadMiddleware: overrides.uploadMiddleware || uploadMemory,
     validateImage: overrides.validateImage || validateImageBuffer,
     mediaPersistence: overrides.mediaPersistence ||
@@ -725,6 +740,23 @@ export function createMediaHandlers(overrides = {}) {
         UploadModel,
         UserModel,
         transactionRunner: overrides.transactionRunner,
+      }),
+    mediaDeletion: overrides.mediaDeletion ||
+      createMediaDeletionService({
+        ParkModel,
+        UploadModel,
+        UserModel,
+        CleanupJobModel,
+        transactionRunner: overrides.transactionRunner,
+        cleanupJobIdFactory: overrides.cleanupJobIdFactory,
+        now: overrides.now,
+      }),
+    mediaCleanupJobs: overrides.mediaCleanupJobs ||
+      createMediaCleanupJobProcessor({
+        CleanupJobModel,
+        cloudinaryClient,
+        clock: overrides.cleanupClock,
+        leaseTokenGenerator: overrides.leaseTokenGenerator,
       }),
   };
 

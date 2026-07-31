@@ -104,6 +104,7 @@ function makeHarness({
     uploadDeletes: [],
     uploadFinds: [],
     uploadRollbackDeletes: [],
+    cleanupJobs: [],
     userPushes: [],
     userUpdates: [],
     parkSaves: 0,
@@ -114,6 +115,27 @@ function makeHarness({
     calls.parkSaves += 1;
     if (options) assert.equal(options.session, session);
     return park;
+  };
+
+  const cloudinaryClient = {
+    uploader: {
+      upload_stream(options, callback) {
+        const result = uploadResults[uploadIndex++];
+        return new Writable({
+          write(chunk, encoding, done) {
+            done();
+          },
+          final(done) {
+            queueMicrotask(() => callback(null, result));
+            done();
+          },
+        });
+      },
+      async destroy(publicId) {
+        calls.cloudinaryDeletes.push(publicId);
+        return { result: destroyResult };
+      },
+    },
   };
 
   const handlers = createMediaHandlers({
@@ -133,15 +155,17 @@ function makeHarness({
         }
         return data;
       },
-      findOne: async query => {
+      find: async query => {
         calls.uploadFinds.push(query);
-        return uploadRecord;
+        return uploadRecord ? [uploadRecord] : [];
       },
-      deleteOne: async query => {
-        calls.uploadDeletes.push(query);
-      },
-      deleteMany: async query => {
-        calls.uploadRollbackDeletes.push(query);
+      deleteMany: async (query, options) => {
+        if (options?.session) {
+          assert.equal(options.session, session);
+          calls.uploadDeletes.push(query);
+        } else {
+          calls.uploadRollbackDeletes.push(query);
+        }
       },
     },
     UserModel: {
@@ -155,24 +179,28 @@ function makeHarness({
         return { matchedCount: 1, modifiedCount: 1 };
       },
     },
-    cloudinaryClient: {
-      uploader: {
-        upload_stream(options, callback) {
-          const result = uploadResults[uploadIndex++];
-          return new Writable({
-            write(chunk, encoding, done) {
-              done();
-            },
-            final(done) {
-              queueMicrotask(() => callback(null, result));
-              done();
-            },
-          });
-        },
-        async destroy(publicId) {
-          calls.cloudinaryDeletes.push(publicId);
-          return { result: destroyResult };
-        },
+    CleanupJobModel: {
+      insertMany: async (records, options) => {
+        assert.equal(options.session, session);
+        calls.cleanupJobs.push(...records);
+        return records;
+      },
+    },
+    cloudinaryClient,
+    mediaCleanupJobs: {
+      async processJobById(jobId) {
+        const job = calls.cleanupJobs.find(item =>
+          item._id.toString() === jobId.toString()
+        );
+        const result = await cloudinaryClient.uploader.destroy(
+          job.cloudinaryPublicId,
+        );
+        return {
+          completed:
+            result.result === 'ok' ||
+            result.result === 'not found',
+          status: 'completed',
+        };
       },
     },
     uploadMiddleware: {
@@ -183,10 +211,16 @@ function makeHarness({
     validateImage: async () => ({ valid: true }),
     transactionRunner: async work => {
       const photoSnapshot = park.photos.map(photo => photo.toObject());
+      const cleanupSnapshot = [...calls.cleanupJobs];
       try {
         return await work(session);
       } catch (error) {
         park.photos.splice(0, park.photos.length, ...photoSnapshot);
+        calls.cleanupJobs.splice(
+          0,
+          calls.cleanupJobs.length,
+          ...cleanupSnapshot,
+        );
         throw error;
       }
     },
@@ -431,7 +465,7 @@ describe('ordinary photo deletion identity compatibility', () => {
     );
 
     assert.equal(res.statusCode, 200);
-    assert.equal(res.body.cloudinaryResult, 'not found');
+    assert.equal(res.body.cleanupPending, false);
     assert.equal(calls.uploadDeletes.length, 1);
     assert.equal(calls.userUpdates.length, 1);
     assert.equal(park.photos.length, 0);
