@@ -1,9 +1,6 @@
 import { User } from '../models/user.js';
-import { Upload } from '../models/upload.js';
-import { Park } from '../models/park.js';
 import { Token } from '../models/token.js';
 import { logger } from '../utils/logging.js'; //for logging errors
-import { v2 as cloudinary } from 'cloudinary';
 // import { getIP } from '../utils/getIP.js'
 import { redirectedFlash } from '../utils/redirectedFlash.js';
 import { createNewUserVerify } from '../utils/createNewUserVerify.js'
@@ -25,6 +22,22 @@ import {
     PASSWORD_CONFIRMATION_MESSAGE,
     validatePassword,
 } from '../utils/passwordPolicy.js';
+import {
+    ACCOUNT_DELETE_CREDENTIAL_CHANGED,
+    ACCOUNT_DELETE_MEDIA_REVIEW_REQUIRED,
+    ACCOUNT_DELETE_NOT_ALLOWED,
+    ACCOUNT_DELETE_NOT_FOUND,
+    ACCOUNT_DELETE_PERSISTENCE_FAILED,
+    ACCOUNT_DELETE_TRANSACTION_UNAVAILABLE,
+    AccountDeletionError,
+    accountDeletion,
+} from '../utils/accountDeletion.js';
+import {
+    processCommittedAccountCleanupJobs,
+} from '../utils/accountDeletionPostCommit.js';
+import {
+    processJobById,
+} from '../utils/mediaCleanupJobs.js';
 
 const GENERIC_RESET_REQUEST_MESSAGE =
     'If you have an account with us, you will receive an email shortly to reset your password.';
@@ -627,65 +640,305 @@ export const getAccount = (req, res, next) => {
 
 
 
-export const deleteAccount = async (req, res, next) => {
-  try {
-    const userId = req.user._id;
+const ACCOUNT_DELETE_AUTHENTICATION_MESSAGE =
+    'The current password is incorrect or could not be verified.';
 
-    // Find all uploads belonging to this user
-    const uploads = await Upload.find({ userId });
+const ACCOUNT_DELETE_ERROR_RESPONSES = Object.freeze({
+    [ACCOUNT_DELETE_NOT_FOUND]: {
+        type: 'error',
+        message: 'Account deletion could not be completed. Please sign in again.',
+    },
+    [ACCOUNT_DELETE_NOT_ALLOWED]: {
+        type: 'error',
+        message: 'Administrator accounts cannot be deleted through self-service.',
+    },
+    [ACCOUNT_DELETE_CREDENTIAL_CHANGED]: {
+        type: 'error',
+        message: 'Your account credentials changed. Please sign in again and retry.',
+    },
+    [ACCOUNT_DELETE_MEDIA_REVIEW_REQUIRED]: {
+        type: 'error',
+        message: 'Account deletion could not be completed automatically. Support must review old media records.',
+    },
+    [ACCOUNT_DELETE_TRANSACTION_UNAVAILABLE]: {
+        type: 'error',
+        message: 'Account deletion is temporarily unavailable. Please try again later.',
+    },
+    [ACCOUNT_DELETE_PERSISTENCE_FAILED]: {
+        type: 'error',
+        message: 'Account deletion could not be completed. Please try again.',
+    },
+});
 
-    // Delete each photo from Cloudinary if applicable
-    const cloudDeletes = uploads
-      .filter(up => up.mediaType === 'photo' && up.cloudinaryId)
-      .map(up =>
-        cloudinary.uploader.destroy(up.cloudinaryId).catch(() => null)
-      );
+async function logAccountDeletionOperation(log, message) {
+    try {
+        await log(null, null, 'error', { message });
+    } catch {
+        // Operational logging must not change the account-deletion result.
+    }
+}
 
-    await Promise.all(cloudDeletes);
-
-    // Delete uploaded media from Park model
-    const parks = await Park.find({
-      $or: [
-        { 'photos.user': userId },
-        { 'videos.user': userId },
-        { 'campgrounds.campsites.photos.user': userId },
-        { 'campgrounds.campsites.videos.user': userId }
-      ]
-    });
-
-    for (const park of parks) {
-      // Remove park-level media
-      park.photos = park.photos.filter(p => !p.user.equals(userId));
-      park.videos = park.videos.filter(v => !v.user.equals(userId));
-
-      // Remove campground/campsite-level media
-      for (const cg of park.campgrounds) {
-        for (const cs of cg.campsites) {
-          cs.photos = cs.photos.filter(p => !p.user.equals(userId));
-          cs.videos = cs.videos.filter(v => !v.user.equals(userId));
+function runCallbackOperation(start) {
+    return new Promise(resolve => {
+        let settled = false;
+        const finish = error => {
+            if (settled) return;
+            settled = true;
+            resolve(error || null);
+        };
+        try {
+            start(finish);
+        } catch (error) {
+            finish(error);
         }
-      }
+    });
+}
 
-      await park.save();
+async function endDeletedAccountSession({
+    req,
+    res,
+    sessionCookieName,
+    log,
+}) {
+    const session = req.session;
+    const logoutError = typeof req.logout === 'function'
+        ? await runCallbackOperation(callback => req.logout(callback))
+        : new Error('Logout is unavailable.');
+    if (logoutError) {
+        await logAccountDeletionOperation(
+            log,
+            'Post-commit account deletion logout failed.',
+        );
     }
 
-    // Delete Upload records
-    await Upload.deleteMany({ userId });
-
-    //Delete the User account itself
-    await User.findByIdAndDelete(userId);
-
-    // Log the user out & redirect
-    req.logout(() => {
-        return redirectedFlash(req, res, 'success', 'Account deleted!', '/',
-            {GA4:{
-                event: 'delete_account',
-                user_id: null,
-            }}
+    const destroyError = typeof session?.destroy === 'function'
+        ? await runCallbackOperation(callback => session.destroy(callback))
+        : new Error('Session destruction is unavailable.');
+    if (destroyError) {
+        await logAccountDeletionOperation(
+            log,
+            'Post-commit account deletion session destruction failed.',
         );
+    }
+
+    if (sessionCookieName && typeof res.clearCookie === 'function') {
+        try {
+            res.clearCookie(sessionCookieName, { path: '/' });
+        } catch {
+            await logAccountDeletionOperation(
+                log,
+                'Post-commit account deletion cookie clearing failed.',
+            );
+        }
+    }
+
+    return { destroyedSession: session, destroyError };
+}
+
+async function ensureAnonymousResponseSession(req, destroyedSession) {
+    if (req.session) return true;
+    if (typeof destroyedSession?.regenerate !== 'function') return false;
+    const regenerateError = await runCallbackOperation(
+        callback => destroyedSession.regenerate(callback),
+    );
+    return !regenerateError && Boolean(req.session);
+}
+
+async function sendCommittedDeletionSuccess({
+    req,
+    res,
+    destroyedSession,
+    redirectWithFlash,
+    log,
+}) {
+    try {
+        const hasSession = await ensureAnonymousResponseSession(
+            req,
+            destroyedSession,
+        );
+        if (hasSession) {
+            return await redirectWithFlash(
+                req,
+                res,
+                'success',
+                'Account deleted. Storage cleanup may continue after you leave.',
+                '/',
+                {
+                    GA4: {
+                        event: 'delete_account',
+                        user_id: null,
+                    },
+                },
+            );
+        }
+        return res.redirect('/');
+    } catch {
+        await logAccountDeletionOperation(
+            log,
+            'Post-commit account deletion response handling failed.',
+        );
+        if (!res.headersSent) {
+            try {
+                return res.redirect('/');
+            } catch {
+                await logAccountDeletionOperation(
+                    log,
+                    'Post-commit account deletion fallback redirect failed.',
+                );
+            }
+        }
+        return undefined;
+    }
+}
+
+export const createDeleteAccountController = ({
+    UserModel = User,
+    deletionService = accountDeletion,
+    cleanupProcessor = { processJobById },
+    cleanupRunner = processCommittedAccountCleanupJobs,
+    log = logger,
+    redirectWithFlash = redirectedFlash,
+    sessionCookieName = process.env.COOKIE_NAME || 'connect.sid',
+} = {}) => async(req, res, next) => {
+    const currentPassword = req.body?.current_password;
+    if (
+        typeof currentPassword !== 'string' ||
+        currentPassword.trim().length === 0
+    ) {
+        return redirectWithFlash(
+            req,
+            res,
+            'error',
+            'Enter your current password to delete your account.',
+            '/user/account',
+        );
+    }
+
+    let authenticatedUser;
+    try {
+        const userQuery = UserModel.findById(req.user?._id);
+        const freshUser = await userQuery.select('+hash +salt');
+        if (!freshUser) {
+            const response = ACCOUNT_DELETE_ERROR_RESPONSES[
+                ACCOUNT_DELETE_NOT_FOUND
+            ];
+            return redirectWithFlash(
+                req,
+                res,
+                response.type,
+                response.message,
+                '/user/account',
+            );
+        }
+        if (freshUser.isAdmin === true) {
+            const response = ACCOUNT_DELETE_ERROR_RESPONSES[
+                ACCOUNT_DELETE_NOT_ALLOWED
+            ];
+            return redirectWithFlash(
+                req,
+                res,
+                response.type,
+                response.message,
+                '/user/account',
+            );
+        }
+
+        const authentication = await freshUser.authenticate(
+            currentPassword,
+        );
+        if (!authentication?.user) {
+            return redirectWithFlash(
+                req,
+                res,
+                'error',
+                ACCOUNT_DELETE_AUTHENTICATION_MESSAGE,
+                '/user/account',
+            );
+        }
+        authenticatedUser = authentication.user;
+        if (
+            typeof authenticatedUser.hash !== 'string' ||
+            !authenticatedUser.hash ||
+            typeof authenticatedUser.salt !== 'string' ||
+            !authenticatedUser.salt
+        ) {
+            throw new Error('Authenticated credential fingerprint is unavailable.');
+        }
+    } catch {
+        await logAccountDeletionOperation(
+            log,
+            'Self-service account deletion password authentication failed.',
+        );
+        return redirectWithFlash(
+            req,
+            res,
+            'error',
+            ACCOUNT_DELETE_AUTHENTICATION_MESSAGE,
+            '/user/account',
+        );
+    }
+
+    let committed;
+    try {
+        committed = await deletionService.deleteAccount({
+            userId: authenticatedUser._id,
+            authenticatedHash: authenticatedUser.hash,
+            authenticatedSalt: authenticatedUser.salt,
+        });
+    } catch (error) {
+        const response = ACCOUNT_DELETE_ERROR_RESPONSES[error?.code] ||
+            ACCOUNT_DELETE_ERROR_RESPONSES[
+                ACCOUNT_DELETE_PERSISTENCE_FAILED
+            ];
+        if (!(error instanceof AccountDeletionError)) {
+            await logAccountDeletionOperation(
+                log,
+                'Self-service account deletion transaction failed.',
+            );
+        }
+        return redirectWithFlash(
+            req,
+            res,
+            response.type,
+            response.message,
+            '/user/account',
+        );
+    }
+
+    const { destroyedSession } = await endDeletedAccountSession({
+        req,
+        res,
+        sessionCookieName,
+        log,
     });
 
-  } catch (err) {
-    next(err);
-  }
+    try {
+        const cleanup = await cleanupRunner({
+            cleanupJobIds: committed.cleanupJobIds,
+            processJobById: cleanupProcessor.processJobById.bind(
+                cleanupProcessor,
+            ),
+        });
+        if (cleanup.failed > 0) {
+            await logAccountDeletionOperation(
+                log,
+                'Post-commit account deletion cleanup processing failed.',
+            );
+        }
+    } catch {
+        await logAccountDeletionOperation(
+            log,
+            'Post-commit account deletion cleanup processing failed.',
+        );
+    }
+
+    return sendCommittedDeletionSuccess({
+        req,
+        res,
+        destroyedSession,
+        redirectWithFlash,
+        log,
+    });
 };
+
+export const deleteAccount = createDeleteAccountController();

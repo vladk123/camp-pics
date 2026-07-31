@@ -101,11 +101,12 @@ test('Cloudinary deletion is isolated from individual deletion transaction logic
   );
 });
 
-test('cleanup CLI is not imported by startup and account deletion is not integrated yet', () => {
+test('cleanup CLI is not imported by startup or account deletion', () => {
   assert.doesNotMatch(appSource, /processMediaCleanupJobs|mediaCleanupJobs/u);
   assert.doesNotMatch(
     usersSource,
-    /MediaCleanupJob|mediaDeletion|mediaCleanupJobs/u,
+    /processMediaCleanupJobs|scripts\/processMediaCleanupJobs/u,
   );
+  assert.match(usersSource, /processCommittedAccountCleanupJobs/u);
   assert.match(usersSource, /export const deleteAccount/u);
 });

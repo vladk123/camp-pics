@@ -103,6 +103,16 @@
         <div class="modal-actions">
           <form action="/user/delete-account" method="post">
             <%- include('../partials/csrfField') %>
+            <div class="form-group">
+              <label for="delete-account-current-password">Current password</label>
+              <input
+                id="delete-account-current-password"
+                type="password"
+                name="current_password"
+                autocomplete="current-password"
+                required
+              >
+            </div>
             <button type="submit" class="btn btn-secondary danger">Yes, delete everything</button>
           </form>
           <button class="btn btn-secondary delete-account-modal-close">Cancel</button>

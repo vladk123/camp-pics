@@ -30,14 +30,16 @@ function closeModal(modalEl) {
   if (backdrop) backdrop.remove();
 }
 
-// open first confirm
-deleteBtn.addEventListener('click', () => openModal(modal1));
+if (deleteBtn && modal1 && modal2 && confirmStep1) {
+  // open first confirm
+  deleteBtn.addEventListener('click', () => openModal(modal1));
 
-// proceed to second confirm
-confirmStep1.addEventListener('click', () => {
-  closeModal(modal1);
-  openModal(modal2);
-});
+  // proceed to second confirm
+  confirmStep1.addEventListener('click', () => {
+    closeModal(modal1);
+    openModal(modal2);
+  });
+}
 
 // close modals on any close button
 document.querySelectorAll('.delete-account-modal-close').forEach(btn => {
