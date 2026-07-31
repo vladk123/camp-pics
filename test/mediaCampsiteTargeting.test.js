@@ -58,6 +58,7 @@ function responseRecorder() {
 }
 
 function controllerHarness(park) {
+  const session = { id: 'media-test-session' };
   const calls = {
     parkUpdates: [],
     uploadCreates: [],
@@ -69,8 +70,9 @@ function controllerHarness(park) {
     parkSaves: 0,
   };
 
-  park.save = async () => {
+  park.save = async options => {
     calls.parkSaves += 1;
+    if (options) assert.equal(options.session, session);
     return park;
   };
 
@@ -82,9 +84,10 @@ function controllerHarness(park) {
       },
     },
     UploadModel: {
-      create: async data => {
-        calls.uploadCreates.push(data);
-        return { _id: new mongoose.Types.ObjectId() };
+      insertMany: async (data, options) => {
+        assert.equal(options.session, session);
+        calls.uploadCreates.push(...data);
+        return data;
       },
       deleteOne: async data => {
         calls.uploadDeletes.push(data);
@@ -92,11 +95,14 @@ function controllerHarness(park) {
       deleteMany: async () => {},
     },
     UserModel: {
-      findByIdAndUpdate: async (...args) => {
-        calls.userPushes.push(args);
-      },
       updateOne: async (...args) => {
-        calls.userUpdates.push(args);
+        if (args[1]?.$push?.uploads) {
+          assert.equal(args[2]?.session, session);
+          calls.userPushes.push(args);
+        } else {
+          calls.userUpdates.push(args);
+        }
+        return { matchedCount: 1, modifiedCount: 1 };
       },
     },
     cloudinaryClient: {
@@ -117,6 +123,7 @@ function controllerHarness(park) {
       },
     },
     validateImage: async () => ({ valid: true }),
+    transactionRunner: async work => work(session),
   });
 
   return { calls, handlers };
@@ -253,8 +260,8 @@ describe('media controller campsite targeting', () => {
       uploadB.campsiteId.toString(),
     );
 
-    const userA = calls.userPushes[0][1].$push.uploads;
-    const userB = calls.userPushes[1][1].$push.uploads;
+    const userA = calls.userPushes[0][1].$push.uploads.$each[0];
+    const userB = calls.userPushes[1][1].$push.uploads.$each[0];
     assert.equal(userA.campgroundSlug, 'camp-a');
     assert.equal(userB.campgroundSlug, 'camp-b');
     assert.equal(userA.campsiteSlug, '12');
@@ -308,7 +315,7 @@ describe('media controller campsite targeting', () => {
     assert.equal(park.videos.length, 1);
     assert.equal(calls.uploadCreates[0].campgroundId, null);
     assert.equal(calls.uploadCreates[0].campsiteId, null);
-    const userEntry = calls.userPushes[0][1].$push.uploads;
+    const userEntry = calls.userPushes[0][1].$push.uploads.$each[0];
     assert.equal(userEntry.campgroundSlug, null);
     assert.equal(userEntry.campsiteSlug, null);
   });

@@ -17,6 +17,17 @@ import {
   resolveCampsiteTarget,
   sendCampsiteTargetError,
 } from '../utils/campsiteTarget.js';
+import {
+  MEDIA_PERSISTENCE_FAILED,
+  MEDIA_QUOTA_CHANGED,
+  MEDIA_TARGET_CHANGED,
+  MEDIA_TRANSACTION_UNAVAILABLE,
+  MEDIA_UPLOADER_NOT_FOUND,
+  createMediaPersistenceService,
+} from '../utils/mediaPersistence.js';
+
+export const PHOTO_UPLOAD_CLEANUP_INCOMPLETE =
+  'PHOTO_UPLOAD_CLEANUP_INCOMPLETE';
 
 // Function to validate images being uploaded
 export async function validateImageBuffer(buffer) {
@@ -48,65 +59,106 @@ export async function validateImageBuffer(buffer) {
   return { valid: true };
 }
 
-// Func to add uploaded media to user's history
-export function buildMediaLocationMetadata(park, location) {
-  return {
-    parkId: park._id,
-    parkSlug: park.slug,
-    parkName: park.name,
-
-    campgroundId: location?.campground?._id ?? null,
-    campgroundSlug: location?.campgroundSlug ?? null,
-    campgroundName: location?.campground?.name ?? null,
-
-    campsiteId: location?.campsite?._id ?? null,
-    campsiteSlug: location?.campsiteSlug ?? null,
-    campsiteName: location?.campsite?.siteNumber ?? null,
-  };
-}
-
 function resolveMediaLocation(park, { campgroundSlug, campsiteSlug }) {
   if (campgroundSlug == null && campsiteSlug == null) return null;
   return resolveCampsiteTarget(park, { campgroundSlug, campsiteSlug });
 }
 
-async function addUserUploadEntry({
-  UserModel,
-  userId,
-  mediaType,
-  mediaId,
-  cloudinaryUrl,
-  cloudinaryPublicId,
-  youtubeUrl,
+function idsEqual(left, right) {
+  if (left == null || right == null) return false;
+  if (typeof left.equals === 'function') return left.equals(right);
+  if (typeof right.equals === 'function') return right.equals(left);
+  return left.toString() === right.toString();
+}
 
-  park,
-  location,
-
-  caption,
-  dateTaken
-}) {
-  const metadata = buildMediaLocationMetadata(park, location);
-
-  await UserModel.findByIdAndUpdate(
-    userId,
-    {
-      $push: {
-        uploads: {
-          mediaType,
-          mediaId,
-
-          cloudinaryUrl: cloudinaryUrl || null,
-          ...(cloudinaryPublicId ? { cloudinaryPublicId } : {}),
-          youtubeUrl: youtubeUrl || null,
-
-          ...metadata,
-
-          caption,
-          dateTaken
-        }
-      }
-    }
+function countUserMedia(items, userId) {
+  if (!Array.isArray(items)) return 0;
+  return items.reduce(
+    (count, item) => count + (idsEqual(item?.user, userId) ? 1 : 0),
+    0,
   );
+}
+
+function mediaPersistenceResponse(error) {
+  const responses = {
+    [MEDIA_QUOTA_CHANGED]: {
+      status: 409,
+      message: 'Upload capacity changed. Refresh and try again.',
+    },
+    [MEDIA_TARGET_CHANGED]: {
+      status: 409,
+      message: 'The upload location changed. Refresh and try again.',
+    },
+    [MEDIA_UPLOADER_NOT_FOUND]: {
+      status: 409,
+      message: 'Your account changed before the upload completed.',
+    },
+    [MEDIA_TRANSACTION_UNAVAILABLE]: {
+      status: 503,
+      message: 'Uploads are temporarily unavailable. Please try again later.',
+    },
+    [MEDIA_PERSISTENCE_FAILED]: {
+      status: 500,
+      message: 'Upload failed. Please try again.',
+    },
+  };
+  const code = Object.hasOwn(responses, error?.code)
+    ? error.code
+    : MEDIA_PERSISTENCE_FAILED;
+  return { code, ...responses[code] };
+}
+
+function sendMediaPersistenceError(res, error) {
+  const response = mediaPersistenceResponse(error);
+  return res.status(response.status).json({
+    error: response.message,
+    code: response.code,
+  });
+}
+
+async function cleanupPhotoAssets(cloudinaryClient, uploadedAssets) {
+  const failures = [];
+  for (const asset of uploadedAssets) {
+    try {
+      const result = await cloudinaryClient.uploader.destroy(asset.publicId);
+      if (result?.result !== 'ok' && result?.result !== 'not found') {
+        failures.push(asset.mediaId);
+      }
+    } catch {
+      failures.push(asset.mediaId);
+    }
+  }
+  return failures;
+}
+
+async function sendPhotoFailureAfterCleanup({
+  res,
+  cloudinaryClient,
+  uploadedAssets,
+  persistenceError = null,
+}) {
+  const cleanupFailures = await cleanupPhotoAssets(
+    cloudinaryClient,
+    uploadedAssets,
+  );
+  if (cleanupFailures.length > 0) {
+    console.error('Photo upload cleanup incomplete', {
+      failureCount: cleanupFailures.length,
+      mediaIds: cleanupFailures.map(id => id.toString()),
+    });
+    return res.status(500).json({
+      error: 'Upload failed and photo cleanup is incomplete.',
+      code: PHOTO_UPLOAD_CLEANUP_INCOMPLETE,
+    });
+  }
+
+  if (persistenceError) {
+    return sendMediaPersistenceError(res, persistenceError);
+  }
+  return res.status(500).json({
+    error: 'UPLOAD_FAILED',
+    message: 'Upload failed. Please try again.',
+  });
 }
 
 // Func to check if day is not from future
@@ -131,15 +183,15 @@ export function isValidNonFutureDate(dateStr) {
 async function uploadPhotoHandler(req, res, next, dependencies) {
   const {
     ParkModel,
-    UploadModel,
-    UserModel,
     cloudinaryClient,
     uploadMiddleware,
     validateImage,
+    mediaPersistence,
   } = dependencies;
   const uploadedCloudinary = [];
-  const createdUploads = [];
-  let park, target, location;
+  let allowedFiles;
+  let skippedCount;
+  let limit;
 
   const { parkSlug, campgroundSlug, campsiteSlug } = req.params;
   const userId = req.user._id;
@@ -154,43 +206,32 @@ async function uploadPhotoHandler(req, res, next, dependencies) {
     });
   }
 
+  // Phase A: request parsing, validation and initial quota preflight.
   try {
     if (!req.is("multipart/form-data")) {
       return res.status(400).json({ error: "Invalid form submission." });
     }
-    // // Parse multipart form before anything else
-    // await new Promise((resolve, reject) => {
-    //   uploadMemory.array('photos', 5)(req, res, (err) => {
-    //     if (err) reject(err);
-    //     else resolve();
-    //   });
-    // });
     await new Promise((resolve) => {
       uploadMiddleware.array('photos', 5)(req, res, (err) => {
         if (!err) return resolve();
 
-        // HANDLE MULTER ERRORS HERE
         if (err.code === "LIMIT_FILE_SIZE") {
           res.status(413).json({
             error: "Each file must be under 10MB.",
             message: "Each file must be under 10MB.",
           });
-          return;
-        }
-
-        if (err.code === "LIMIT_UNEXPECTED_FILE") {
+        } else if (err.code === "LIMIT_UNEXPECTED_FILE") {
           res.status(400).json({
             error: "Too many files uploaded.",
             message: "Too many files uploaded.",
           });
-          return;
+        } else {
+          res.status(400).json({
+            error: "UPLOAD_ERROR",
+            message: "The upload form could not be processed.",
+          });
         }
-
-        // Any other Multer error
-        res.status(400).json({
-          error: "UPLOAD_ERROR",
-          message: err.message,
-        });
+        resolve();
       });
     });
 
@@ -214,11 +255,12 @@ async function uploadPhotoHandler(req, res, next, dependencies) {
     }
 
     // Find park and determine target
-    park = await ParkModel.findOne({ slug: parkSlug });
+    const park = await ParkModel.findOne({ slug: parkSlug });
     if (!park) return res.status(404).json({ error: 'Park not found' });
 
-    let limit = 0
+    let target;
     if (campsiteSlug) {
+      let location;
       try {
         location = resolveMediaLocation(park, { campgroundSlug, campsiteSlug });
       } catch (error) {
@@ -233,7 +275,7 @@ async function uploadPhotoHandler(req, res, next, dependencies) {
     }
 
     // Check user’s remaining quota
-    const userCount = target.photos.filter(p => p.user.equals(userId)).length;
+    const userCount = countUserMedia(target.photos, userId);
     const remaining = limit - userCount;
 
     if (remaining <= 0) {
@@ -251,13 +293,20 @@ async function uploadPhotoHandler(req, res, next, dependencies) {
       }
     }
 
-    // Now safe to enforce user limits
-    const allowedFiles = files.slice(0, remaining);
+    allowedFiles = files.slice(0, remaining);
+    skippedCount = files.length - allowedFiles.length;
+  } catch {
+    return res.status(500).json({
+      error: "UPLOAD_FAILED",
+      message: "Upload failed. Please try again.",
+    });
+  }
 
-    const skippedCount = files.length - allowedFiles.length;
-    const uploadedPhotos = [];
-
-    // Upload each allowed file to Cloudinary
+  // Phase B: Cloudinary preparation with exact captured identities.
+  const preparedPhotos = [];
+  const showUsername =
+    req.body.showUsername === 'true' || req.body.showUsername === true;
+  try {
     for (const file of allowedFiles) {
       const mediaId = new mongoose.Types.ObjectId();
 
@@ -317,7 +366,6 @@ async function uploadPhotoHandler(req, res, next, dependencies) {
       const uploadedAsset = {
         mediaId,
         publicId: cloudinaryPublicId,
-        url: null,
       };
       uploadedCloudinary.push(uploadedAsset);
 
@@ -333,135 +381,83 @@ async function uploadPhotoHandler(req, res, next, dependencies) {
       ) {
         throw new Error('Cloudinary upload returned an invalid secure URL');
       }
-      uploadedAsset.url = cloudinaryUrl;
 
-      uploadedPhotos.push({
-        _id: mediaId,
-        user: userId,
-        url: cloudinaryUrl,
+      preparedPhotos.push(Object.freeze({
+        mediaId,
+        uploadId: new mongoose.Types.ObjectId(),
+        cloudinaryUrl,
         cloudinaryPublicId,
         caption: req.body.caption || '',
-        showUsername: req.body.showUsername === 'true' || req.body.showUsername === true,
-        username: req.body.showUsername ? req.user.fname : null,
+        showUsername,
+        username: showUsername ? req.user.fname : null,
         dateTaken: req.body.dateTaken || new Date(),
-      });
+      }));
     }
-
-    // Save to Mongo
-    target.photos.push(...uploadedPhotos);
-    await park.save();
-
-    // Update park's Updated Time
-    await ParkModel.findByIdAndUpdate(park._id, { updatedAt: new Date() });
-
-    // Use the preassigned media IDs to preserve each URL/public-ID pairing.
-    const justAdded = uploadedCloudinary.map(asset => {
-      const photo = target.photos.id(asset.mediaId);
-      if (!photo) throw new Error('Saved photo could not be matched by media ID');
-      return { asset, photo };
+  } catch {
+    return sendPhotoFailureAfterCleanup({
+      res,
+      cloudinaryClient,
+      uploadedAssets: uploadedCloudinary,
     });
+  }
 
-    // Add Upload records
-    for (const { asset, photo } of justAdded) {
-      const metadata = buildMediaLocationMetadata(park, location);
-      const uploadDoc = await UploadModel.create({
-        mediaType: 'photo',
-        mediaId: photo._id, // now guaranteed to exist
-        cloudinaryUrl: asset.url,
-        cloudinaryPublicId: asset.publicId,
-        cloudinaryId: asset.url,
-        parkId: metadata.parkId,
-        parkName: metadata.parkName,
-        campgroundId: metadata.campgroundId,
-        campgroundName: metadata.campgroundName,
-        campsiteId: metadata.campsiteId,
-        campsiteName: metadata.campsiteName,
-        userId,
-      });
-      createdUploads.push(uploadDoc._id);
-    }
+  // Phase C: commit every MongoDB representation in one transaction.
+  let committed;
+  try {
+    committed = await mediaPersistence.commitMediaCreation({
+      parkSlug,
+      locationInput: {
+        campgroundSlug,
+        campsiteSlug,
+      },
+      userId,
+      mediaType: 'photo',
+      preparedMedia: Object.freeze(preparedPhotos),
+    });
+  } catch (error) {
+    // Phase D: MongoDB aborted; remove only this request's captured assets.
+    return sendPhotoFailureAfterCleanup({
+      res,
+      cloudinaryClient,
+      uploadedAssets: uploadedCloudinary,
+      persistenceError: error,
+    });
+  }
 
-    // Add upload record to the User document
-    for (const { asset, photo } of justAdded) {
-      await addUserUploadEntry({
-        UserModel,
-        userId,
-        mediaType: "photo",
-        mediaId: photo._id,
-        cloudinaryUrl: asset.url,
-        cloudinaryPublicId: asset.publicId,
+  // Phase E: the rollback boundary ended when the transaction committed.
+  const pluralize = (n, word) => (n === 1 ? word : `${word}s`);
+  const message =
+    skippedCount > 0
+      ? `Only ${preparedPhotos.length} ${pluralize(preparedPhotos.length, 'photo')} uploaded — limit reached.`
+      : `${preparedPhotos.length} ${pluralize(preparedPhotos.length, 'photo')} uploaded successfully.`;
 
-        park,
-        location,
-
-        caption: photo.caption,
-        dateTaken: photo.dateTaken
-      });
-    }
-
-
-    const pluralize = (n, word) => (n === 1 ? word : `${word}s`);
-    const message =
-      skippedCount > 0
-        ? `Only ${uploadedPhotos.length} ${pluralize(uploadedPhotos.length, 'photo')} uploaded — limit reached.`
-        : `${uploadedPhotos.length} ${pluralize(uploadedPhotos.length, 'photo')} uploaded successfully.`;
-
+  try {
     return res.json({
       success: true,
-      added: uploadedPhotos.length,
+      added: preparedPhotos.length,
       skipped: skippedCount,
-      remaining: Math.max(0, limit - (userCount + uploadedPhotos.length)),
+      remaining: committed.remaining,
       message,
     });
-  } catch (err) {
-  console.error(err);
-
-  // Cleanup (safe)
-  if (createdUploads.length) {
-    await UploadModel.deleteMany({ _id: { $in: createdUploads } });
+  } catch (error) {
+    return next(error);
   }
-
-  await Promise.all(
-    uploadedCloudinary.map(asset =>
-      cloudinaryClient.uploader.destroy(asset.publicId).catch(() => null)
-    )
-  );
-
-  if (park && target) {
-    const uploadedMediaIds = new Set(
-      uploadedCloudinary.map(asset => asset.mediaId.toString()),
-    );
-    target.photos = target.photos.filter(
-      photo => !uploadedMediaIds.has(photo._id.toString())
-    );
-    await park.save().catch(() => null);
-  }
-
-  // ALWAYS RESPOND JSON
-  return res.status(500).json({
-    error: "UPLOAD_FAILED",
-    message: "Upload failed. Please try again.",
-  });
-}
-
 }
 
 
 async function addVideoHandler(req, res, next, dependencies) {
   const {
     ParkModel,
-    UploadModel,
-    UserModel,
+    mediaPersistence,
   } = dependencies;
   const { parkSlug, campgroundSlug, campsiteSlug } = req.params;
   const rawUrl = req.body?.url?.trim();
   const caption = req.body?.caption || '';
-  const showUsername = req.body?.showUsername
+  const showUsername =
+    req.body?.showUsername === 'true' || req.body?.showUsername === true;
   const username = showUsername ? req.user.fname : null
   const dateTaken = req.body?.dateTaken
   const userId = req.user._id
-  const createdUploads = []; // in case of error catching
-  let park, target, location;
 
   if (!parkSlug || !userId || !dateTaken || !rawUrl) {
     return res.status(400).json({ error: 'Missing data.' });
@@ -477,18 +473,19 @@ async function addVideoHandler(req, res, next, dependencies) {
     return res.status(400).json({ error: 'Only valid YouTube links are allowed.' });
   }
 
-  const video = { user: req.user._id, url: rawUrl, caption, showUsername, username, dateTaken };
-
   // If date is after today + 1 (future)
   if(!isValidNonFutureDate(dateTaken)){
     return res.status(400).json({ error: 'Date cannot be in the future.' });
   }
 
+  // Preserve the current preflight before the fresh transactional recheck.
   try {
-    park = await ParkModel.findOne({ slug: parkSlug });
+    const park = await ParkModel.findOne({ slug: parkSlug });
     if (!park) return res.status(404).json({ error: 'Park not found' });
 
+    let target;
     if (campsiteSlug) {
+      let location;
       try {
         location = resolveMediaLocation(park, { campgroundSlug, campsiteSlug });
       } catch (error) {
@@ -501,68 +498,53 @@ async function addVideoHandler(req, res, next, dependencies) {
     }
 
     // Limit per user: 2 videos max
-    const userVidCount = target.videos.filter(v => v.user.equals(req.user._id)).length;
+    const userVidCount = countUserMedia(target.videos, userId);
     if (userVidCount >= 2) {
       return res.status(400).json({ error: `Maximum of 2 YouTube videos allowed per user per ${campsiteSlug ? 'campsite' : 'park'}.` });
     }
+  } catch (error) {
+    return sendMediaPersistenceError(res, error);
+  }
 
-    target.videos.push(video);
-    await park.save();
+  const mediaId = new mongoose.Types.ObjectId();
+  const preparedVideo = Object.freeze({
+    mediaId,
+    uploadId: new mongoose.Types.ObjectId(),
+    youtubeUrl: rawUrl,
+    caption,
+    showUsername,
+    username,
+    dateTaken,
+  });
 
-    // UPDATE PARK UPDATED TIME
-    await ParkModel.findByIdAndUpdate(park._id, { updatedAt: new Date() });
-
-    const addedVideo = target.videos.find(v => v.url === rawUrl && v.user.equals(userId));
-
-    await addUserUploadEntry({
-      UserModel,
+  try {
+    await mediaPersistence.commitMediaCreation({
+      parkSlug,
+      locationInput: {
+        campgroundSlug,
+        campsiteSlug,
+      },
       userId,
-      mediaType: "video",
-      mediaId: addedVideo._id,
-
-      youtubeUrl: rawUrl,
-      cloudinaryUrl: null,
-
-      park,
-      location,
-
-      caption: caption,
-      dateTaken: dateTaken
+      mediaType: 'video',
+      preparedMedia: Object.freeze([preparedVideo]),
     });
+  } catch (error) {
+    return sendMediaPersistenceError(res, error);
+  }
 
-
-    // Add photos to Mongo Upload modal
-    const metadata = buildMediaLocationMetadata(park, location);
-    // Find the newly added video
-    try {
-      const uploadDoc = await UploadModel.create({
-        mediaType: 'video',
-        mediaId: addedVideo._id,
-        youtubeId: video.url,
-        parkId: metadata.parkId,
-        parkName: metadata.parkName,
-        campgroundId: metadata.campgroundId,
-        campgroundName: metadata.campgroundName,
-        campsiteId: metadata.campsiteId,
-        campsiteName: metadata.campsiteName,
-        userId,
-      });
-      
-      createdUploads.push(uploadDoc._id); // in case of error
-    } catch (err) {
-      // rollback newly pushed video if Upload doc creation fails
-      target.videos = target.videos.filter(v => !v._id.equals(addedVideo._id));
-      await park.save().catch(() => null);
-      throw err;
-    }
-    
-
+  const addedVideo = {
+    _id: mediaId,
+    user: userId,
+    url: rawUrl,
+    caption,
+    showUsername,
+    username,
+    dateTaken,
+  };
+  try {
     return res.json({ success: true, addedVideo });
-  } catch (err) {
-    if (createdUploads.length) {
-      await UploadModel.deleteMany({ _id: { $in: createdUploads } });
-    }
-    next(err);
+  } catch (error) {
+    return next(error);
   }
 }
 
@@ -727,13 +709,23 @@ async function deleteVideoHandler(req, res, next, dependencies) {
 }
 
 export function createMediaHandlers(overrides = {}) {
+  const ParkModel = overrides.ParkModel || Park;
+  const UploadModel = overrides.UploadModel || Upload;
+  const UserModel = overrides.UserModel || User;
   const dependencies = {
-    ParkModel: overrides.ParkModel || Park,
-    UploadModel: overrides.UploadModel || Upload,
-    UserModel: overrides.UserModel || User,
+    ParkModel,
+    UploadModel,
+    UserModel,
     cloudinaryClient: overrides.cloudinaryClient || cloudinary,
     uploadMiddleware: overrides.uploadMiddleware || uploadMemory,
     validateImage: overrides.validateImage || validateImageBuffer,
+    mediaPersistence: overrides.mediaPersistence ||
+      createMediaPersistenceService({
+        ParkModel,
+        UploadModel,
+        UserModel,
+        transactionRunner: overrides.transactionRunner,
+      }),
   };
 
   return {

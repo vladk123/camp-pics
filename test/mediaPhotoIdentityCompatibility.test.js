@@ -97,6 +97,7 @@ function makeHarness({
   failUploadCreateAt = null,
   destroyResult = 'ok',
 } = {}) {
+  const session = { id: 'photo-identity-session' };
   const calls = {
     cloudinaryDeletes: [],
     uploadCreates: [],
@@ -109,8 +110,9 @@ function makeHarness({
   };
   let uploadIndex = 0;
 
-  park.save = async () => {
+  park.save = async options => {
     calls.parkSaves += 1;
+    if (options) assert.equal(options.session, session);
     return park;
   };
 
@@ -120,15 +122,16 @@ function makeHarness({
       findByIdAndUpdate: async () => {},
     },
     UploadModel: {
-      create: async data => {
-        calls.uploadCreates.push(data);
+      insertMany: async (data, options) => {
+        assert.equal(options.session, session);
+        calls.uploadCreates.push(...data);
         if (
           failUploadCreateAt != null &&
-          calls.uploadCreates.length === failUploadCreateAt
+          calls.uploadCreates.length >= failUploadCreateAt
         ) {
           throw new Error('injected Upload create failure');
         }
-        return { _id: new mongoose.Types.ObjectId() };
+        return data;
       },
       findOne: async query => {
         calls.uploadFinds.push(query);
@@ -142,11 +145,14 @@ function makeHarness({
       },
     },
     UserModel: {
-      findByIdAndUpdate: async (...args) => {
-        calls.userPushes.push(args);
-      },
       updateOne: async (...args) => {
-        calls.userUpdates.push(args);
+        if (args[1]?.$push?.uploads) {
+          assert.equal(args[2]?.session, session);
+          calls.userPushes.push(args);
+        } else {
+          calls.userUpdates.push(args);
+        }
+        return { matchedCount: 1, modifiedCount: 1 };
       },
     },
     cloudinaryClient: {
@@ -175,6 +181,15 @@ function makeHarness({
       },
     },
     validateImage: async () => ({ valid: true }),
+    transactionRunner: async work => {
+      const photoSnapshot = park.photos.map(photo => photo.toObject());
+      try {
+        return await work(session);
+      } catch (error) {
+        park.photos.splice(0, park.photos.length, ...photoSnapshot);
+        throw error;
+      }
+    },
   });
 
   return { calls, handlers };
@@ -218,14 +233,17 @@ describe('new photo identity persistence and failed-request cleanup', () => {
       ]),
     );
     assert.deepEqual(
-      calls.userPushes.map(([, update]) => {
-        const entry = update.$push.uploads;
-        return [entry.cloudinaryUrl, entry.cloudinaryPublicId];
-      }),
+      calls.userPushes[0][1].$push.uploads.$each.map(entry => [
+        entry.cloudinaryUrl,
+        entry.cloudinaryPublicId,
+      ]),
       uploadResults.map(result => [result.secure_url, result.public_id]),
     );
     assert.equal(
-      Object.hasOwn(calls.userPushes[0][1].$push.uploads, 'cloudinaryId'),
+      Object.hasOwn(
+        calls.userPushes[0][1].$push.uploads.$each[0],
+        'cloudinaryId',
+      ),
       false,
     );
   });
