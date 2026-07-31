@@ -347,7 +347,15 @@ export const createResendVerificationController = ({
 export const resendVerification = createResendVerificationController();
 
 // Clicked forgot password
-export const forgotPassword = async(req, res, next) => {
+export const createForgotPasswordController = ({
+    UserModel = User,
+    emailSender = sendEmail,
+    reserveResetRequest = reservePasswordResetRequest,
+    finalizeResetRequest = finalizePasswordResetRequest,
+    rollbackResetRequest = rollbackPasswordResetRequest,
+    log = logger,
+    redirectWithFlash = redirectedFlash,
+} = {}) => async(req, res, next) => {
     const username = typeof req.body.forgot_username === 'string'
         ? req.body.forgot_username.toLowerCase().trim()
         : '';
@@ -355,11 +363,11 @@ export const forgotPassword = async(req, res, next) => {
 
     try {
         const user = username
-            ? await User.findOne({ username }).select('+hash +salt')
+            ? await UserModel.findOne({ username }).select('+hash +salt')
             : null;
         const reservation = user
-            ? await reservePasswordResetRequest({
-                UserModel: User,
+            ? await reserveResetRequest({
+                UserModel,
                 user,
             })
             : null;
@@ -367,7 +375,7 @@ export const forgotPassword = async(req, res, next) => {
         if (reservation) {
             const userId = reservation.user._id;
             try {
-                await sendEmail({
+                await emailSender({
                     to: reservation.user.username,
                     subject: 'Your Password Reset Link - CampPics',
                     template: 'reset-password',
@@ -378,8 +386,8 @@ export const forgotPassword = async(req, res, next) => {
                     userId,
                 });
 
-                emailDelivered = await finalizePasswordResetRequest({
-                    UserModel: User,
+                emailDelivered = await finalizeResetRequest({
+                    UserModel,
                     userId,
                     tokenDigest: reservation.tokenDigest,
                     requestClaimDigest: reservation.requestClaimDigest,
@@ -390,26 +398,26 @@ export const forgotPassword = async(req, res, next) => {
             }
 
             if (!emailDelivered) {
-                await rollbackPasswordResetRequest({
-                    UserModel: User,
+                await rollbackResetRequest({
+                    UserModel,
                     userId,
                     tokenDigest: reservation.tokenDigest,
                     requestClaimDigest: reservation.requestClaimDigest,
                     expiresAt: reservation.expiresAt,
                     previousState: reservation.previousState,
                 }).catch(() => {});
-                await logger(null, null, 'error', {
+                await log(null, null, 'error', {
                     message: 'A password-reset email request could not be completed.',
                 });
             }
         }
     } catch {
-        await logger(null, null, 'error', {
+        await log(null, null, 'error', {
             message: 'A password-reset request could not be processed.',
         });
     }
 
-    return redirectedFlash(
+    return redirectWithFlash(
         req,
         res,
         'success',
@@ -420,6 +428,8 @@ export const forgotPassword = async(req, res, next) => {
             : {},
     );
 }
+
+export const forgotPassword = createForgotPasswordController();
 
 // Clicked the reset link in email after clicking Forgot Password on website
 export const renderForgotPasswordReset = async(req, res, next) => {

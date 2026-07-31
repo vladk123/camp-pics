@@ -107,16 +107,37 @@ describe('application logging call-site guards', () => {
     }
   });
 
-  test('sendEmail logs safely and rethrows the original caught value', () => {
-    const catchStart = sendEmailSource.lastIndexOf('} catch (err) {');
-    assert.ok(catchStart >= 0);
-    const catchBlock = sendEmailSource.slice(catchStart);
+  test('sendEmail separates provider errors from non-fatal metadata errors', () => {
+    const providerCall = sendEmailSource.indexOf(
+      'result = await mailClient.messages.create',
+    );
+    const metadataStart = sendEmailSource.indexOf('const metadata = {');
+    const returnResult = sendEmailSource.indexOf('return result;', metadataStart);
 
-    assert.match(catchBlock, /await logger\(null, null, 'error'/);
-    assert.match(catchBlock, /error: err/);
-    assert.match(catchBlock, /throw err;/);
-    assert.doesNotMatch(catchBlock, /throw new Error/);
-    assert.doesNotMatch(catchBlock, /console\.error/);
+    assert.ok(providerCall >= 0);
+    assert.ok(metadataStart > providerCall);
+    assert.ok(returnResult > metadataStart);
+    assert.match(
+      sendEmailSource.slice(providerCall, metadataStart),
+      /PROVIDER_DELIVERY_FAILURE_MESSAGE[\s\S]*throw error;/,
+    );
+    assert.match(
+      sendEmailSource.slice(metadataStart, returnResult),
+      /METADATA_PERSISTENCE_FAILURE_MESSAGE/,
+    );
+    assert.doesNotMatch(
+      sendEmailSource.slice(metadataStart, returnResult),
+      /throw error;/,
+    );
+    assert.match(
+      sendEmailSource,
+      /TEMPLATE_RENDER_FAILURE_MESSAGE[\s\S]*throw error;/,
+    );
+    assert.doesNotMatch(
+      sendEmailSource,
+      /Email delivery or log persistence operation failed\./,
+    );
+    assert.doesNotMatch(sendEmailSource, /console\.(?:log|error)/);
   });
 
   test('existing generic user-facing error behavior remains present', () => {
