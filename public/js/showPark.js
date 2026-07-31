@@ -99,22 +99,24 @@ function showCampsitePopup(data) {
     ...photos.map(p => ({
       type: 'photo',
       _id: p._id,
-      user: p.user,
       url: p.url,
       caption: p.caption || '',
       username: p.username,
       dateTaken: p.dateTaken,
-      uploadedAt: p.uploadedAt
+      uploadedAt: p.uploadedAt,
+      canDelete: p.canDelete === true,
+      isAdminDelete: p.isAdminDelete === true,
     })),
     ...videos.map(v => ({
       type: 'video',
       _id: v._id,
-      user: v.user,
       url: v.url,
       caption: v.caption || '',
       username: v.username,
       dateTaken: v.dateTaken,
-      uploadedAt: v.uploadedAt
+      uploadedAt: v.uploadedAt,
+      canDelete: v.canDelete === true,
+      isAdminDelete: v.isAdminDelete === true,
     }))
   ];
 
@@ -191,20 +193,13 @@ function showCampsitePopup(data) {
 
       swiperWrapper.appendChild(slide);
 
-      const canDelete = Boolean(
-        window.CURRENT_USER_ID &&
-        (item.user === window.CURRENT_USER_ID || window.CURRENT_USER_IS_ADMIN === true)
-      );
       const thumbWrapper = mediaRendering.createMediaThumbnail({
         item,
         index,
         caption: slideCaption,
         wrapperClassName: 'thumb-wrapper media-thumb-div',
-        canDelete,
-        isAdminDelete: Boolean(
-          window.CURRENT_USER_IS_ADMIN === true &&
-          item.user !== window.CURRENT_USER_ID
-        ),
+        canDelete: item.canDelete === true,
+        isAdminDelete: item.isAdminDelete === true,
         onActivate: selectedIndex => {
           if (campsiteSwiper) campsiteSwiper.slideTo(selectedIndex);
           setActiveCampsiteThumb(selectedIndex);
@@ -543,22 +538,24 @@ async function refreshParkMedia() {
     ...photos.map(p => ({
       type: 'photo',
       url: p.url,
-      user: p.user,
       _id: p._id,
       caption: p.caption || '',
       username: p.username,
       dateTaken: p.dateTaken,
-      uploadedAt: p.uploadedAt
+      uploadedAt: p.uploadedAt,
+      canDelete: p.canDelete === true,
+      isAdminDelete: p.isAdminDelete === true,
     })),
     ...videos.map(v => ({
       type: 'video',
       url: v.url,
-      user: v.user,
       _id: v._id,
       caption: v.caption || '',
       username: v.username,
       dateTaken: v.dateTaken,
-      uploadedAt: v.uploadedAt
+      uploadedAt: v.uploadedAt,
+      canDelete: v.canDelete === true,
+      isAdminDelete: v.isAdminDelete === true,
     }))
   ];
 

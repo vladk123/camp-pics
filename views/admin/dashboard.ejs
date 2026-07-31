@@ -10,7 +10,7 @@
       <div class="upload-item">
         <div>
           <strong><%= u.mediaType %></strong>
-          by <%= u.userId?.fname || 'Unknown' %> (<%= u.userId?.username %>)
+          by <%= u.uploader.fname || 'Unknown' %> (<%= u.uploader.username || '' %>)
           — <%= new Date(u.createdAt).toLocaleString() %>
         </div>
         <div>
@@ -170,8 +170,8 @@ function createUploadRow(upload) {
   summary.append(
     mediaType,
     document.createTextNode(
-      ` by ${upload.userId?.fname || 'Unknown'} ` +
-      `(${upload.userId?.username || ''}) \u2014 ` +
+      ` by ${upload.uploader?.fname || 'Unknown'} ` +
+      `(${upload.uploader?.username || ''}) \u2014 ` +
       new Date(upload.createdAt).toLocaleString()
     ),
   );
@@ -192,16 +192,44 @@ function createUserRow(user) {
   const row = document.createElement('div');
   row.className = 'user-item';
 
+  const verification = document.createElement('span');
+  verification.textContent = `[${Boolean(user.email_verified)}]`;
+  if (!user.email_verified) {
+    verification.style.backgroundColor = 'rgb(255, 112, 112)';
+  }
+
   const name = document.createElement('strong');
   name.textContent = user.fname == null ? '' : String(user.fname);
   row.append(
-    document.createTextNode(`[${user.email_verified}] - `),
+    verification,
+    document.createTextNode(' - '),
     name,
     document.createTextNode(
       ` \u2014 ${user.username || ''} ` +
       `(joined ${new Date(user.date_created).toLocaleDateString()})`
     ),
   );
+
+  const action = user.blocked ? 'unblock' : 'block';
+  const actionLabel = user.blocked ? 'Unblock' : 'Block';
+  const form = document.createElement('form');
+  form.action = `/a/user/${encodeURIComponent(String(user._id))}/${action}`;
+  form.method = 'POST';
+  form.className = 'inline-form user-status-form';
+  form.dataset.action = action;
+
+  const csrfField = document.createElement('input');
+  csrfField.type = 'hidden';
+  csrfField.name = '_csrf';
+  csrfField.value = window.CampPicsCsrf.getToken() || '';
+
+  const button = document.createElement('button');
+  button.type = 'submit';
+  button.className = `${action}-btn`;
+  button.textContent = actionLabel;
+
+  form.append(csrfField, button);
+  row.appendChild(form);
   return row;
 }
 

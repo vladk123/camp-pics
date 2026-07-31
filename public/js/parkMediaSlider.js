@@ -56,20 +56,13 @@ function buildMediaHTML(mediaItems) {
       slide.append(media, caption);
     }
 
-    const canDelete = Boolean(
-      window.CURRENT_USER_ID &&
-      (item.user === window.CURRENT_USER_ID || window.CURRENT_USER_IS_ADMIN)
-    );
     const thumb = parkMediaRendering.createMediaThumbnail({
       item,
       index,
       caption: captionText,
       imageClassName: 'thumb',
-      canDelete,
-      isAdminDelete: Boolean(
-        window.CURRENT_USER_IS_ADMIN &&
-        item.user !== window.CURRENT_USER_ID
-      ),
+      canDelete: item.canDelete === true,
+      isAdminDelete: item.isAdminDelete === true,
       onActivate: selectedIndex => {
         parkSwiper.slideTo(selectedIndex);
         stopParkAutoplay();

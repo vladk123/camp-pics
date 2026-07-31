@@ -155,9 +155,10 @@ describe('browser media rendering', () => {
       const { slidesHTML } = window.buildMediaHTML([{
         _id: 'photo-id',
         type: 'photo',
-        user: 'user-id',
         url: 'https://res.cloudinary.com/example/photo.jpg',
         caption: payload,
+        canDelete: false,
+        isAdminDelete: false,
       }]);
 
       const slide = slidesHTML[0];
@@ -169,28 +170,30 @@ describe('browser media rendering', () => {
   });
 
   test('park photo/video slides and thumbnails use safe media nodes', () => {
-    window.CURRENT_USER_ID = 'owner-id';
     const { slidesHTML, thumbsHTML } = window.buildMediaHTML([
       {
         _id: 'photo-id',
         type: 'photo',
-        user: 'owner-id',
         url: 'https://res.cloudinary.com/example/photo.jpg',
         caption: 'Photo caption',
+        canDelete: true,
+        isAdminDelete: false,
       },
       {
         _id: 'video-id',
         type: 'video',
-        user: 'owner-id',
         url: 'https://youtube.com/watch?v=dQw4w9WgXcQ',
         caption: 'Video caption',
+        canDelete: true,
+        isAdminDelete: true,
       },
       {
         _id: 'invalid-video-id',
         type: 'video',
-        user: 'someone-else',
         url: 'https://youtube.com.evil.example/watch?v=dQw4w9WgXcQ',
         caption: 'Historical caption',
+        canDelete: false,
+        isAdminDelete: false,
       },
     ]);
 
@@ -201,6 +204,8 @@ describe('browser media rendering', () => {
     assert.equal(countTag(thumbsHTML[0], 'button'), 1);
     assert.equal(countTag(thumbsHTML[1], 'button'), 1);
     assert.equal(countTag(thumbsHTML[2], 'button'), 0);
+    assert.equal(findByClass(thumbsHTML[0], 'admin-delete'), null);
+    assert.ok(findByClass(thumbsHTML[1], 'admin-delete'));
     assert.equal(countTag(thumbsHTML[0], 'img'), 1);
     assert.equal(countTag(thumbsHTML[1], 'img'), 1);
     assert.equal(findByClass(slidesHTML[2], 'caption').textContent, 'Historical caption');

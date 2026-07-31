@@ -2,16 +2,9 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import { createCampsiteApiHandlers } from '../controllers/camp.js';
+import { PUBLIC_MEDIA_KEYS } from '../utils/publicMediaSerializer.js';
 
-const REQUIRED_MEDIA_FIELDS = [
-  '_id',
-  'user',
-  'url',
-  'caption',
-  'username',
-  'dateTaken',
-  'uploadedAt',
-];
+const REQUIRED_MEDIA_FIELDS = [...PUBLIC_MEDIA_KEYS];
 
 function mediaItem(type) {
   return {
@@ -25,7 +18,10 @@ function mediaItem(type) {
     likedBy: ['internal-user'],
     approved: false,
     socialMediaApproved: true,
+    showUsername: true,
+    cloudinaryPublicId: 'private-cloudinary-id',
     moderationFlag: 'internal',
+    arbitraryFutureField: 'future-value',
   };
 }
 
@@ -105,11 +101,11 @@ function responseRecorder() {
   };
 }
 
-async function callHandler(handler, params) {
+async function callHandler(handler, params, user = null) {
   const res = responseRecorder();
   let nextError;
   await handler(
-    { params },
+    { params, user },
     res,
     error => {
       nextError = error;
@@ -179,7 +175,7 @@ describe('campsite API controllers and serializer', () => {
     assert.equal(nested.body.locationKind, 'campground-campsite');
   });
 
-  test('media retains browser fields and excludes internal fields', async () => {
+  test('media uses the exact shared public contract and excludes owner/internal fields', async () => {
     const handlers = createCampsiteApiHandlers({
       ParkModel: modelReturning({
         campsites: [campsite()],
@@ -195,10 +191,64 @@ describe('campsite API controllers and serializer', () => {
     assert.deepEqual(Object.keys(res.body.photos[0]), REQUIRED_MEDIA_FIELDS);
     assert.deepEqual(Object.keys(res.body.videos[0]), REQUIRED_MEDIA_FIELDS);
     assert.equal(res.body.photos[0].uploadedAt, '2026-01-03T00:00:00.000Z');
+    assert.equal(res.body.photos[0].canDelete, false);
+    assert.equal(res.body.photos[0].isAdminDelete, false);
+    assert.equal('user' in res.body.photos[0], false);
     assert.equal('likedBy' in res.body.photos[0], false);
     assert.equal('approved' in res.body.photos[0], false);
+    assert.equal('socialMediaApproved' in res.body.photos[0], false);
+    assert.equal('showUsername' in res.body.photos[0], false);
+    assert.equal('cloudinaryPublicId' in res.body.photos[0], false);
+    assert.equal('arbitraryFutureField' in res.body.photos[0], false);
     assert.equal('reviews' in res.body, false);
     assert.equal('toObject' in res.body, false);
+  });
+
+  test('standalone owner and nested administrator receive deletion presentation flags', async () => {
+    const standaloneHandlers = createCampsiteApiHandlers({
+      ParkModel: modelReturning({
+        campsites: [campsite()],
+        campgrounds: [],
+      }),
+    });
+    const nestedHandlers = createCampsiteApiHandlers({
+      ParkModel: modelReturning({
+        campsites: [],
+        campgrounds: [{
+          _id: 'cg-id',
+          slug: 'north',
+          name: 'North Campground',
+          campsites: [campsite()],
+        }],
+      }),
+    });
+
+    const owner = await callHandler(
+      standaloneHandlers.getCampsite,
+      { parkSlug: 'park', campsiteSlug: '12' },
+      { _id: 'user-id', isAdmin: false },
+    );
+    const administrator = await callHandler(
+      nestedHandlers.getCampgroundCampsite,
+      {
+        parkSlug: 'park',
+        campgroundSlug: 'north',
+        campsiteSlug: '12',
+      },
+      { _id: 'administrator-id', isAdmin: true },
+    );
+
+    assert.deepEqual(Object.keys(owner.body.photos[0]), REQUIRED_MEDIA_FIELDS);
+    assert.equal(owner.body.photos[0].canDelete, true);
+    assert.equal(owner.body.photos[0].isAdminDelete, false);
+    assert.deepEqual(
+      Object.keys(administrator.body.photos[0]),
+      REQUIRED_MEDIA_FIELDS,
+    );
+    assert.equal(administrator.body.photos[0].canDelete, true);
+    assert.equal(administrator.body.photos[0].isAdminDelete, true);
+    assert.equal('user' in owner.body.photos[0], false);
+    assert.equal('user' in administrator.body.photos[0], false);
   });
 
   test('missing and ambiguous targets return safe 404 and 409 responses', async () => {

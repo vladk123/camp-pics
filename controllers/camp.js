@@ -13,6 +13,7 @@ import {
   sendCampsiteTargetError,
 } from '../utils/campsiteTarget.js';
 import { serializeCampsiteForClient } from '../utils/campsiteSerializer.js';
+import { serializePublicMediaCollection } from '../utils/publicMediaSerializer.js';
 
 
 const router = express.Router();
@@ -55,6 +56,24 @@ export const CAMPSITE_LOCATION_PROJECTION = {
   'campsites._id': 1,
   'campsites.slug': 1,
 };
+
+export const PARK_MEDIA_PROJECTION = Object.freeze({
+  _id: 0,
+  'photos._id': 1,
+  'photos.user': 1,
+  'photos.url': 1,
+  'photos.caption': 1,
+  'photos.username': 1,
+  'photos.dateTaken': 1,
+  'photos.uploadedAt': 1,
+  'videos._id': 1,
+  'videos.user': 1,
+  'videos.url': 1,
+  'videos.caption': 1,
+  'videos.username': 1,
+  'videos.dateTaken': 1,
+  'videos.uploadedAt': 1,
+});
 
 let memoryCache = null;
 let lastCacheTime = 0;
@@ -411,30 +430,22 @@ export const showPark = async (req, res, next) => {
 };
 
 
-export const getPark = async(req, res, next) => {
-  const park = await Park.findOne({ slug: req.params.parkSlug }).lean();
-  if (!park) return res.status(404).json({ error: 'Not found' });
-  // res.json({ photos: park.photos, videos: park.videos });
-  return res.json({
-    ...park,
-    photos: park.photos.map(p => ({
-      _id: p._id,
-      user: p.user,
-      url: p.url,
-      caption: p.caption,
-      username: p.username,
-      dateTaken: p.dateTaken
-    })),
-    videos: park.videos.map(v => ({
-      _id: v._id,
-      user: v.user,
-      url: v.url,
-      caption: v.caption,
-      username: v.username,
-      dateTaken: v.dateTaken
-    }))
-  });
+export function createParkMediaHandler({ ParkModel = Park } = {}) {
+  return async (req, res, next) => {
+    const park = await ParkModel.findOne(
+      { slug: req.params.parkSlug },
+      PARK_MEDIA_PROJECTION,
+    ).lean();
+    if (!park) return res.status(404).json({ error: 'Not found' });
+
+    return res.json({
+      photos: serializePublicMediaCollection(park.photos, req.user),
+      videos: serializePublicMediaCollection(park.videos, req.user),
+    });
+  };
 }
+
+export const getPark = createParkMediaHandler();
 
 function exactMediaExpression(sourcePath) {
   return {
@@ -626,7 +637,7 @@ async function getCampsiteByLocation(req, res, next, ParkModel) {
       return res.status(404).json({ error: 'Park not found.' });
     }
 
-    return res.json(serializeCampsiteForClient(location));
+    return res.json(serializeCampsiteForClient(location, req.user));
   } catch (error) {
     next(error);
   }

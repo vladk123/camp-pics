@@ -1,0 +1,26 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { test } from 'node:test';
+
+const showParkSource = await readFile(
+  new URL('../public/js/showPark.js', import.meta.url),
+  'utf8',
+);
+const sliderSource = await readFile(
+  new URL('../public/js/parkMediaSlider.js', import.meta.url),
+  'utf8',
+);
+
+test('park and campsite delete controls consume server permission flags only', () => {
+  for (const source of [showParkSource, sliderSource]) {
+    assert.doesNotMatch(source, /\bitem\.user\b/);
+    assert.doesNotMatch(source, /\b[vp]\.user\b/);
+    assert.match(source, /item\.canDelete === true/);
+    assert.match(source, /item\.isAdminDelete === true/);
+  }
+
+  assert.doesNotMatch(
+    `${showParkSource}\n${sliderSource}`,
+    /item\.[A-Za-z_$][\w$]*\s*===\s*window\.CURRENT_USER_ID|window\.CURRENT_USER_ID\s*===\s*item\./,
+  );
+});

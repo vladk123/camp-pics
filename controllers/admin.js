@@ -6,6 +6,34 @@ import { extractYouTubeVideoId } from '../utils/youtube.js';
 // import { getIP } from '../utils/getIP.js'
 import { redirectedFlash } from '../utils/redirectedFlash.js';
 
+export const ADMIN_USER_PROJECTION = Object.freeze({
+  _id: 1,
+  fname: 1,
+  username: 1,
+  date_created: 1,
+  email_verified: 1,
+  blocked: 1,
+});
+
+export const ADMIN_UPLOAD_PROJECTION = Object.freeze({
+  _id: 0,
+  mediaType: 1,
+  createdAt: 1,
+  parkName: 1,
+  campgroundName: 1,
+  campsiteName: 1,
+  youtubeId: 1,
+  cloudinaryUrl: 1,
+  cloudinaryId: 1,
+  userId: 1,
+});
+
+export const ADMIN_UPLOAD_USER_PROJECTION = Object.freeze({
+  _id: 0,
+  fname: 1,
+  username: 1,
+});
+
 export function getSafeHttpUrl(value) {
   if (typeof value !== 'string' || !value.trim()) return null;
 
@@ -28,81 +56,115 @@ export function getAdminPhotoUrl(upload) {
     getSafeHttpUrl(upload?.cloudinaryId);
 }
 
-export function serializeAdminUpload(upload) {
+export function serializeAdminUser(user) {
   return {
-    ...upload,
-    adminPhotoUrl: upload?.mediaType === 'photo'
-      ? getAdminPhotoUrl(upload)
-      : null,
+    _id: user?._id ?? null,
+    fname: user?.fname ?? null,
+    username: user?.username ?? null,
+    date_created: user?.date_created ?? null,
+    email_verified: user?.email_verified ?? null,
+    blocked: user?.blocked ?? null,
   };
 }
 
-export const dashboard = async (req, res, next) => {
-  try {
-    // Pagination parameters
-    const uploadPage = parseInt(req.query.uploadPage) || 1;
-    const userPage = parseInt(req.query.userPage) || 1;
-    const limitUploads = 10;
-    const limitUsers = 50;
+export function serializeAdminUpload(upload) {
+  return {
+    mediaType: upload?.mediaType ?? null,
+    createdAt: upload?.createdAt ?? null,
+    parkName: upload?.parkName ?? null,
+    campgroundName: upload?.campgroundName ?? null,
+    campsiteName: upload?.campsiteName ?? null,
+    youtubeId: upload?.youtubeId ?? null,
+    adminPhotoUrl: upload?.mediaType === 'photo'
+      ? getAdminPhotoUrl(upload)
+      : null,
+    uploader: {
+      fname: upload?.userId?.fname ?? null,
+      username: upload?.userId?.username ?? null,
+    },
+  };
+}
 
-    const skipUploads = (uploadPage - 1) * limitUploads;
-    const skipUsers = (userPage - 1) * limitUsers;
+export function createAdminDashboardHandler({
+  UserModel = User,
+  UploadModel = Upload,
+} = {}) {
+  return async (req, res, next) => {
+    try {
+      // Pagination parameters
+      const uploadPage = parseInt(req.query.uploadPage) || 1;
+      const userPage = parseInt(req.query.userPage) || 1;
+      const limitUploads = 10;
+      const limitUsers = 50;
 
-    // Get most recent uploads (10 per page)
-    const uploadRecords = await Upload.find({})
+      const skipUploads = (uploadPage - 1) * limitUploads;
+      const skipUsers = (userPage - 1) * limitUsers;
+
+      // Get most recent uploads (10 per page)
+      const uploadRecords = await UploadModel.find({})
+        .select(ADMIN_UPLOAD_PROJECTION)
         .sort({ createdAt: -1 })
         .skip(skipUploads)
         .limit(limitUploads)
-        .populate('userId', 'fname username') // show uploader info
+        .populate({
+          path: 'userId',
+          select: ADMIN_UPLOAD_USER_PROJECTION,
+        }) // show uploader info
         // .populate('parkId', 'name slug')
         // .populate('campgroundId', 'name slug') // only filled if campground exists
         // .populate('campsiteId', 'siteNumber slug') // only filled if campsite exists
         .lean();
-    const uploads = uploadRecords.map(serializeAdminUpload);
+      const uploads = uploadRecords.map(serializeAdminUpload);
 
-    const totalUploads = await Upload.countDocuments();
-    const hasMoreUploads = totalUploads > uploadPage * limitUploads;
+      const totalUploads = await UploadModel.countDocuments();
+      const hasMoreUploads = totalUploads > uploadPage * limitUploads;
 
-    // Get most recent users (50 per page)
-    const users = await User.find({_id: { $ne: req.user._id }})
-      .sort({ date_created: -1 })
-      .skip(skipUsers)
-      .limit(limitUsers)
-      .lean();
+      // Get most recent users (50 per page)
+      const userRecords = await UserModel.find({_id: { $ne: req.user._id }})
+        .select(ADMIN_USER_PROJECTION)
+        .sort({ date_created: -1 })
+        .skip(skipUsers)
+        .limit(limitUsers)
+        .lean();
+      const users = userRecords.map(serializeAdminUser);
 
-    const totalUsers = await User.countDocuments({ _id: { $ne: req.user._id } });
-    const hasMoreUsers = totalUsers > userPage * limitUsers;
+      const totalUsers = await UserModel.countDocuments({
+        _id: { $ne: req.user._id },
+      });
+      const hasMoreUsers = totalUsers > userPage * limitUsers;
 
-    // Respond differently depending on request type
-    if (req.xhr || req.headers.accept?.includes('application/json')) {
-      return res.json({
+      // Respond differently depending on request type
+      if (req.xhr || req.headers.accept?.includes('application/json')) {
+        return res.json({
+          uploads,
+          users,
+          hasMoreUploads,
+          hasMoreUsers,
+        });
+      }
+
+      // Regular render (first load)
+      return res.render('admin/dashboard', {
+			meta: {
+				title: 'Admin',
+			},
         uploads,
         users,
+        uploadPage,
+        userPage,
         hasMoreUploads,
         hasMoreUsers,
+        extractYouTubeVideoId,
+        data:{} // data obj to avoid crashes
       });
+    } catch (err) {
+      console.error('Admin dashboard error:', err);
+      return redirectedFlash(req, res, 'error', 'Failed to load dashboard.', '/');
     }
+  };
+}
 
-    // Regular render (first load)
-    return res.render('admin/dashboard', {
-			meta: {
-				title: 'Admin', 
-			},
-      uploads,
-      users,
-      uploadPage,
-      userPage,
-      hasMoreUploads,
-      hasMoreUsers,
-      extractYouTubeVideoId,
-      data:{} // data obj to avoid crashes
-    });
-
-  } catch (err) {
-    console.error('Admin dashboard error:', err);
-    return redirectedFlash(req, res, 'error', 'Failed to load dashboard.', '/');
-  }
-};
+export const dashboard = createAdminDashboardHandler();
 
 export const blockUser = async (req, res, next) => {
   try {
