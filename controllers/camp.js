@@ -6,6 +6,7 @@ import { Park } from '../models/park.js';
 import { toSlug } from '../utils/general.js'
 import { isArray } from 'util';
 import { redirectedFlash } from '../utils/redirectedFlash.js';
+import { logger } from '../utils/logging.js';
 import { serializeForInlineScript } from '../utils/serializeForInlineScript.js';
 import {
   CampsiteTargetError,
@@ -185,7 +186,10 @@ export const loadCache = async (forceRefresh = false) => {
     return enhanced;
     
   } catch (err) {
-    console.error('Cache load error:', err);
+    await logger(null, null, 'error', {
+      message: 'Park search cache failed to load.',
+      error: err,
+    });
     return [];
   }
 };
@@ -244,7 +248,11 @@ function highlight(text, query) {
 
 
 
-export const searchApi = async(req, res, next) => {
+export function createSearchApiHandler({
+  loadSearchData = loadCache,
+  log = logger,
+} = {}) {
+  return async(req, res, next) => {
     const { q } = req.query;
     const query = q?.trim().toLowerCase() || '';
 
@@ -253,7 +261,7 @@ export const searchApi = async(req, res, next) => {
         if (!q || !q.trim()) return res.json([]);
 
         const query = q.trim().toLowerCase();
-        const data = await loadCache();
+        const data = await loadSearchData();
 
         // Compute scores
         const scored = data.map(item => ({
@@ -277,12 +285,21 @@ export const searchApi = async(req, res, next) => {
         // Return top N results
         res.json(results);
     } catch (err) {
-        console.error(err);
+        await log(req, res, 'error', {
+          message: 'Park search API failed.',
+          error: err,
+        });
         res.status(500).json({ message: 'Search failed' });
     }
+  };
 }
 
-export const searchResults = async(req, res, next) => {
+export const searchApi = createSearchApiHandler();
+
+export function createSearchResultsHandler({
+  loadSearchData = loadCache,
+} = {}) {
+  return async(req, res, next) => {
     const { q } = req.query;
     const slicedQuery = q.slice(0, 50)
     const query = slicedQuery?.trim().toLowerCase() || '';
@@ -295,7 +312,7 @@ export const searchResults = async(req, res, next) => {
           return res.redirect('/camp/all-parks')
         };
 
-        const data = await loadCache();
+        const data = await loadSearchData();
 
         // Compute scores
         const scored = data.map(item => ({
@@ -341,10 +358,12 @@ export const searchResults = async(req, res, next) => {
           data: {results: highlightedResults, query}, toSlug
         }) // data obj to avoid crashes
     } catch (err) {
-        console.error(err);
         next(err)
     }
+  };
 }
+
+export const searchResults = createSearchResultsHandler();
 
 export const showAllParks = async (req, res, next) => {
   try {

@@ -103,20 +103,19 @@ const blockDuration = 48 * 60 * 60 * 1000; // 48 hours
 app.use(async (req, res, next) => {
 	// console.log('1')
     const ipAddress = await getIP(req);
-    const fullUrl = req.protocol + '://' + req.get('host') + req.originalUrl;
 
     // Check if IP is already blocked
     const blockTime = badBotMap.get(ipAddress);
 	// console.log(blockTime)
     if (blockTime && (Date.now() - blockTime) < blockDuration) {
-        logger(req, res, 'general', { message: `[IP: ${ipAddress}] Still blocked: ${fullUrl}`, severity: 1 });
+        logger(req, res, 'general', { message: 'Blocked request remains active.', severity: 1 });
         return res.status(403).send('Nope.');
     }
 
     // Check for bad URL patterns
     const isBot = blockedPatterns.some(pattern => req.originalUrl.includes(pattern));
     if (isBot) {
-        logger(req, res, 'error', { message: `[IP: ${ipAddress}] Blocked bot at: ${fullUrl}`, severity: 1 });
+        logger(req, res, 'error', { message: 'Blocked bot request.', severity: 1 });
         badBotMap.set(ipAddress, Date.now());
         return res.status(403).send('No.');
     }
@@ -132,7 +131,10 @@ const connectToMongo = async () => {
     console.log("MongoDB connected");
 	// await initializeParkSearchCache(); // rebuild search cache immediately on startup
   } catch (err) {
-    console.error("MongoDB connection failed:", err);
+    await logger(null, null, 'error', {
+      message: 'MongoDB connection failed.',
+      error: err,
+    });
     process.exit(1);
   }
 };
@@ -336,9 +338,9 @@ app.all('/{*any}', (req, res, next) => {
 		}
 	}
 
-	// Don't notify admin about bots & If it's a non-existent route (that isn't in the list above)
+    // Don't notify admin about bots & If it's a non-existent route (that isn't in the list above)
     if (!foundBotUrl) {
-        logger(null, null, 'error', { message: `Non-existent route visited: ${req.originalUrl}`, severity: 1 });
+        logger(req, res, 'error', { message: 'Non-existent route visited.', severity: 1 });
     }
 	
 	// return redirectedFlash(req, res, 'error', `That page does not exist, sorry.`, '/') <- NO, this causes issues with Google search crawler
@@ -358,11 +360,10 @@ app.use(csrfErrorHandler);
 //GENERIC ERROR HANDLER MIDDLEWARE
 //All the error handler "next"s get carried over here for finalizing - this code has to be below all other route stuff
 app.use(async (err,req,res,next) => {
-	try{
-		await logger(req, res, 'error', {message:`Error: tried URL: ${req.originalUrl}`, error: err})
-	} catch(e) {
-        console.error('Failed to log error');
-	}
+	await logger(req, res, 'error', {
+		message: 'Unhandled request error.',
+		error: err,
+	})
 
     if (res.headersSent) return next(err);
 	return redirectedFlash(req, res, 'error', `Oops! An error has occurred: ${err.name}`, '/')
@@ -372,21 +373,8 @@ app.use(async (err,req,res,next) => {
 // UNHANDLED ERRORS
 // Unhandled rejections
 process.on('unhandledRejection', async (err) => {
-	console.log('IN UNHANDLEDREJECTION', err)
-
-	// If not some kind of issue with logger - need to do this to avoid infinite loop if it is a logging.js issue
-	if(err.message && !err.message.toLowerCase().includes('logger error')){
-		// Just in case, put it in a try-catch
-		try {
-			await logger(null,null,'error', {message: 'unhandledRejection', error: err});
-		} catch (err) {
-			console.error("Error when trying to use logger in unhandledRejection")
-			// throw new Error('Sending from unhandledRejection to uncaughtException'); // so that other types of unhandled exceptions crash the server
-			process.exit(1)
-		}
-		
-		
-	}
+	console.log('IN UNHANDLEDREJECTION')
+	await logger(null,null,'error', {message: 'unhandledRejection', error: err});
 	console.log('THROWING ERROR FROM UNHANDLED REJECTION SPOT')
 	// Send email/text to admin if possible before exiting?
 	
@@ -397,15 +385,7 @@ process.on('unhandledRejection', async (err) => {
 // Uncaught Exceptions
 process.on('uncaughtException', async function (err) {
 	console.log('IN UNCAUGHTEXCEPTION')
-	// If it's not something with the logger
-	if(err.message && !err.message.toLowerCase().includes('logger error')){
-		await logger(null,null,'error', {message: 'uncaughtException error - crashing now...', error: err});
-	} else {
-		console.error('Logger error (as in, the logger malfunctioned)! Here is the error:')
-		console.error('......................................')
-		console.error(err)
-		console.error('......................................')
-	}
+	await logger(null,null,'error', {message: 'uncaughtException error - crashing now...', error: err});
 	// Send email/text to admin if possible before exiting?
 	process.exit(1)
 })

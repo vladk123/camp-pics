@@ -1,8 +1,8 @@
 import { User } from '../models/user.js';
 import { Upload } from '../models/upload.js';
 import { extractYouTubeVideoId } from '../utils/youtube.js';
+import { logger } from '../utils/logging.js';
 
-// import { logger } from '../utils/logging.js'; //for logging errors
 // import { getIP } from '../utils/getIP.js'
 import { redirectedFlash } from '../utils/redirectedFlash.js';
 
@@ -88,6 +88,8 @@ export function serializeAdminUpload(upload) {
 export function createAdminDashboardHandler({
   UserModel = User,
   UploadModel = Upload,
+  log = logger,
+  redirectWithFlash = redirectedFlash,
 } = {}) {
   return async (req, res, next) => {
     try {
@@ -158,32 +160,57 @@ export function createAdminDashboardHandler({
         data:{} // data obj to avoid crashes
       });
     } catch (err) {
-      console.error('Admin dashboard error:', err);
-      return redirectedFlash(req, res, 'error', 'Failed to load dashboard.', '/');
+      await log(req, res, 'error', {
+        message: 'Admin dashboard failed to load.',
+        error: err,
+      });
+      return redirectWithFlash(req, res, 'error', 'Failed to load dashboard.', '/');
     }
   };
 }
 
 export const dashboard = createAdminDashboardHandler();
 
-export const blockUser = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    await User.findByIdAndUpdate(id, { blocked: true });
-    return redirectedFlash(req, res, 'success', 'User has been blocked.', '/a/dashboard');
-  } catch (err) {
-    console.error('Error blocking user:', err);
-    return redirectedFlash(req, res, 'error', 'Failed to block user.', '/a/dashboard');
-  }
-};
+export function createUserBlockHandler({
+  blocked,
+  UserModel = User,
+  log = logger,
+  redirectWithFlash = redirectedFlash,
+} = {}) {
+  const action = blocked ? 'block' : 'unblock';
+  const successMessage = blocked
+    ? 'User has been blocked.'
+    : 'User has been unblocked.';
+  const failureMessage = blocked
+    ? 'Failed to block user.'
+    : 'Failed to unblock user.';
 
-export const unblockUser = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    await User.findByIdAndUpdate(id, { blocked: false });
-    return redirectedFlash(req, res, 'success', 'User has been unblocked.', '/a/dashboard');
-  } catch (err) {
-    console.error('Error unblocking user:', err);
-    return redirectedFlash(req, res, 'error', 'Failed to unblock user.', '/a/dashboard');
-  }
-};
+  return async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      await UserModel.findByIdAndUpdate(id, { blocked });
+      return redirectWithFlash(
+        req,
+        res,
+        'success',
+        successMessage,
+        '/a/dashboard',
+      );
+    } catch (err) {
+      await log(req, res, 'error', {
+        message: `Admin user ${action} operation failed.`,
+        error: err,
+      });
+      return redirectWithFlash(
+        req,
+        res,
+        'error',
+        failureMessage,
+        '/a/dashboard',
+      );
+    }
+  };
+}
+
+export const blockUser = createUserBlockHandler({ blocked: true });
+export const unblockUser = createUserBlockHandler({ blocked: false });

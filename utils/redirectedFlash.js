@@ -2,7 +2,14 @@
 import flash from 'connect-flash';
 import { logger } from "./logging.js";
 
-export const redirectedFlash = async(req, res, msgType='info', msg, oldRedirectTo='/', data = {}) => {
+export const createRedirectedFlash = ({ log = logger } = {}) => async(
+    req,
+    res,
+    msgType='info',
+    msg,
+    oldRedirectTo='/',
+    data = {},
+) => {
     let redirectTo = oldRedirectTo
     let loginParam = ""
 
@@ -27,7 +34,12 @@ export const redirectedFlash = async(req, res, msgType='info', msg, oldRedirectT
 
         // Ensure flash is persisted before redirect by saving to the user's session
         req.session.save(err => {
-            if (err) console.error('Session save error before redirect:', err);
+            if (err) {
+                void log(req, res, 'error', {
+                    message: 'Session save failed before redirect.',
+                    error: err,
+                });
+            }
 
             if (redirectTo !== '/login' && redirectTo !== '/logout') {
                 return res.redirect(redirectTo + loginParam || '/' + loginParam);
@@ -36,9 +48,13 @@ export const redirectedFlash = async(req, res, msgType='info', msg, oldRedirectT
             }
         });
     } else {
-        await logger(req, res, 'error', {message:`Trying to send user to the following url, but headers already sent: ${redirectTo}`})
+        await log(req, res, 'error', {
+            message: 'Redirect attempted after headers were sent.',
+        })
         return
     }
     
 }
+
+export const redirectedFlash = createRedirectedFlash();
 

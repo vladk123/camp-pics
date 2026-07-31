@@ -5,6 +5,7 @@ import ejs from "ejs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { Email } from "../models/email.js"; // adjust as needed
+import { logger } from "./logging.js";
 import 'dotenv/config';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -52,7 +53,10 @@ export async function sendEmail({
     // console.log(`Email sent to ${to} (${subject})`);
     return result;
   } catch (err) {
-    console.error("Mailgun send error:", err.message || err);
+    await logger(null, null, 'error', {
+      message: 'Email delivery or log persistence operation failed.',
+      error: err,
+    });
     throw err;
   }
 }
