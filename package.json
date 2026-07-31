@@ -10,6 +10,8 @@
     "media:backfill-identifiers": "node scripts/reconcileMediaIdentifiers.js --apply",
     "media:audit-cleanup": "node scripts/processMediaCleanupJobs.js",
     "media:process-cleanup": "node scripts/processMediaCleanupJobs.js --apply",
+    "email:audit-logs": "node scripts/reconcileEmailLogs.js",
+    "email:redact-legacy-content": "node scripts/reconcileEmailLogs.js --apply",
     "start": "node app.js"
   },
   "repository": {
