@@ -6,23 +6,19 @@
     <div><%= data.results.length%> results.</div>
     <%- include('../partials/search') %>
     <div id="park-list">
-    <% for (result of data.results) { %>
+    <% for (const result of data.results) { %>
         
         <!-- If park -->
-        <% if (!result.parentPark) { %>
+        <% if (result.type === 'park') { %>
             <div class="park-result-div">
-                <a href="/camp<%= result.slug %>" translate="no">
+                <a href="<%= result.destination %>" translate="no">
                     <img src="<%= result.image || '/images/icons/not-found.jpg' %>">
-                    <!-- </a> -->
 
-                    <!-- <a href="/camp<%= result.slug %>"> -->
-                        <!-- name -->
-                        <div  translate="no"><%- result._nameHighlighted %></div>
-                    <!-- </a> -->
+                    <div translate="no"><% for (const segment of result.nameSegments) { %><% if (segment.highlighted) { %><mark><%= segment.text %></mark><% } else { %><%= segment.text %><% } %><% } %></div>
 
                     <!-- province -->
                     <div style="font-size: var(--font-extra-extra-small); font-weight: normal;" translate="no">
-                        <%- result._provinceHighlighted %>
+                        <% for (const segment of result.provinceSegments) { %><% if (segment.highlighted) { %><mark><%= segment.text %></mark><% } else { %><%= segment.text %><% } %><% } %>
                     </div>
                 </a>
             </div>
@@ -31,26 +27,21 @@
         <% } else { %>
 
             <div class="park-result-div">
-                <a href="/camp<%= result.slug %>">
+                <a href="<%= result.destination %>">
                     <img src="<%= result.image || '/images/icons/not-found.jpg' %>">
-                <!-- </a> -->
 
                 <!-- parent park -->
-                <!-- <a href="/camp/park/<%= toSlug(result.parentPark) %>"> -->
-                    <%- result._parentHighlighted %>
-                <!-- </a> -->
+                    <% for (const segment of result.parentParkSegments) { %><% if (segment.highlighted) { %><mark><%= segment.text %></mark><% } else { %><%= segment.text %><% } %><% } %>
 
                 <!-- campground name -->
-                <!-- <a style="font-size: var(--font-extra-small);"
-                   href="/camp/park/<%= toSlug(result.parentPark) %>#<%= toSlug(result.parentPark) %>-<%= toSlug(result.name) %>"> -->
                 <div style="font-size: var(--font-extra-small);">
-                   <%- result._nameHighlighted %>
+                   <% for (const segment of result.nameSegments) { %><% if (segment.highlighted) { %><mark><%= segment.text %></mark><% } else { %><%= segment.text %><% } %><% } %>
                 </div> 
                 
 
                 <!-- province -->
                 <div style="font-size: var(--font-extra-extra-small); font-weight: normal;">
-                    <%- result._provinceHighlighted %>
+                    <% for (const segment of result.provinceSegments) { %><% if (segment.highlighted) { %><mark><%= segment.text %></mark><% } else { %><%= segment.text %><% } %><% } %>
                 </div>
                 </a>
             </div>

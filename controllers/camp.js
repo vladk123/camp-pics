@@ -15,6 +15,12 @@ import {
 } from '../utils/campsiteTarget.js';
 import { serializeCampsiteForClient } from '../utils/campsiteSerializer.js';
 import { serializePublicMediaCollection } from '../utils/publicMediaSerializer.js';
+import {
+  createParkSearchViewResult,
+  normalizeParkSearchText,
+  parseParkSearchQuery,
+  rankParkSearchEntries,
+} from '../utils/parkSearch.js';
 
 
 const router = express.Router();
@@ -114,14 +120,6 @@ export function prepareCampsiteMediaCounts(park) {
   return park;
 }
 
-// Func to allow for accents and such
-function normalizeText(str = '') {
-  return str
-    .normalize('NFD')                 // split accented letters
-    .replace(/[\u0300-\u036f]/g, '')  // remove accents
-    .toLowerCase();
-}
-
 // Function to load data into cache
 export const loadCache = async (forceRefresh = false) => {
   // console.log('loading cache')
@@ -175,9 +173,9 @@ export const loadCache = async (forceRefresh = false) => {
     
     const enhanced = parks.map(p => ({
       ...p,
-      _nameNorm: normalizeText(p.name),
-      _provinceNorm: normalizeText(p.province),
-      _keywordsNorm: (p.keywords || []).map(k => normalizeText(k))
+      _nameNorm: normalizeParkSearchText(p.name),
+      _provinceNorm: normalizeParkSearchText(p.province),
+      _keywordsNorm: (p.keywords || []).map(k => normalizeParkSearchText(k))
     }));
 
     fs.writeFileSync(cacheFile, JSON.stringify(enhanced, null, 2));
@@ -194,102 +192,25 @@ export const loadCache = async (forceRefresh = false) => {
   }
 };
 
-// Function for search score logic
-function computeScore(entry, query) {
-  const normalizedQuery = normalizeText(query);
-  const terms = normalizedQuery.split(/\s+/);
-  let score = 0;
-
-  const name = normalizeText(entry.name);
-  const province = normalizeText(entry.province);
-  const keywords = (entry.keywords || []).map(k => normalizeText(k));
-
-  for (const term of terms) {
-    if (!term) continue;
-
-    // Name matches (highest)
-    if (name === term) score += 10;
-    else if (name.includes(term)) score += 5;
-
-    // Province matches
-    if (province === term) score += 4;
-    else if (province.includes(term)) score += 2;
-
-    // Keywords
-    if (keywords.includes(term)) score += 3;
-    else if (keywords.some(k => k.includes(term))) score += 1;
-  }
-
-  return score;
-}
-
-
-// Functon to highlight text
-function highlight(text, query) {
-  if (!text || !query) return text;
-
-  const normText = normalizeText(text);
-  const normQuery = normalizeText(query);
-
-  let result = '';
-  let lastIndex = 0;
-
-  const idx = normText.indexOf(normQuery);
-  if (idx === -1) return text;
-
-  // Map normalized index back to original string
-  const before = text.slice(0, idx);
-  const match = text.slice(idx, idx + query.length);
-  const after = text.slice(idx + query.length);
-
-  return `${before}<mark>${match}</mark>${after}`;
-}
-
-
-
-
 export function createSearchApiHandler({
   loadSearchData = loadCache,
   log = logger,
 } = {}) {
   return async(req, res, next) => {
-    const { q } = req.query;
-    const query = q?.trim().toLowerCase() || '';
+    const parsedQuery = parseParkSearchQuery(req?.query?.q);
+    if (!parsedQuery.hasQuery) return res.json([]);
 
     try {
-        const { q } = req.query;
-        if (!q || !q.trim()) return res.json([]);
-
-        const query = q.trim().toLowerCase();
         const data = await loadSearchData();
-
-        // Compute scores
-        const scored = data.map(item => ({
-            ...item,
-            score: computeScore(item, query),
-        }));
-
-        // Filter out 0-score results
-        const relevant = scored.filter(i => i.score > 0);
-
-        // Sort: score desc, then parks before campgrounds
-        relevant.sort((a, b) => {
-            if (b.score !== a.score) return b.score - a.score;
-            if (a.type === 'park' && b.type === 'campground') return -1;
-            if (a.type === 'campground' && b.type === 'park') return 1;
-            return 0;
-        });
-
-        const results = relevant.slice(0, 25)
-
-        // Return top N results
-        res.json(results);
+        const results = rankParkSearchEntries(data, parsedQuery.query)
+          .slice(0, 25);
+        return res.json(results);
     } catch (err) {
         await log(req, res, 'error', {
           message: 'Park search API failed.',
           error: err,
         });
-        res.status(500).json({ message: 'Search failed' });
+        return res.status(500).json({ message: 'Search failed' });
     }
   };
 }
@@ -300,65 +221,30 @@ export function createSearchResultsHandler({
   loadSearchData = loadCache,
 } = {}) {
   return async(req, res, next) => {
-    const { q } = req.query;
-    const slicedQuery = q.slice(0, 50)
-    const query = slicedQuery?.trim().toLowerCase() || '';
+    const parsedQuery = parseParkSearchQuery(req?.query?.q);
+    if (!parsedQuery.hasQuery) {
+      return res.redirect('/camp/all-parks');
+    }
 
     try {
-
-        // If no query, show all parks 
-        if (!query) {
-          // const results = data.slice(0, 50)
-          return res.redirect('/camp/all-parks')
-        };
-
         const data = await loadSearchData();
+        const results = rankParkSearchEntries(data, parsedQuery.query)
+          .slice(0, 50);
+        const viewResults = results.map(result =>
+          createParkSearchViewResult(result, parsedQuery.query));
 
-        // Compute scores
-        const scored = data.map(item => ({
-            ...item,
-            score: computeScore(item, query),
-        }));
-
-        // Filter out 0-score results
-        const relevant = scored.filter(i => i.score > 0);
-
-        // Sort: score desc, then parks before campgrounds
-        relevant.sort((a, b) => {
-            if (b.score !== a.score) return b.score - a.score;
-            if (a.type === 'park' && b.type === 'campground') return -1;
-            if (a.type === 'campground' && b.type === 'park') return 1;
-            return 0;
-        });
-
-        const results = relevant.slice(0, 50)
-        // Attach highlighted versions (for EJS)
-        const highlightedResults = results.map(r => ({
-          ...r,
-          _nameHighlighted: highlight(r.name, query),
-          _parentHighlighted: r.parentPark ? highlight(r.parentPark, query) : null,
-          _provinceHighlighted: highlight(r.province, query)
-        }));
-
-        // console.log(results)
-        // If just one result:
-        if(results.length == 1){
-          // If this is a campground
-          if(results[0]?.parentPark){
-            return res.redirect(`/camp/park/${results[0].parentPark}#${results[0].name.toLowerCase()}`)
-          } else {
-            return res.redirect(`/camp/park/${results[0]?.name}`)
-          }
+        if (viewResults.length === 1) {
+          return res.redirect(viewResults[0].destination);
         }
-        // const resultsLength = Object.keys(results).length
+
         return res.render('parks/results', {
           meta: {
-            title: `Search Results: ${query}`, 
+            title: `Search Results: ${parsedQuery.query}`,
           }, 
-          data: {results: highlightedResults, query}, toSlug
-        }) // data obj to avoid crashes
+          data: { results: viewResults, query: parsedQuery.query },
+        });
     } catch (err) {
-        next(err)
+        return next(err);
     }
   };
 }
