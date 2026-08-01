@@ -1,15 +1,5 @@
-import { logger } from './utils/logging.js'; //for logging errors
-
-// If in dev mode, use dotenv package to access .env variables
-if(process.env.NODE_ENV === "development"){ 
-	logger(null,null,'general', {message: 'Dev mode!'});
-	await import('dotenv/config')
-	logger(null,null,'general', {message: 'dotenv loaded in development mode'});
-}
-
+import 'dotenv/config';
 import express from 'express';
-const app = express();
-app.set('trust proxy', 1) // Since on Heroku/Digital Ocean (behind proxy), telling Express to trust proxy before using req.ip
 import path from 'path'; //so we can set views directory below
 import { fileURLToPath } from 'url';
 import ejsMate from 'ejs-mate'; //engine used to parse EJS
@@ -21,7 +11,6 @@ import passport from 'passport';//plugin that allows us to easily authenticate
 import LocalStrategy from 'passport-local'; //using local strategy i.e., not FB or Twitter login, etc
 
 import compression from 'compression'
-app.use(compression())
 import methodOverride from 'method-override';
 import helmet from 'helmet'
 import rateLimiting from 'express-rate-limit' // For limiting how many requests made in a period of time
@@ -32,7 +21,6 @@ import {
 	DEFAULT_BOT_BLOCK_MAX_ENTRIES,
 	BlockedClientCache,
 } from './utils/blockedClientCache.js';
-import { parseUrlPatterns } from './utils/requestFiltering.js';
 import {
 	createBotUrlBlocker,
 	createNotFoundHandler,
@@ -47,6 +35,28 @@ import {
 
 import flash from 'connect-flash';
 import { redirectedFlash } from './utils/redirectedFlash.js';
+import { logger } from './utils/logging.js'; //for logging errors
+import { startWithRuntimeConfig } from './config/runtimeStartup.js';
+
+import userRoutes from './routes/users.js';
+import campRoutes from './routes/camp.js';
+import otherRoutes from './routes/other.js';
+import adminRoutes from './routes/admin.js';
+import crawlingRoutes from './routes/crawling.js';
+
+async function reportRuntimeConfigurationFailure({ message, issues }) {
+	await logger(null, null, 'error', { message });
+	for (const issue of issues) {
+		await logger(null, null, 'error', {
+			message: `Configuration issue: ${issue.variable} (${issue.reason}).`,
+		});
+	}
+}
+
+function startApplication(runtimeConfig) {
+const app = express();
+app.set('trust proxy', 1) // Since on Heroku/Digital Ocean (behind proxy), telling Express to trust proxy before using req.ip
+app.use(compression())
 
 // Skip rate limiting if loading public files
 const skipPublicFiles = (req) => {
@@ -62,13 +72,13 @@ const skipPublicFiles = (req) => {
 // Doing overall limiting on all requests
 const rateLimiterLong = rateLimiting({
   windowMs: 5 * 60 * 1000,
-  max: process.env.FIVE_MIN_NUM_REQ_BEFORE_LIMIT || 100,
+  max: runtimeConfig.requestLimits.fiveMinuteMaximum,
   message: 'Too many requests, please try again later.',
   skip: skipPublicFiles,
 });
 const speedLimiterLong = speedLimiting({
   windowMs: 1 * 60 * 1000,
-  delayAfter: process.env.ONE_MIN_NUM_REQ_BEFORE_SLOWDOWN || 50,
+  delayAfter: runtimeConfig.requestLimits.oneMinuteDelayAfter,
   delayMs: (hits) => hits * 1 * 1000,
   skip: skipPublicFiles,
 });
@@ -95,7 +105,7 @@ app.use((req, res, next) => {
 
 // If in production, check that it's on https (otherwise redirect to https)
 
-if(process.env.NODE_ENV === 'production') {
+if(runtimeConfig.environment.isProduction) {
     app.use((req, res, next) => {
       if (req.headers['x-forwarded-proto']?.split(',')[0] !== 'https')
         res.redirect(`https://camppics.ca${req.url}`)
@@ -107,7 +117,7 @@ if(process.env.NODE_ENV === 'production') {
 
 
 // Block possibly malicious bots
-const blockedPatterns = parseUrlPatterns(process.env.BLOCK_BOT_URL);
+const blockedPatterns = runtimeConfig.requestFiltering.blockedPatterns;
 const botBlockCache = new BlockedClientCache({
 	blockDurationMs: DEFAULT_BOT_BLOCK_DURATION_MS,
 	maxEntries: DEFAULT_BOT_BLOCK_MAX_ENTRIES,
@@ -120,10 +130,10 @@ app.use(createBotUrlBlocker({
 }));
 
 //CONNECTION TO MONGODB
-const dbUrl = process.env.DB_URL
+const dbUrl = runtimeConfig.database.url
 const connectToMongo = async () => {
   try {
-    await mongoose.connect(process.env.DB_URL);
+    await mongoose.connect(dbUrl);
     console.log("MongoDB connected");
 	// await initializeParkSearchCache(); // rebuild search cache immediately on startup
   } catch (err) {
@@ -139,7 +149,7 @@ connectToMongo();
 
 // SESSION CONFIG
 // Setting up Storing Session Stuff on DB_URL (using the connect-mongo npm app)
-const secret = process.env.SESSION_SECRET;
+const secret = runtimeConfig.session.secret;
 const store = MongoStore.create({
 	mongoUrl: dbUrl,
 	touchAfter: 24 * 60 * 60, //24 hrs to update session when nothing has changed. Otherwise, if something does change, it'll update
@@ -150,7 +160,7 @@ const store = MongoStore.create({
 store.on('error', e => logger(null,null,'error',{message:'Session store error', error:e}))
 const sessionConfig= { // setting up the express-session (required for persistent logins with passport)
 	store, //for the storeage of session stuff (using connect-mongo)
-	name: process.env.COOKIE_NAME, //name of the cookie, so it's not too obvious what it is at first glance for hackers
+	name: runtimeConfig.session.cookieName, //name of the cookie, so it's not too obvious what it is at first glance for hackers
 	secret, // Secret for signing session ID
 	resave: false, // No need to resave if not modified
 	rolling: true, // Reset the cookie Max-Age on every request
@@ -165,7 +175,7 @@ const sessionConfig= { // setting up the express-session (required for persisten
 }
 
 // When using actual https (in production),  set cookies to only be sent over https
-if(process.env.NODE_ENV === 'production') {
+if(runtimeConfig.environment.isProduction) {
 	sessionConfig.cookie.secure = true;
 }
 
@@ -234,7 +244,7 @@ app.use(
 				styleSrc: ["'self'", "'unsafe-inline'", ...styleSrcUrls], // 
 				workerSrc: ["'self'",], // "blob:"
 				objectSrc: [],
-				imgSrc: ["'self'","data:","blob:", `https://res.cloudinary.com/${process.env.CLOUDINARY_CLOUD_NAME}/`, 'https://img.youtube.com', 'https://www.googletagmanager.com'], //,
+				imgSrc: ["'self'","data:","blob:", `https://res.cloudinary.com/${runtimeConfig.cloudinary.cloudName}/`, 'https://img.youtube.com', 'https://www.googletagmanager.com'], //,
 				fontSrc: ["'self'", ...fontSrcUrls],
 				frameAncestors: ["'self'"], // What websites to allow to embed this site's pages on their page
 				frameSrc: ["'self'", 'https://www.youtube.com'], // What to allow to embed on this site (ex. Google Maps)
@@ -287,13 +297,6 @@ app.use(exposeCsrfToken);
 
 //WEBSITE-WIDE MESSAGES FROM MONGO DB
 
-//REQUIRE ROUTE FILES
-import userRoutes from './routes/users.js';
-import campRoutes from './routes/camp.js';
-import otherRoutes from './routes/other.js';
-import adminRoutes from './routes/admin.js';
-import crawlingRoutes from './routes/crawling.js';
-
 //USE ROUTE FILES 
 app.use('/user', userRoutes);
 app.use('/camp', campRoutes);
@@ -314,7 +317,7 @@ app.get('/', (req, res) => {
 			meta: {
 				title: 'Find a Park', 
 				description:'See user-uploaded campsite photos and videos of Canadian national, provincial, and territorial parks, before you reserve a campsite.',
-				url: `${process.env.CC_DOMAIN}`,
+				url: runtimeConfig.publicSite.domain,
 				image: `https://camppics.ca/images/images/home-hero-summer.jpg`,
 			},
 			data: { isHomepage: true}
@@ -324,7 +327,7 @@ app.get('/', (req, res) => {
 
 // CATCH ALL NON-EXISTING ROUTES
 // Store typical bot "incorrect URL" keywords in array
-const ignoreURLAttempts = parseUrlPatterns(process.env.IGNORE_URL)
+const ignoreURLAttempts = runtimeConfig.requestFiltering.ignoredNotFoundPatterns
 //__________________________
 app.all('/{*any}', createNotFoundHandler({
 	ignoredPatterns: ignoreURLAttempts,
@@ -369,7 +372,14 @@ process.on('uncaughtException', async function (err) {
 
 
 //PORT LISTENING
-const port = process.env.PORT || 3000
-app.listen(port, process.env.IP, function(){
+const port = runtimeConfig.server.port
+app.listen(port, runtimeConfig.server.host, function(){
 	logger(null,null,'general', {message: `Camp Pics server started - listening on port ${port}...`});
+});
+}
+
+await startWithRuntimeConfig({
+	environment: process.env,
+	start: startApplication,
+	report: reportRuntimeConfigurationFailure,
 });

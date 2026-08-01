@@ -4,12 +4,14 @@ import { describe, test } from 'node:test';
 
 const [
   appSource,
+  runtimeConfigSource,
   getIpSource,
   parserSource,
   cacheSource,
   middlewareSource,
 ] = await Promise.all([
   readFile('app.js', 'utf8'),
+  readFile('config/runtimeConfig.js', 'utf8'),
   readFile('utils/getIP.js', 'utf8'),
   readFile('utils/requestFiltering.js', 'utf8'),
   readFile('utils/blockedClientCache.js', 'utf8'),
@@ -19,12 +21,16 @@ const [
 describe('request-filtering production wiring guards', () => {
   test('both environment values use the startup parser without unsafe direct splitting', () => {
     assert.match(
-      appSource,
-      /parseUrlPatterns\(process\.env\.BLOCK_BOT_URL\)/,
+      runtimeConfigSource,
+      /parseUrlPatterns\(environment\[variable\]\)/,
     );
     assert.match(
       appSource,
-      /parseUrlPatterns\(process\.env\.IGNORE_URL\)/,
+      /runtimeConfig\.requestFiltering\.blockedPatterns/,
+    );
+    assert.match(
+      appSource,
+      /runtimeConfig\.requestFiltering\.ignoredNotFoundPatterns/,
     );
     assert.doesNotMatch(
       appSource,
