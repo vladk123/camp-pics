@@ -9,6 +9,7 @@ const [
   campSource,
   redirectedFlashSource,
   sendEmailSource,
+  requestFilteringMiddlewareSource,
 ] = await Promise.all([
   readFile('utils/logging.js', 'utf8'),
   readFile('app.js', 'utf8'),
@@ -16,6 +17,7 @@ const [
   readFile('controllers/camp.js', 'utf8'),
   readFile('utils/redirectedFlash.js', 'utf8'),
   readFile('utils/sendEmail.js', 'utf8'),
+  readFile('utils/requestFilteringMiddleware.js', 'utf8'),
 ]);
 
 describe('central logger source guards', () => {
@@ -55,9 +57,10 @@ describe('application logging call-site guards', () => {
       appSource,
       /message\s*:\s*`[^`]*\$\{\s*(?:req\.(?:originalUrl|url)|fullUrl)\s*\}/,
     );
+    assert.match(appSource, /reportEvent: logger/);
     assert.match(
-      appSource,
-      /logger\(req, res, 'error', \{ message: 'Non-existent route visited\.'/,
+      requestFilteringMiddlewareSource,
+      /message: 'Non-existent route visited\.'/,
     );
     assert.match(appSource, /message: 'Unhandled request error\.'/);
   });

@@ -149,7 +149,7 @@ test('application middleware order protects all mounted mutation routes after pr
     passportInitialize: app.indexOf('app.use(passport.initialize())'),
     passportSession: app.indexOf('app.use(passport.session())'),
     sessionVersion: app.indexOf('app.use(enforceSessionAuthVersion)'),
-    generalLocals: app.indexOf('app.use(async(req, res, next)'),
+    generalLocals: app.indexOf('// GET CURRENT USER DETAILS LOCALS MIDDLEWARE'),
     csrfProtection: app.indexOf('app.use(csrfSynchronisedProtection)'),
     csrfLocals: app.indexOf('app.use(exposeCsrfToken)'),
     userRoutes: app.indexOf("app.use('/user', userRoutes)"),

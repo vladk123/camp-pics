@@ -27,6 +27,16 @@ import helmet from 'helmet'
 import rateLimiting from 'express-rate-limit' // For limiting how many requests made in a period of time
 import speedLimiting from 'express-slow-down' // For limiting speed depending on how many requests made in a period of time
 import { getIP } from './utils/getIP.js'
+import {
+	DEFAULT_BOT_BLOCK_DURATION_MS,
+	DEFAULT_BOT_BLOCK_MAX_ENTRIES,
+	BlockedClientCache,
+} from './utils/blockedClientCache.js';
+import { parseUrlPatterns } from './utils/requestFiltering.js';
+import {
+	createBotUrlBlocker,
+	createNotFoundHandler,
+} from './utils/requestFilteringMiddleware.js';
 import { initializeParkSearchCache } from './utils/cacheSearch.js';
 import { enforceSessionAuthVersion } from './middleware.js';
 import {
@@ -97,31 +107,17 @@ if(process.env.NODE_ENV === 'production') {
 
 
 // Block possibly malicious bots
-const blockedPatterns = process.env.BLOCK_BOT_URL.split(',');
-const badBotMap = new Map(); // IP -> timestamp of block
-const blockDuration = 48 * 60 * 60 * 1000; // 48 hours
-app.use(async (req, res, next) => {
-	// console.log('1')
-    const ipAddress = await getIP(req);
-
-    // Check if IP is already blocked
-    const blockTime = badBotMap.get(ipAddress);
-	// console.log(blockTime)
-    if (blockTime && (Date.now() - blockTime) < blockDuration) {
-        logger(req, res, 'general', { message: 'Blocked request remains active.', severity: 1 });
-        return res.status(403).send('Nope.');
-    }
-
-    // Check for bad URL patterns
-    const isBot = blockedPatterns.some(pattern => req.originalUrl.includes(pattern));
-    if (isBot) {
-        logger(req, res, 'error', { message: 'Blocked bot request.', severity: 1 });
-        badBotMap.set(ipAddress, Date.now());
-        return res.status(403).send('No.');
-    }
-
-  next();
+const blockedPatterns = parseUrlPatterns(process.env.BLOCK_BOT_URL);
+const botBlockCache = new BlockedClientCache({
+	blockDurationMs: DEFAULT_BOT_BLOCK_DURATION_MS,
+	maxEntries: DEFAULT_BOT_BLOCK_MAX_ENTRIES,
 });
+app.use(createBotUrlBlocker({
+	blockedPatterns,
+	cache: botBlockCache,
+	getClientIp: getIP,
+	reportEvent: logger,
+}));
 
 //CONNECTION TO MONGODB
 const dbUrl = process.env.DB_URL
@@ -260,19 +256,21 @@ app.use(passport.initialize());
 app.use(passport.session());
 app.use(enforceSessionAuthVersion);
 
-// GET CURRENT USER DETAILS LOCALS MIDDLEWARE, AND SET IP
+// Registration and login controllers still persist the canonical request IP.
+// Keep that compatibility value scoped to those POSTs instead of all views.
+app.use(['/user/register', '/user/login'], (req, res, next) => {
+	if (req.method === 'POST') res.locals.ip = getIP(req);
+	next();
+});
+
+// GET CURRENT USER DETAILS LOCALS MIDDLEWARE
 // Locals help us just write "success", "message", etc, directly in the .ejs files
-app.use(async(req, res, next) => { 
+app.use((req, res, next) => {
 	res.locals.currentUser = req.user;
 	res.locals.success = req.flash('success'); 
     res.locals.info = req.flash('info'); 
     res.locals.warning = req.flash('warning');
     res.locals.error = req.flash('error');
-	try{
-		res.locals.ip = await getIP(req)
-	} catch(err){
-		res.locals.ip = null
-	}
 
 	// Google Analytics/Tag Manager( GA4)
 	res.locals.GA4_EVENT = req.session.__GA4_EVENT__ || null;
@@ -326,33 +324,12 @@ app.get('/', (req, res) => {
 
 // CATCH ALL NON-EXISTING ROUTES
 // Store typical bot "incorrect URL" keywords in array
-const ignoreURLAttempts = process.env.IGNORE_URL || []
+const ignoreURLAttempts = parseUrlPatterns(process.env.IGNORE_URL)
 //__________________________
-app.all('/{*any}', (req, res, next) => { 
-	// Don't notify admin about bots
-	// console.log('in any')
-	let foundBotUrl = false
-	for(let keyword of ignoreURLAttempts){
-		if(req.originalUrl.includes(keyword)){
-			foundBotUrl = true
-		}
-	}
-
-    // Don't notify admin about bots & If it's a non-existent route (that isn't in the list above)
-    if (!foundBotUrl) {
-        logger(req, res, 'error', { message: 'Non-existent route visited.', severity: 1 });
-    }
-	
-	// return redirectedFlash(req, res, 'error', `That page does not exist, sorry.`, '/') <- NO, this causes issues with Google search crawler
-	return res.status(404).render('404', {
-		meta: {
-			title: 'Page not found',
-			description: 'This page does not exist.',
-		},
-        data:{}
-	});
-
-})
+app.all('/{*any}', createNotFoundHandler({
+	ignoredPatterns: ignoreURLAttempts,
+	reportEvent: logger,
+}));
 
 // Expected invalid-CSRF failures are handled without reaching the broad logger.
 app.use(csrfErrorHandler);
