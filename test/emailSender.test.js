@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import mongoose from 'mongoose';
 
 process.env.MAILGUN_API_KEY ||= 'test-only-mailgun-key';
 
@@ -48,7 +49,7 @@ test('successful delivery persists only allowlisted metadata and returns the pro
     subject: 'fixture-arbitrary-secret subject',
     template: 'verify-account',
     templateData,
-    userId: 'delivery-user-id',
+    userId: new mongoose.Types.ObjectId('64b7f2d4c9f1e8a123456789'),
     from: 'fixture-provider-from@example.test',
     futureSenderArgument: 'fixture-future-sender-secret',
   });
@@ -95,6 +96,7 @@ test('successful delivery persists only allowlisted metadata and returns the pro
     html: renderedHtml,
   }]]);
   assert.equal(saveCalls, 1);
+  assert.strictEqual(constructed[0].userId, input.userId);
   assert.deepEqual(constructed, [{
     to: input.to,
     template: input.template,
@@ -122,6 +124,70 @@ test('successful delivery persists only allowlisted metadata and returns the pro
   }
   assert.strictEqual(input.templateData, templateData);
   assert.strictEqual(providerResult.request.html, renderedHtml);
+});
+
+test('absent, null, undefined, and blank user IDs are omitted from metadata', async t => {
+  const cases = [
+    ['no userId argument', {}],
+    ['undefined userId', { userId: undefined }],
+    ['null userId', { userId: null }],
+    ['blank userId', { userId: '' }],
+  ];
+
+  for (const [name, userIdInput] of cases) {
+    await t.test(name, async () => {
+      const providerResult = Object.freeze({
+        id: `<${name.replaceAll(' ', '-')}@example.test>`,
+        message: 'Queued',
+      });
+      const providerCalls = [];
+      const constructed = [];
+
+      class EmailModel {
+        constructor(metadata) {
+          constructed.push(metadata);
+        }
+
+        async save() {}
+      }
+
+      const sender = createEmailSender({
+        renderTemplate: async () => '<p>rendered</p>',
+        mailClient: createMailClient({
+          result: providerResult,
+          calls: providerCalls,
+        }),
+        EmailModel,
+        async log() {},
+        now: () => SENT_AT,
+        domain: DOMAIN,
+        defaultFrom: DEFAULT_FROM,
+      });
+
+      const input = {
+        to: 'contact@example.test',
+        subject: 'Contact form submission',
+        template: 'email-contact-form-submission',
+        ...userIdInput,
+      };
+      const returned = await sender(input);
+
+      assert.strictEqual(returned, providerResult);
+      assert.deepEqual(providerCalls, [[DOMAIN, {
+        from: DEFAULT_FROM,
+        to: input.to,
+        subject: input.subject,
+        html: '<p>rendered</p>',
+      }]]);
+      assert.deepEqual(constructed, [{
+        to: input.to,
+        template: input.template,
+        messageId: providerResult.id,
+        sentAt: SENT_AT,
+      }]);
+      assert.equal(Object.hasOwn(constructed[0], 'userId'), false);
+    });
+  }
 });
 
 test('constructor failure after provider success is reported but delivery still resolves', async () => {
@@ -374,7 +440,6 @@ test('missing, non-string, and excessively long provider IDs are omitted', async
       assert.deepEqual(constructed[0], {
         to: 'camper@example.test',
         template: 'verify-account',
-        userId: null,
         sentAt: SENT_AT,
       });
     });

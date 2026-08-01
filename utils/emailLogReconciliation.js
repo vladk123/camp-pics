@@ -13,7 +13,7 @@ export const EMAIL_LOG_MALFORMED_ISSUES = Object.freeze({
   INVALID_SENT_AT: 'invalid-sent-at',
   INVALID_TEMPLATE: 'invalid-template-type',
   INVALID_MESSAGE_ID: 'invalid-message-id-type',
-  INVALID_USER_ID: 'invalid-user-id-type',
+  INVALID_USER_ID: 'invalid-user-id',
   UNKNOWN_FIELDS: 'unknown-top-level-fields',
 });
 
@@ -159,6 +159,7 @@ function createSummary(apply) {
       templatePresentInvalidType: 0,
       userIdPresent: 0,
       userIdAbsent: 0,
+      userIdNull: 0,
       userIdPresentObjectId: 0,
       userIdPresentInvalidType: 0,
       messageIdPresent: 0,
@@ -232,6 +233,22 @@ function countOptionalShape({
   }
 }
 
+function countUserIdShape(metadataShape, row) {
+  if (row.userIdPresent !== true) {
+    metadataShape.userIdAbsent += 1;
+    return;
+  }
+
+  metadataShape.userIdPresent += 1;
+  if (row.userIdNull === true) {
+    metadataShape.userIdNull += 1;
+  } else if (row.userIdValid === true) {
+    metadataShape.userIdPresentObjectId += 1;
+  } else {
+    metadataShape.userIdPresentInvalidType += 1;
+  }
+}
+
 function auditRow(summary, row, sampleLimit) {
   if (!row || !VALID_AGE_BUCKETS.has(row.ageBucket)) {
     throw new TypeError('Repository returned an invalid Email audit row.');
@@ -258,13 +275,7 @@ function auditRow(summary, row, sampleLimit) {
     prefix: 'template',
     validSuffix: 'String',
   });
-  countOptionalShape({
-    metadataShape: summary.metadataShape,
-    present: row.userIdPresent === true,
-    valid: row.userIdValid === true,
-    prefix: 'userId',
-    validSuffix: 'ObjectId',
-  });
+  countUserIdShape(summary.metadataShape, row);
   countOptionalShape({
     metadataShape: summary.metadataShape,
     present: row.messageIdPresent === true,
@@ -298,7 +309,11 @@ function auditRow(summary, row, sampleLimit) {
   if (row.messageIdPresent === true && row.messageIdValid !== true) {
     issues.push(EMAIL_LOG_MALFORMED_ISSUES.INVALID_MESSAGE_ID);
   }
-  if (row.userIdPresent === true && row.userIdValid !== true) {
+  if (
+    row.userIdPresent === true &&
+    row.userIdNull !== true &&
+    row.userIdValid !== true
+  ) {
     issues.push(EMAIL_LOG_MALFORMED_ISSUES.INVALID_USER_ID);
   }
   if (row.unknownTopLevelFields === true) {

@@ -70,14 +70,33 @@ missing-sent-at
 invalid-sent-at
 invalid-template-type
 invalid-message-id-type
-invalid-user-id-type
+invalid-user-id
 unknown-top-level-fields
 ```
 
 Optional `template` and `messageId` fields are valid BSON strings when present;
-`userId` is a valid BSON ObjectId when present. A recipient must be a non-empty
-BSON string. `sentAt` must be a real BSON date. Missing `template` is expected
-for legacy records. Legacy content alone is not malformed.
+`userId` is optional. A missing `userId` and an explicit BSON null are both
+accepted, including null values in historical or current records. A present,
+non-null `userId` must be a BSON ObjectId; only other present, non-null values
+receive `invalid-user-id` and make the document malformed. This command does
+not repair, unset, or normalize any `userId` value.
+
+The metadata-shape counters preserve `userIdPresent` and `userIdAbsent` as
+field-existence counts. `userIdPresent` includes null and non-null values;
+`userIdAbsent` includes only documents where the field does not exist. Present
+values are divided into `userIdNull`, `userIdPresentObjectId`, and
+`userIdPresentInvalidType`, so these counts reconcile as:
+
+```text
+userIdPresent =
+  userIdNull +
+  userIdPresentObjectId +
+  userIdPresentInvalidType
+```
+
+A recipient must be a non-empty BSON string. `sentAt` must be a real BSON date.
+Missing `template` is expected for legacy records. Legacy content alone is not
+malformed.
 
 ## Apply warning
 

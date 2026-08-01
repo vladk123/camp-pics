@@ -68,6 +68,7 @@ function safeAuditRow(document, now) {
     templatePresent: Object.hasOwn(document, 'template'),
     templateValid: typeof document.template === 'string',
     userIdPresent: Object.hasOwn(document, 'userId'),
+    userIdNull: Object.hasOwn(document, 'userId') && document.userId === null,
     userIdValid: document.userId instanceof mongoose.Types.ObjectId,
     messageIdPresent: Object.hasOwn(document, 'messageId'),
     messageIdValid: typeof document.messageId === 'string',
@@ -279,6 +280,7 @@ describe('Email log reconciliation audit', () => {
       templatePresentInvalidType: 1,
       userIdPresent: 3,
       userIdAbsent: 5,
+      userIdNull: 0,
       userIdPresentObjectId: 2,
       userIdPresentInvalidType: 1,
       messageIdPresent: 3,
@@ -354,6 +356,89 @@ describe('Email log reconciliation audit', () => {
     assert.equal(summary.planned, 1);
     assert.equal(summary.metadataShape.templateAbsent, 1);
     assert.equal(summary.malformed, 0);
+  });
+
+  test('classifies every optional userId shape without treating missing or null as malformed', async () => {
+    const sensitiveInvalidUserId = 'sensitive-invalid-user-id-fixture-4f91';
+    const documents = [
+      { _id: id(200), to: 'missing@example.test', sentAt: NOW },
+      { _id: id(201), to: 'null@example.test', userId: null, sentAt: NOW },
+      { _id: id(202), to: 'valid@example.test', userId: id(302), sentAt: NOW },
+      { _id: id(203), to: 'blank@example.test', userId: '', sentAt: NOW },
+      {
+        _id: id(204),
+        to: 'string@example.test',
+        userId: sensitiveInvalidUserId,
+        sentAt: NOW,
+      },
+      { _id: id(205), to: 'number@example.test', userId: 123, sentAt: NOW },
+      { _id: id(206), to: 'object@example.test', userId: {}, sentAt: NOW },
+      { _id: id(207), to: '', userId: [], sentAt: NOW },
+    ];
+    const { repository } = makeRepository(documents);
+
+    const summary = await reconcileEmailLogs({
+      repository,
+      sampleLimit: 20,
+      now: () => NOW,
+    });
+
+    assert.equal(EMAIL_LOG_MALFORMED_ISSUES.INVALID_USER_ID, 'invalid-user-id');
+    assert.equal(summary.scanned, 8);
+    assert.equal(summary.planned, 0);
+    assert.equal(summary.malformed, 5);
+    assert.deepEqual(summary.metadataShape, {
+      templatePresent: 0,
+      templateAbsent: 8,
+      templatePresentString: 0,
+      templatePresentInvalidType: 0,
+      userIdPresent: 7,
+      userIdAbsent: 1,
+      userIdNull: 1,
+      userIdPresentObjectId: 1,
+      userIdPresentInvalidType: 5,
+      messageIdPresent: 0,
+      messageIdAbsent: 8,
+      messageIdPresentString: 0,
+      messageIdPresentInvalidType: 0,
+      sentAtBsonDate: 8,
+      sentAtMissing: 0,
+      sentAtPresentNonDate: 0,
+      recipientNonEmptyString: 7,
+      recipientMissingEmptyOrInvalidType: 1,
+      unknownTopLevelFields: 0,
+    });
+    assert.equal(
+      summary.metadataShape.userIdPresent,
+      summary.metadataShape.userIdNull +
+        summary.metadataShape.userIdPresentObjectId +
+        summary.metadataShape.userIdPresentInvalidType,
+    );
+
+    const malformedById = new Map(
+      summary.samples.malformed.map(sample => [sample.emailId, sample.issues]),
+    );
+    for (const validDocument of documents.slice(0, 3)) {
+      assert.equal(malformedById.has(validDocument._id.toString()), false);
+    }
+    for (const invalidDocument of documents.slice(3)) {
+      assert.ok(
+        malformedById.get(invalidDocument._id.toString())
+          .includes('invalid-user-id'),
+      );
+    }
+    assert.deepEqual(malformedById.get(documents[7]._id.toString()), [
+      EMAIL_LOG_MALFORMED_ISSUES.INVALID_RECIPIENT,
+      EMAIL_LOG_MALFORMED_ISSUES.INVALID_USER_ID,
+    ]);
+    assert.equal(
+      summary.samples.malformed.reduce(
+        (total, sample) => total + sample.issues.length,
+        0,
+      ),
+      6,
+    );
+    assert.doesNotMatch(JSON.stringify(summary), /sensitive-invalid-user-id/u);
   });
 });
 
@@ -468,6 +553,76 @@ describe('Email log reconciliation apply behavior', () => {
     assert.equal(second.skipped, 3);
     assert.equal(second.remainingSensitive, 0);
     assert.equal(calls.writeBatches.length, writesAfterFirstRun);
+  });
+
+  test('redacts legacy content for missing, null, and malformed user IDs without changing userId', async () => {
+    const sensitiveInvalidUserId = 'redaction-sensitive-user-id-fixture-8c12';
+    const documents = [
+      {
+        _id: id(230),
+        to: 'missing@example.test',
+        html: '<p>sensitive-missing-html-fixture</p>',
+        subject: 'sensitive-missing-subject-fixture',
+        sentAt: NOW,
+      },
+      {
+        _id: id(231),
+        to: 'null@example.test',
+        html: '<p>sensitive-null-html-fixture</p>',
+        subject: 'sensitive-null-subject-fixture',
+        userId: null,
+        sentAt: NOW,
+      },
+      {
+        _id: id(232),
+        to: '',
+        html: '<p>sensitive-invalid-html-fixture</p>',
+        subject: 'sensitive-invalid-subject-fixture',
+        userId: sensitiveInvalidUserId,
+        sentAt: NOW,
+      },
+    ];
+    const originals = documents.map(document => ({ ...document }));
+    const { repository } = makeRepository(documents);
+
+    const first = await reconcileEmailLogs({
+      repository,
+      apply: true,
+      batchSize: 2,
+      sampleLimit: 20,
+      now: () => NOW,
+    });
+
+    assert.equal(first.planned, 3);
+    assert.equal(first.changed, 3);
+    assert.equal(first.malformed, 1);
+    assert.equal(first.remainingSensitive, 0);
+    assert.deepEqual(
+      documents.map(withoutLegacyContent),
+      originals.map(withoutLegacyContent),
+    );
+    assert.equal(Object.hasOwn(documents[0], 'userId'), false);
+    assert.equal(Object.hasOwn(documents[1], 'userId'), true);
+    assert.strictEqual(documents[1].userId, null);
+    assert.strictEqual(documents[2].userId, sensitiveInvalidUserId);
+    assert.ok(documents.every(document =>
+      !Object.hasOwn(document, 'html') &&
+      !Object.hasOwn(document, 'subject')
+    ));
+    assert.doesNotMatch(
+      JSON.stringify(first),
+      /redaction-sensitive-user-id|sensitive-(?:missing|null|invalid)-(?:html|subject)/u,
+    );
+
+    const second = await reconcileEmailLogs({
+      repository,
+      apply: true,
+      batchSize: 2,
+      now: () => NOW,
+    });
+    assert.equal(second.planned, 0);
+    assert.equal(second.changed, 0);
+    assert.equal(second.remainingSensitive, 0);
   });
 
   test('counts disappeared and concurrently redacted candidates as skipped', async () => {

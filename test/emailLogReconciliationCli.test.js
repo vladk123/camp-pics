@@ -173,6 +173,7 @@ describe('Mongo Email log repository', () => {
           templatePresent: false,
           templateValid: false,
           userIdPresent: false,
+          userIdNull: false,
           userIdValid: false,
           messageIdPresent: false,
           messageIdValid: false,
@@ -232,9 +233,13 @@ describe('Mongo Email log repository', () => {
       'templatePresent',
       'templateValid',
       'unknownTopLevelFields',
+      'userIdNull',
       'userIdPresent',
       'userIdValid',
     ].sort());
+    assert.deepEqual(projection.userIdNull, {
+      $eq: [{ $type: '$userId' }, 'null'],
+    });
     for (const sensitiveOutput of [
       'html',
       'subject',
@@ -372,7 +377,7 @@ describe('Email log CLI lifecycle and safe output', () => {
       template: 'verify-account',
       subject: 'private-contact-message-fixture',
       html: '<a>verification-token-fixture-9f32</a>',
-      userId: id(110),
+      userId: 'sensitive-user-id-fixture-5d73',
       messageId: 'provider-message-id-fixture-73bc',
       sentAt: NOW,
     };
@@ -386,8 +391,8 @@ describe('Email log CLI lifecycle and safe output', () => {
             templatePresent: Object.hasOwn(rawDocument, 'template'),
             templateValid: typeof rawDocument.template === 'string',
             userIdPresent: Object.hasOwn(rawDocument, 'userId'),
-            userIdValid:
-              rawDocument.userId instanceof mongoose.Types.ObjectId,
+            userIdNull: rawDocument.userId === null,
+            userIdValid: false,
             messageIdPresent: Object.hasOwn(rawDocument, 'messageId'),
             messageIdValid: typeof rawDocument.messageId === 'string',
             recipientValid:
@@ -424,7 +429,7 @@ describe('Email log CLI lifecycle and safe output', () => {
     assert.match(output, /"mode": "dry-run"/u);
     assert.doesNotMatch(
       output,
-      /verification-token-fixture|recipient@example|provider-message|private-contact-message/u,
+      /verification-token-fixture|recipient@example|provider-message|private-contact-message|sensitive-user-id/u,
     );
   });
 
@@ -441,6 +446,7 @@ describe('Email log CLI lifecycle and safe output', () => {
             templatePresent: false,
             templateValid: false,
             userIdPresent: false,
+            userIdNull: false,
             userIdValid: false,
             messageIdPresent: false,
             messageIdValid: false,

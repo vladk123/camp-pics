@@ -55,7 +55,7 @@ export function createEmailSender({
     subject,
     template,
     templateData = {},
-    userId = null,
+    userId,
     from = defaultFrom,
   }) {
     let html;
@@ -96,8 +96,14 @@ export function createEmailSender({
       const metadata = {
         to,
         template,
-        userId,
       };
+      if (
+        userId !== undefined &&
+        userId !== null &&
+        !(typeof userId === 'string' && userId.trim().length === 0)
+      ) {
+        metadata.userId = userId;
+      }
       const messageId = providerMessageId(result);
       if (messageId !== undefined) {
         metadata.messageId = messageId;

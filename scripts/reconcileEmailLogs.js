@@ -169,6 +169,7 @@ function auditProjection(now) {
     templatePresent: fieldPresent('template'),
     templateValid: fieldHasType('template', 'string'),
     userIdPresent: fieldPresent('userId'),
+    userIdNull: fieldHasType('userId', 'null'),
     userIdValid: fieldHasType('userId', 'objectId'),
     messageIdPresent: fieldPresent('messageId'),
     messageIdValid: fieldHasType('messageId', 'string'),
