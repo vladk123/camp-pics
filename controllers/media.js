@@ -288,7 +288,10 @@ async function uploadPhotoHandler(req, res, next, dependencies) {
             error: "Each file must be under 10MB.",
             message: "Each file must be under 10MB.",
           });
-        } else if (err.code === "LIMIT_UNEXPECTED_FILE") {
+        } else if (
+          err.code === "LIMIT_UNEXPECTED_FILE" ||
+          err.code === "LIMIT_FILE_COUNT"
+        ) {
           res.status(400).json({
             error: "Too many files uploaded.",
             message: "Too many files uploaded.",

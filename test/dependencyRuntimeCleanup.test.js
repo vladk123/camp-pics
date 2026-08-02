@@ -30,7 +30,7 @@ const expectedDependencies = {
   'mailgun.js': '^12.1.1',
   'method-override': '^3.0.0',
   mongoose: '^8.19.1',
-  multer: '^2.0.2',
+  multer: '^2.2.0',
   passport: '^0.7.0',
   'passport-local': '^1.0.0',
   'passport-local-mongoose': '^8.0.0',
@@ -77,6 +77,47 @@ describe('dependency and runtime cleanup guards', () => {
     assert.deepEqual(lockRoot.dependencies, packageJson.dependencies);
     assert.deepEqual(packageJson.engines, { node: '24.x', npm: '11.x' });
     assert.deepEqual(lockRoot.engines, packageJson.engines);
+    assert.equal(packageJson.dependencies.multer, '^2.2.0');
+    assert.equal(lockRoot.dependencies.multer, '^2.2.0');
+    assert.equal(
+      packageLock.packages['node_modules/multer'].version,
+      '2.2.0',
+    );
+    assert.equal(
+      packageLock.packages['node_modules/multer'].resolved,
+      'https://registry.npmjs.org/multer/-/multer-2.2.0.tgz',
+    );
+    assert.equal(
+      packageLock.packages['node_modules/multer'].integrity,
+      'sha512-6rdyFg2kLrMh9Jee7/BMPuV9lEAd7lLW2YUpF9/YxR7njyoUwwQ0ZPh3TaIY50Sw6vlyD2HW3wGOkTS4P79xrQ==',
+    );
+    assert.deepEqual(
+      packageLock.packages['node_modules/multer'].dependencies,
+      {
+        'append-field': '^1.0.0',
+        busboy: '^1.6.0',
+        'concat-stream': '^2.0.0',
+        'type-is': '^1.6.18',
+      },
+    );
+    assert.deepEqual(
+      packageLock.packages['node_modules/multer'].funding,
+      {
+        type: 'opencollective',
+        url: 'https://opencollective.com/express',
+      },
+    );
+    for (const dependency of [
+      'minimist',
+      'mkdirp',
+      'object-assign',
+      'xtend',
+    ]) {
+      assert.equal(
+        Object.hasOwn(packageLock.packages, `node_modules/${dependency}`),
+        false,
+      );
+    }
     assert.equal(packageJson.dependencies['form-data'], '^4.0.6');
     assert.equal(lockRoot.dependencies['form-data'], '^4.0.6');
     assert.equal(
@@ -183,5 +224,9 @@ describe('dependency and runtime cleanup guards', () => {
     assert.match(middleware, /^import multer from 'multer';$/mu);
     assert.match(middleware, /export const uploadMemory = multer\(\{/u);
     assert.match(middleware, /storage: multer\.memoryStorage\(\)/u);
+    assert.match(
+      middleware,
+      /const PHOTO_UPLOAD_LIMITS = Object\.freeze\(\{[\s\S]*?\}\);/u,
+    );
   });
 });

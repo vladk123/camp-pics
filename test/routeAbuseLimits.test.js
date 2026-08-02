@@ -2764,7 +2764,7 @@ describe('dependency, dead-helper, global-protection, and documentation guards',
       'mailgun.js': '^12.1.1',
       'method-override': '^3.0.0',
       mongoose: '^8.19.1',
-      multer: '^2.0.2',
+      multer: '^2.2.0',
       passport: '^0.7.0',
       'passport-local': '^1.0.0',
       'passport-local-mongoose': '^8.0.0',
@@ -3016,6 +3016,7 @@ describe('dependency, dead-helper, global-protection, and documentation guards',
       .filter(Boolean)
       .filter(line => (
         !new Set([
+          'controllers/media.js',
           'controllers/users.js',
           'middleware.js',
           'package.json',

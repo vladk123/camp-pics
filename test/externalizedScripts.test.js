@@ -810,6 +810,7 @@ describe('CSP and scope regression guards for externalization', () => {
       'public/js/passwordPolicy.js',
     ], { cwd: root, encoding: 'utf8' });
     const allowedProtectedFiles = new Set([
+      'controllers/media.js',
       'controllers/users.js',
       'middleware.js',
       'routes/users.js',

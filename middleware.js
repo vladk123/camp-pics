@@ -127,9 +127,26 @@ export const catchAsyncErrors = (fn) => {
 }
 
 
+const MAX_PHOTO_FILES = 5;
+const MAX_PHOTO_FIELDS = 4;
+const MAX_ACCEPTED_PHOTO_PARTS = MAX_PHOTO_FILES + MAX_PHOTO_FIELDS;
+
+const PHOTO_UPLOAD_LIMITS = Object.freeze({
+  fileSize: 10 * 1024 * 1024,
+  files: MAX_PHOTO_FILES,
+  fields: MAX_PHOTO_FIELDS,
+
+  // Busboy emits partsLimit when its counter reaches this threshold.
+  // Use accepted application parts + 1 so nine parts succeed and
+  // the tenth is rejected.
+  parts: MAX_ACCEPTED_PHOTO_PARTS + 1,
+
+  fieldNestingDepth: 0,
+});
+
 export const uploadMemory = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB limit just in case
+  limits: PHOTO_UPLOAD_LIMITS,
 });
 
 
