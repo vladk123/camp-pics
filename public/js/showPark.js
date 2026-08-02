@@ -125,10 +125,7 @@ function showCampsitePopup(data) {
   if (!campsiteMediaItems.length) {
     // Show "no media" slide
     const slide = document.createElement('div');
-    slide.className = 'swiper-slide';
-    slide.style.display = 'flex';
-    slide.style.alignItems = 'center';
-    slide.style.justifyContent = 'center';
+    slide.className = 'swiper-slide campsite-media-empty-slide';
     if (window.CURRENT_USER_ID) {
       slide.append(
         document.createTextNode('No media uploaded for this campsite. Feel free to '),
@@ -156,9 +153,8 @@ function showCampsitePopup(data) {
         const img = mediaRendering.createImageElement({
           src: item.url,
           alt: item.caption || `Photo ${index + 1}`,
-          className: 'photo',
+          className: 'photo media-fullscreen-trigger',
         });
-        img.style.cursor = 'pointer';
 
         img.addEventListener('click', () => {
           openCampsiteFullscreen('photo', item.url, slideCaption);
@@ -185,7 +181,7 @@ function showCampsitePopup(data) {
 
         slide.append(video, caption);
 
-        caption.style.cursor = 'pointer';
+        caption.classList.add('media-fullscreen-trigger');
         caption.addEventListener('click', () => {
           openCampsiteFullscreen('video', item.url, slideCaption);
         });
@@ -578,7 +574,7 @@ async function refreshParkMedia() {
 
   const sliderSection = document.getElementById('park-media-slider');
   const noMediaEl = document.getElementById('no-park-media');
-  noMediaEl.style.textAlign = 'center'
+  noMediaEl.classList.add('park-media-empty')
 
   // If no park media, don't show any slider stuff
   if (mediaItems.length === 0) {

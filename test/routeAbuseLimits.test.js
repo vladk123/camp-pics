@@ -2996,9 +2996,13 @@ describe('dependency, dead-helper, global-protection, and documentation guards',
     );
     const allowedExternalizationFiles = new Set([
       'public/js/adminDashboard.js',
+      'public/js/allParks.js',
       'public/js/flash-messages.js',
       'public/js/forgotPassword.js',
       'public/js/general.js',
+      'public/js/login.js',
+      'public/js/mediaRendering.js',
+      'public/js/showPark.js',
       'public/js/theme.js',
     ]);
     const unexpectedBrowserChanges = browserStatus

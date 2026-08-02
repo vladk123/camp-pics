@@ -234,35 +234,17 @@ document.addEventListener('DOMContentLoaded', () => {
   (function changeBackgroundImg() {
     const currentDate = new Date();
     const currentMonthNumber = currentDate.getMonth()+1;
+    let season = 'winter';
 
-    const homeHero = document.getElementById('home-hero')
-    const homeNav = document.getElementById('navbar')
-    const homeNavBg = homeNav.querySelector('.background')
-    const homeNavExists = homeNav.classList.contains('home') // Make sure it's on the home page
+    if (currentMonthNumber >= 9 && currentMonthNumber < 11) {
+      season = 'autumn';
+    } else if (currentMonthNumber >= 6 && currentMonthNumber < 9) {
+      season = 'summer';
+    } else if (currentMonthNumber >= 3 && currentMonthNumber < 6) {
+      season = 'spring';
+    }
 
-    // Set home page hero OR navbar (if not on home page)
-    // If winter
-    if(currentMonthNumber >= 11 || currentMonthNumber < 3){
-      if(homeHero) {homeHero.style.backgroundImage = "url('/images/images/home-hero-winter.jpg')"}
-      // if(!homeNavExists) {homeNavBg.style.backgroundImage = "url('/images/images/home-hero-winter.jpg')"}
-      if(!homeNavExists) {homeNavBg.style.backgroundColor = "var(--winter-color)"}
-    // If fall
-    } else if(currentMonthNumber >= 9){
-      if(homeHero) {homeHero.style.backgroundImage = "url('/images/images/home-hero-autumn.jpg')"}
-      // if(!homeNavExists) {homeNavBg.style.backgroundImage = "url('/images/images/home-hero-autumn.jpg')"}
-      if(!homeNavExists) {homeNavBg.style.backgroundColor = "var(--autumn-color)"}
-    // If summer
-    } else if(currentMonthNumber >= 6){
-      if(homeHero) {homeHero.style.backgroundImage = "url('/images/images/home-hero-summer.jpg')"}
-      // if(!homeNavExists) {homeNavBg.style.backgroundImage = "url('/images/images/home-hero-summer.jpg')"}
-      if(!homeNavExists) {homeNavBg.style.backgroundColor = "var(--summer-color)"}
-    // If spring
-    } else if(currentMonthNumber >= 3){
-      if(homeHero) {homeHero.style.backgroundImage = "url('/images/images/home-hero-spring.jpg')"}
-      // if(!homeNavExists) {homeNavBg.style.backgroundImage = "url('/images/images/home-hero-spring.jpg')"}
-      if(!homeNavExists) {homeNavBg.style.backgroundColor = "var(--spring-color)"}
-
-    } 
+    document.documentElement.dataset.season = season;
   })();
 
   // Navbar logic
@@ -276,13 +258,13 @@ document.addEventListener('DOMContentLoaded', () => {
   function openMenu() {
     navLinks.classList.add('open');
     backdrop.classList.add('visible');
-    document.body.style.overflow = 'hidden';
+    document.body.classList.add('nav-scroll-locked');
   }
 
   function closeMenu() {
     navLinks.classList.remove('open');
     backdrop.classList.remove('visible');
-    document.body.style.overflow = '';
+    document.body.classList.remove('nav-scroll-locked');
   }
 
   toggle.addEventListener('click', openMenu);

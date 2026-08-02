@@ -85,9 +85,8 @@
 
     const verification = document.createElement('span');
     verification.textContent = `[${Boolean(user.email_verified)}]`;
-    if (!user.email_verified) {
-      verification.style.backgroundColor = 'rgb(255, 112, 112)';
-    }
+    verification.className =
+      `admin-email-status${user.email_verified ? '' : ' admin-email-status--unverified'}`;
 
     const name = document.createElement('strong');
     name.textContent = user.fname == null ? '' : String(user.fname);

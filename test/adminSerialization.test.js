@@ -300,8 +300,10 @@ describe('dynamic administrator user rows', () => {
       assert.equal(button.textContent, fixture.label);
       assert.equal(verification.textContent, `[${fixture.blocked}]`);
       assert.equal(
-        verification.style.backgroundColor,
-        fixture.blocked ? undefined : 'rgb(255, 112, 112)',
+        verification.className,
+        fixture.blocked
+          ? 'admin-email-status'
+          : 'admin-email-status admin-email-status--unverified',
       );
     }
 

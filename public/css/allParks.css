@@ -125,6 +125,11 @@
   color: var(--orange);
 }
 
+.all-parks-result-province {
+  font-size: var(--font-extra-extra-small);
+  font-weight: normal;
+}
+
 @media (max-width: 992px) {
   #all-parks-container {
     flex-direction: column;

@@ -73,6 +73,20 @@ body{
     width: 100%;
 }
 
+body.nav-scroll-locked {
+  overflow: hidden;
+}
+
+.gtm-noscript-frame,
+.logout-form,
+.registration-honeypot {
+  display: none;
+}
+
+.gtm-noscript-frame {
+  visibility: hidden;
+}
+
 [data-theme="dark"] body{
   scrollbar-color: var(--white) var(--brown);
 }
@@ -246,6 +260,22 @@ nav .background{
   height: 100%;
   box-sizing: border-box;
   cursor: default;
+}
+
+html[data-season="winter"] nav:not(.home) .background {
+  background-color: var(--winter-color);
+}
+
+html[data-season="spring"] nav:not(.home) .background {
+  background-color: var(--spring-color);
+}
+
+html[data-season="summer"] nav:not(.home) .background {
+  background-color: var(--summer-color);
+}
+
+html[data-season="autumn"] nav:not(.home) .background {
+  background-color: var(--autumn-color);
 }
 
 [data-theme="dark"] nav .nav-tear img{
@@ -754,6 +784,54 @@ footer > a{
   overflow-y: auto;
 }
 
+.media-caption--hidden {
+  display: none !important;
+}
+
+.media-fullscreen-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  cursor: zoom-out;
+}
+
+.media-fullscreen-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  margin: 0 auto;
+  max-width: 90%;
+}
+
+.media-fullscreen-image,
+.media-fullscreen-video {
+  display: block;
+  margin: 0 auto;
+  max-width: 90vw;
+  max-height: 80vh;
+  border-radius: 8px;
+}
+
+.media-fullscreen-video {
+  width: 90vw;
+  height: 70vh;
+}
+
+.overlay-caption {
+  margin-top: 12px;
+  font-size: 1rem;
+  color: #ccc;
+  font-style: italic;
+  max-width: 90%;
+  line-height: 1.4em;
+}
+
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(0); }
   to { opacity: 1; transform: translateY(0); }
@@ -1010,6 +1088,26 @@ footer > a{
   min-height: 450px;
 }
 
+.home-hero-spacer {
+  height: 100px;
+}
+
+html[data-season="winter"] #home-hero {
+  background-image: url('/images/images/home-hero-winter.jpg');
+}
+
+html[data-season="spring"] #home-hero {
+  background-image: url('/images/images/home-hero-spring.jpg');
+}
+
+html[data-season="summer"] #home-hero {
+  background-image: url('/images/images/home-hero-summer.jpg');
+}
+
+html[data-season="autumn"] #home-hero {
+  background-image: url('/images/images/home-hero-autumn.jpg');
+}
+
 #home-hero *{
   z-index: 2;
   position: relative;
@@ -1143,6 +1241,23 @@ footer > a{
   object-fit: cover;
 }
 
+.park-result-campground-name {
+  font-size: var(--font-extra-small);
+}
+
+.park-result-province {
+  font-size: var(--font-extra-extra-small);
+  font-weight: normal;
+}
+
+.not-found-guidance {
+  text-align: center;
+}
+
+.error-page-spacer {
+  height: 50px;
+}
+
 @media (max-width: 768px) {
   .park-result-div img{
     min-width: 100px;
@@ -1195,6 +1310,14 @@ footer > a{
   flex: 1;
   min-height: 0;   /* override default */
   resize: vertical;
+}
+
+.contact-submit-row {
+  width: 100%;
+}
+
+.contact-submit-button.btn.btn-primary {
+  margin: 40px auto 0;
 }
 
 /* Mobile */

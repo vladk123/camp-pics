@@ -337,37 +337,6 @@
   flex-shrink: 0; /* prevent it from shrinking or forcing scroll */
 }
 
-/* Full screen media captions */
-.overlay-media-wrapper {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  margin: 0 auto;
-  max-width: 90%;
-}
-
-.overlay-media-wrapper img,
-.overlay-media-wrapper iframe {
-  display: block;
-  margin: 0 auto;
-  max-width: 90vw;
-  max-height: 80vh;
-  border-radius: 8px;
-}
-
-.overlay-caption {
-  margin-top: 12px;
-  font-size: 1rem;
-  color: #ccc;
-  font-style: italic;
-  max-width: 90%;
-  line-height: 1.4em;
-}
-
-
-
 .reviews-section {
   border-top: 1px solid #ddd;
   padding-top: 1rem;
@@ -502,6 +471,23 @@
 /* === Upload Section Layout === */
 #park-media{
   margin-top: 100px;
+}
+
+.park-media-instructions {
+  text-align: center;
+}
+
+.park-media-upload-button.btn.btn-primary {
+  margin: auto;
+}
+
+.park-media-login-prompt {
+  margin: 100px auto 0;
+  text-align: center;
+}
+
+.park-media-empty {
+  text-align: center;
 }
 
 .upload-section {
@@ -727,6 +713,21 @@
   justify-content: center;
   align-items: center;
   flex-direction: column;
+}
+
+.campsite-media-empty-slide {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.media-fullscreen-trigger {
+  cursor: pointer;
+}
+
+.campsite-upload-login-prompt {
+  padding: 20px;
+  margin: auto;
 }
 
 .campsiteSwiper .swiper-wrapper {

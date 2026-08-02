@@ -89,7 +89,7 @@
     const caption = document.createElement(tagName);
     caption.className = className;
     caption.textContent = text == null ? '' : String(text);
-    if (hidden) caption.style.display = 'none';
+    if (hidden) caption.classList.add('media-caption--hidden');
     return caption;
   }
 
@@ -207,33 +207,20 @@
       : createImageElement({
           src: url,
           alt: caption,
-          className: '',
+          className: 'media-fullscreen-image',
           fallbackSrc: '',
         });
 
     if (!media || (type !== 'video' && !getSafeHttpUrl(url))) return null;
 
     const overlay = document.createElement('div');
-    overlay.style.position = 'fixed';
-    overlay.style.inset = '0';
-    overlay.style.background = 'rgba(0,0,0,0.9)';
-    overlay.style.display = 'flex';
-    overlay.style.alignItems = 'center';
-    overlay.style.justifyContent = 'center';
-    overlay.style.zIndex = '9999';
-    overlay.style.cursor = 'zoom-out';
+    overlay.className = 'media-fullscreen-overlay';
 
     const mediaWrapper = document.createElement('div');
-    mediaWrapper.className = 'overlay-media-wrapper';
+    mediaWrapper.className = 'media-fullscreen-content';
 
     if (type === 'video') {
-      media.style.width = '90vw';
-      media.style.height = '70vh';
-      media.style.borderRadius = '8px';
-    } else {
-      media.style.maxWidth = '90vw';
-      media.style.maxHeight = '80vh';
-      media.style.borderRadius = '8px';
+      media.className = 'media-fullscreen-video';
     }
 
     mediaWrapper.appendChild(media);

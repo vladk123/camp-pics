@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { before, describe, test } from 'node:test';
 
@@ -102,6 +103,12 @@ function findByTag(element, tagName) {
     if (match) return match;
   }
   return null;
+}
+
+function assertNoInlineStyles(element) {
+  assert.equal(element.getAttribute('style'), null);
+  assert.deepEqual(element.style, {});
+  element.children.forEach(assertNoInlineStyles);
 }
 
 const captionPayloads = [
@@ -211,6 +218,17 @@ describe('browser media rendering', () => {
     assert.equal(findByClass(slidesHTML[2], 'caption').textContent, 'Historical caption');
   });
 
+  test('hidden captions use the shared hidden state class', () => {
+    const caption = mediaRendering.createCaptionElement({
+      className: 'caption',
+      hidden: true,
+      text: 'Hidden photo caption',
+    });
+
+    assert.ok(findByClass(caption, 'media-caption--hidden'));
+    assertNoInlineStyles(caption);
+  });
+
   test('thumbnail activation and play controls have distinct behavior', () => {
     const item = {
       _id: 'video-id',
@@ -271,6 +289,10 @@ describe('browser media rendering', () => {
       assert.equal(photoCaption.textContent, payload);
       assert.equal(countTag(photoOverlay, 'script'), 0);
       assert.equal(countTag(photoOverlay, 'img'), 1);
+      assert.ok(findByClass(photoOverlay, 'media-fullscreen-overlay'));
+      assert.ok(findByClass(photoOverlay, 'media-fullscreen-content'));
+      assert.ok(findByClass(photoOverlay, 'media-fullscreen-image'));
+      assertNoInlineStyles(photoOverlay);
 
       const videoOverlay = mediaRendering.createFullscreenOverlay({
         type: 'video',
@@ -281,7 +303,32 @@ describe('browser media rendering', () => {
       assert.equal(videoCaption.textContent, payload);
       assert.equal(countTag(videoOverlay, 'script'), 0);
       assert.equal(countTag(videoOverlay, 'iframe'), 1);
+      assert.ok(findByClass(videoOverlay, 'media-fullscreen-overlay'));
+      assert.ok(findByClass(videoOverlay, 'media-fullscreen-content'));
+      assert.ok(findByClass(videoOverlay, 'media-fullscreen-video'));
+      assertNoInlineStyles(videoOverlay);
     }
+  });
+
+  test('fullscreen classes own dimensions and click-to-close remains active', async () => {
+    const css = await readFile('public/css/general.css', 'utf8');
+    assert.match(css, /\.media-fullscreen-overlay\s*\{[\s\S]*?position:\s*fixed/u);
+    assert.match(css, /\.media-fullscreen-overlay\s*\{[\s\S]*?inset:\s*0/u);
+    assert.match(css, /\.media-fullscreen-overlay\s*\{[\s\S]*?z-index:\s*9999/u);
+    assert.match(css, /\.media-fullscreen-image[\s\S]*?max-width:\s*90vw/u);
+    assert.match(css, /\.media-fullscreen-image[\s\S]*?max-height:\s*80vh/u);
+    assert.match(css, /\.media-fullscreen-video\s*\{[\s\S]*?width:\s*90vw/u);
+    assert.match(css, /\.media-fullscreen-video\s*\{[\s\S]*?height:\s*70vh/u);
+    assert.match(css, /\.media-fullscreen-video[\s\S]*?border-radius:\s*8px/u);
+
+    const overlay = mediaRendering.createFullscreenOverlay({
+      type: 'photo',
+      url: 'https://res.cloudinary.com/example/photo.jpg',
+      caption: 'Close me',
+    });
+    assert.equal(overlay.removed, undefined);
+    overlay.listeners.get('click')();
+    assert.equal(overlay.removed, true);
   });
 
   test('invalid historical video URLs create no iframe', () => {

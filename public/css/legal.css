@@ -1,0 +1,20 @@
+.legal-document p {
+  text-align: left;
+}
+
+.legal-document .legal-document-title,
+.legal-document .legal-document-summary {
+  text-align: center;
+}
+
+.legal-document .legal-document-effective-date {
+  text-align: right;
+}
+
+.legal-document .legal-document-list-item {
+  margin-bottom: 18pt;
+}
+
+.legal-document .legal-document-list-item--last {
+  margin-bottom: 0;
+}

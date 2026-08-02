@@ -1,0 +1,55 @@
+.upload-item, .user-item {
+  margin-bottom: 15px;
+  border-bottom: 1px solid #ccc;
+  padding-bottom: 10px;
+}
+
+.upload-item a {
+  width: min-content;
+  display: block;
+}
+
+.thumb {
+  display: block;
+  margin-top: 5px;
+  max-width: 200px;
+  max-height: 200px;
+  height: auto;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.inline-form {
+  display: inline;
+  margin-left: 10px;
+}
+
+.admin-email-status--unverified {
+  background-color: rgb(255, 112, 112);
+}
+
+.block-btn, .unblock-btn {
+  border: none;
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 0.9em;
+}
+
+.block-btn {
+  background: #d9534f;
+  color: white;
+}
+
+.block-btn:hover {
+  background: #c9302c;
+}
+
+.unblock-btn {
+  background: #5cb85c;
+  color: white;
+}
+
+.unblock-btn:hover {
+  background: #449d44;
+}

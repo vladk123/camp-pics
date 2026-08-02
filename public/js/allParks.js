@@ -379,7 +379,7 @@ function populateParkList(provinceName) {
     parkName.textContent = park.name;
 
     const parkProvince = document.createElement('div')
-    parkProvince.setAttribute('style', 'font-size: var(--font-extra-extra-small); font-weight: normal;')
+    parkProvince.className = 'all-parks-result-province'
     parkProvince.textContent = park.province;
 
     // HOVER to highlight marker

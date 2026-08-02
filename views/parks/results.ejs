@@ -17,7 +17,7 @@
                     <div translate="no"><% for (const segment of result.nameSegments) { %><% if (segment.highlighted) { %><mark><%= segment.text %></mark><% } else { %><%= segment.text %><% } %><% } %></div>
 
                     <!-- province -->
-                    <div style="font-size: var(--font-extra-extra-small); font-weight: normal;" translate="no">
+                    <div class="park-result-province" translate="no">
                         <% for (const segment of result.provinceSegments) { %><% if (segment.highlighted) { %><mark><%= segment.text %></mark><% } else { %><%= segment.text %><% } %><% } %>
                     </div>
                 </a>
@@ -34,13 +34,13 @@
                     <% for (const segment of result.parentParkSegments) { %><% if (segment.highlighted) { %><mark><%= segment.text %></mark><% } else { %><%= segment.text %><% } %><% } %>
 
                 <!-- campground name -->
-                <div style="font-size: var(--font-extra-small);">
+                <div class="park-result-campground-name">
                    <% for (const segment of result.nameSegments) { %><% if (segment.highlighted) { %><mark><%= segment.text %></mark><% } else { %><%= segment.text %><% } %><% } %>
                 </div> 
                 
 
                 <!-- province -->
-                <div style="font-size: var(--font-extra-extra-small); font-weight: normal;">
+                <div class="park-result-province">
                     <% for (const segment of result.provinceSegments) { %><% if (segment.highlighted) { %><mark><%= segment.text %></mark><% } else { %><%= segment.text %><% } %><% } %>
                 </div>
                 </a>

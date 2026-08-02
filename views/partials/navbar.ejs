@@ -30,7 +30,7 @@
     <% if (!currentUser){ %>
       <div id="nav-open-login-modal">Login</div>
     <% } else { %>
-      <form id="logout-form" action="/user/logout" method="POST" style="display:none;">
+      <form id="logout-form" class="logout-form" action="/user/logout" method="POST">
         <%- include('./csrfField') %>
       </form>
       <div id="nav-logout">Logout</div>

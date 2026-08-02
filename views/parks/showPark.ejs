@@ -86,7 +86,7 @@
   </div>
     <!-- Report btn -->
   <div class="report-btn park">Report</div>
-  <p class="" style="text-align: center;">Upload Parks Photos and Videos <a href="#park-media">Below</a></p>
+  <p class="park-media-instructions">Upload Parks Photos and Videos <a href="#park-media">Below</a></p>
 </section>
 
 <!-- If no media -->
@@ -167,11 +167,11 @@
       }) %>
 
 
-      <button id="open-upload-park-media-modal" class="btn btn-primary" style="margin: auto;">Upload Park Media</button>
+      <button id="open-upload-park-media-modal" class="btn btn-primary park-media-upload-button">Upload Park Media</button>
 
       <!-- <hr width="100%"> -->
     <% } else { %>
-      <div style="margin: 100px auto 0px auto; text-align: center;">Log in to submit your own park photos/videos!</div>
+      <div class="park-media-login-prompt">Log in to submit your own park photos/videos!</div>
     <% } %>
   </section>
 

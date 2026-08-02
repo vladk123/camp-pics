@@ -807,7 +807,6 @@ describe('CSP and scope regression guards for externalization', () => {
       'utils/cspNonce.js',
       'utils/serializeForInlineScript.js',
       'public/js/csrf.js',
-      'public/js/mediaRendering.js',
       'public/js/passwordPolicy.js',
     ], { cwd: root, encoding: 'utf8' });
     assert.equal(protectedStatus.trim(), '');

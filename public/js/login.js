@@ -137,24 +137,35 @@ document.addEventListener('DOMContentLoaded', () => {
   let passwordValid = false;
   let passwordsMatch = false;
 
+  const feedbackStateClasses = [
+    'feedback--error',
+    'feedback--info',
+    'feedback--success',
+  ];
+
+  function setFeedbackState(element, state) {
+    element.classList.remove(...feedbackStateClasses);
+    element.classList.add(`feedback--${state}`);
+  }
+
   // --- EMAIL VALIDATION ---
   emailInput.addEventListener('input', () => {
     const value = emailInput.value.trim();
     if (value === '') {
       emailFeedback.textContent = '';
-      emailFeedback.style.color = '#dc3545';
+      setFeedbackState(emailFeedback, 'error');
       emailValid = false;
     } else if (!emailRegex.test(value)) {
       emailFeedback.textContent = 'Invalid email format.';
-      emailFeedback.style.color = '#dc3545';
+      setFeedbackState(emailFeedback, 'error');
       emailValid = false;
     } else if (value.includes('outlook') || value.includes('hotmail')) {
       emailFeedback.textContent = 'Please note that Outlook and Hotmail does not always receive our emails (for verifying accounts) - try using Gmail or another email if possible.';
-      emailFeedback.style.color = 'blue';
+      setFeedbackState(emailFeedback, 'info');
       emailValid = true;
     } else {
       emailFeedback.textContent = 'Valid email.';
-      emailFeedback.style.color = '#28a745';
+      setFeedbackState(emailFeedback, 'success');
       emailValid = true;
     }
   });
@@ -164,19 +175,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const value = fnameInput.value.trim();
     if (value === '') {
       fnameFeedback.textContent = 'This is what others may see if you upload media.';
-      fnameFeedback.style.color = 'blue';
+      setFeedbackState(fnameFeedback, 'info');
       fnameValid = false;
     } else if (value.length < 3 || value.length > 15) {
       fnameFeedback.textContent = 'Please fill 3-15 characters for the nickname - this is what others may see if you upload media.';
-      fnameFeedback.style.color = '#dc3545';
+      setFeedbackState(fnameFeedback, 'error');
       fnameValid = false;
     } else if (value.includes('admin') || value.includes('moderator')) {
       fnameFeedback.textContent = 'Please do not use "admin" or "moderator" in your username.';
-      fnameFeedback.style.color = '#dc3545';
+      setFeedbackState(fnameFeedback, 'error');
       fnameValid = false;
     } else {
       fnameFeedback.textContent = 'Valid nickname.';
-      fnameFeedback.style.color = '#28a745';
+      setFeedbackState(fnameFeedback, 'success');
       fnameValid = true;
     }
   });
@@ -221,11 +232,11 @@ document.addEventListener('DOMContentLoaded', () => {
       passwordsMatch = false;
     } else if (val !== confirmVal) {
       confirmFeedback.textContent = 'Passwords do not match.';
-      confirmFeedback.style.color = '#dc3545';
+      setFeedbackState(confirmFeedback, 'error');
       passwordsMatch = false;
     } else {
       confirmFeedback.textContent = 'Passwords match.';
-      confirmFeedback.style.color = '#28a745';
+      setFeedbackState(confirmFeedback, 'success');
       passwordsMatch = true;
     }
   }

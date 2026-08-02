@@ -112,6 +112,18 @@
   text-align: left;
 }
 
+.feedback--error {
+  color: #dc3545;
+}
+
+.feedback--info {
+  color: blue;
+}
+
+.feedback--success {
+  color: #28a745;
+}
+
 .password-rules {
   list-style: none;
   padding: 0;
