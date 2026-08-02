@@ -13,7 +13,8 @@ These global protections retain their existing order and apply in addition to th
 
 ## Route-specific policies
 
-Each policy has its own counter and applies only to the listed POST route.
+The authentication and contact policies each have their own counter and apply
+only to the listed POST route.
 
 | Operation | Route | Window | Maximum POST attempts |
 | --- | --- | ---: | ---: |
@@ -22,6 +23,20 @@ Each policy has its own counter and applies only to the listed POST route.
 | Forgotten-password email request | `POST /user/forgot-password` | 60 minutes | 10 |
 | Verification-email resend | `POST /user/resend-verification` | 60 minutes | 5 |
 | Contact submission | `POST /other/contact` | 60 minutes | 5 |
+
+Authenticated media mutations use these additional policies:
+
+| Operation | Routes | Window | Maximum attempts |
+| --- | --- | ---: | ---: |
+| Photo upload | All park and campsite photo-upload POST routes | 10 minutes | 5 |
+| YouTube video addition | All park and campsite video-add POST routes | 60 minutes | 20 |
+| Media deletion | All park and campsite photo/video DELETE routes | 60 minutes | 60 |
+
+Media mutation limits are keyed only by the authenticated User ID. Photo
+upload, video addition, and media deletion have independent counters, while
+all route variants for the same operation share that operation's counter. The
+photo-upload limiter runs after authentication and before multipart parsing or
+file buffering.
 
 All attempts count, including successful and invalid submissions.
 
@@ -33,15 +48,18 @@ An exceeded route-specific limit returns HTTP 429 with a fixed plain-text respon
 
 The current counters live in process memory and reset whenever the process restarts. Separate web dynos would have separate counters. This is acceptable for the current single-instance, basic abuse-prevention stage, but it is not distributed-bot protection and rate limiting alone does not prevent distributed attacks.
 
-Before CampPics uses multiple web dynos, each limiter must move to its own shared-store instance with a unique prefix so the five policies remain independent across processes.
+The authenticated media counters are also process-local. They reset whenever
+the process restarts, and separate web dynos do not share state. Before
+CampPics uses multiple web dynos, each limiter must move to its own shared-store
+instance with a unique prefix so all policies remain independent across
+processes.
 
 ## Deferred layers
 
-Later passes still need separate rate-limit policies for:
+Later passes still need separate abuse-control policies for:
 
-- uploads;
-- media deletion;
 - account deletion;
+- password-changing and password-reset submissions;
 - public campsite APIs;
 - the park search API; and
 - administrator mutations.

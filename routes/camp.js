@@ -3,6 +3,11 @@ const router = express.Router();
 import * as camp from '../controllers/camp.js';
 import * as media from '../controllers/media.js';
 import { isLoggedIn, catchAsyncErrors, uploadMemory } from '../middleware.js'; //
+import {
+  mediaDeletionLimiter,
+  photoUploadLimiter,
+  videoUploadLimiter,
+} from '../utils/routeAbuseLimits.js';
 import { loadCache } from '../controllers/camp.js'
 
 router.route('/search-api')
@@ -32,21 +37,21 @@ router.route('/park/:parkSlug/campground/:campgroundSlug/campsite/:campsiteSlug'
 // Upload Routes
 // Park-level
 router.route('/park/:parkSlug/photo')
-    .post(isLoggedIn, catchAsyncErrors(media.uploadPhoto));
+    .post(isLoggedIn, photoUploadLimiter, catchAsyncErrors(media.uploadPhoto));
 router.route('/park/:parkSlug/video')
-    .post(isLoggedIn, catchAsyncErrors(media.addVideo));
+    .post(isLoggedIn, videoUploadLimiter, catchAsyncErrors(media.addVideo));
 // router.route('/park/:parkSlug/review')
 //     .post(isLoggedIn, media.addReview);
 
 // Campsite level
 router.route('/park/:parkSlug/campsite/:campsiteSlug/photo')
-    .post(isLoggedIn, catchAsyncErrors(media.uploadPhoto));
+    .post(isLoggedIn, photoUploadLimiter, catchAsyncErrors(media.uploadPhoto));
 router.route('/park/:parkSlug/campsite/:campsiteSlug/video')
-    .post(isLoggedIn, catchAsyncErrors(media.addVideo));
+    .post(isLoggedIn, videoUploadLimiter, catchAsyncErrors(media.addVideo));
 router.route('/park/:parkSlug/campground/:campgroundSlug/campsite/:campsiteSlug/photo')
-    .post(isLoggedIn, catchAsyncErrors(media.uploadPhoto));
+    .post(isLoggedIn, photoUploadLimiter, catchAsyncErrors(media.uploadPhoto));
 router.route('/park/:parkSlug/campground/:campgroundSlug/campsite/:campsiteSlug/video')
-    .post(isLoggedIn, catchAsyncErrors(media.addVideo));
+    .post(isLoggedIn, videoUploadLimiter, catchAsyncErrors(media.addVideo));
 // router.route('/park/:parkSlug/campground/:campgroundSlug/campsite/:campsiteSlug/review')
 //     .post(isLoggedIn, media.addReview);
 
@@ -54,23 +59,23 @@ router.route('/park/:parkSlug/campground/:campgroundSlug/campsite/:campsiteSlug/
 // DELETE ROUTES
 // Delete - Park-level
 router.route('/park/:parkSlug/photo/:photoId')
-  .delete(isLoggedIn, media.deletePhoto);
+  .delete(isLoggedIn, mediaDeletionLimiter, media.deletePhoto);
 
 router.route('/park/:parkSlug/video/:videoId')
-  .delete(isLoggedIn, media.deleteVideo);
+  .delete(isLoggedIn, mediaDeletionLimiter, media.deleteVideo);
 
 // Delete - Campsite-level
 router.route('/park/:parkSlug/campsite/:campsiteSlug/photo/:photoId')
-  .delete(isLoggedIn, media.deletePhoto);
+  .delete(isLoggedIn, mediaDeletionLimiter, media.deletePhoto);
 
 router.route('/park/:parkSlug/campsite/:campsiteSlug/video/:videoId')
-  .delete(isLoggedIn, media.deleteVideo);
+  .delete(isLoggedIn, mediaDeletionLimiter, media.deleteVideo);
 
 router.route('/park/:parkSlug/campground/:campgroundSlug/campsite/:campsiteSlug/photo/:photoId')
-  .delete(isLoggedIn, media.deletePhoto);
+  .delete(isLoggedIn, mediaDeletionLimiter, media.deletePhoto);
 
 router.route('/park/:parkSlug/campground/:campgroundSlug/campsite/:campsiteSlug/video/:videoId')
-  .delete(isLoggedIn, media.deleteVideo);
+  .delete(isLoggedIn, mediaDeletionLimiter, media.deleteVideo);
 
 
 

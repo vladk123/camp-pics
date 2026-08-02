@@ -14,11 +14,18 @@ import {
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const controllerPath = path.join(root, 'controllers', 'camp.js');
+const campRoutesPath = path.join(root, 'routes', 'camp.js');
 const helperPath = path.join(root, 'utils', 'parkSearch.js');
 const templatePath = path.join(root, 'views', 'parks', 'results.ejs');
 
-const [controllerSource, helperSource, templateSource] = await Promise.all([
+const [
+  controllerSource,
+  campRoutesSource,
+  helperSource,
+  templateSource,
+] = await Promise.all([
   readFile(controllerPath, 'utf8'),
+  readFile(campRoutesPath, 'utf8'),
   readFile(helperPath, 'utf8'),
   readFile(templatePath, 'utf8'),
 ]);
@@ -123,7 +130,7 @@ describe('park-search source guards', () => {
     assert.doesNotMatch(templateSource, /href="\/camp<%= result\.slug %>"/u);
   });
 
-  test('schemas, indexes, route wiring, and cache data stay untouched in this pass', () => {
+  test('schemas, indexes, search route wiring, and cache data stay untouched', () => {
     const status = execFileSync(
       'git',
       [
@@ -131,12 +138,19 @@ describe('park-search source guards', () => {
         '--short',
         '--',
         'models',
-        'routes/camp.js',
         'cache/parkSearch.json',
       ],
       { cwd: root, encoding: 'utf8' },
     );
 
     assert.equal(status.trim(), '');
+    assert.match(
+      campRoutesSource,
+      /router\.route\('\/search-api'\)\s*\.get\(camp\.searchApi\)/u,
+    );
+    assert.match(
+      campRoutesSource,
+      /router\.route\('\/search'\)\s*\.get\(camp\.searchResults\)/u,
+    );
   });
 });
