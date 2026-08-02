@@ -71,12 +71,17 @@ test('the shared CSRF partial contains one escaped _csrf field', async () => {
 
 test('verification resend GET only redirects while POST invokes the resend controller once', async () => {
   let resendCalls = 0;
+  let limiterCalls = 0;
   const resendController = async (req, res) => {
     resendCalls += 1;
     res.status(204).end();
   };
+  const resendLimiter = (req, res, next) => {
+    limiterCalls += 1;
+    next();
+  };
   const router = express.Router();
-  addVerificationResendRoutes(router, resendController);
+  addVerificationResendRoutes(router, resendController, resendLimiter);
 
   const app = express();
   app.use((req, res, next) => {
@@ -103,6 +108,7 @@ test('verification resend GET only redirects while POST invokes the resend contr
     assert.equal(getResponse.status, 302);
     assert.equal(getResponse.headers.get('location'), '/user/account');
     assert.equal(resendCalls, 0);
+    assert.equal(limiterCalls, 0);
 
     const postResponse = await fetch(`${baseUrl}/user/resend-verification`, {
       method: 'POST',
@@ -110,6 +116,7 @@ test('verification resend GET only redirects while POST invokes the resend contr
     });
     assert.equal(postResponse.status, 204);
     assert.equal(resendCalls, 1);
+    assert.equal(limiterCalls, 1);
   } finally {
     await new Promise((resolve, reject) => {
       server.close(err => err ? reject(err) : resolve());
@@ -128,7 +135,7 @@ test('resend is POST, logout remains POST, and no resend GET can call the contro
   );
   assert.match(
     routes,
-    /\.post\(isAuthenticatedForVerification, catchAsyncErrors\(resendController\)\)/,
+    /\.post\(\s*isAuthenticatedForVerification,\s*resendLimiter,\s*catchAsyncErrors\(resendController\),?\s*\)/,
   );
   assert.doesNotMatch(routes, /\.get\([^)]*resendVerification/);
   assert.match(

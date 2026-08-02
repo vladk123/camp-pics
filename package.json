@@ -39,6 +39,7 @@
     "dotenv": "^17.2.3",
     "ejs-mate": "^4.0.0",
     "express": "^5.1.0",
+    "express-rate-limit": "^8.6.1",
     "express-session": "^1.18.2",
     "express-slow-down": "^3.0.0",
     "express-validator": "^7.3.0",

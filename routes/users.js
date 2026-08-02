@@ -12,9 +12,15 @@ import {
 import passport from 'passport';
 import { redirectedFlash } from '../utils/redirectedFlash.js';
 import { storeSessionAuthVersion } from '../utils/authLifecycle.js';
+import {
+  forgotPasswordLimiter,
+  loginLimiter,
+  registrationLimiter,
+  verificationResendLimiter,
+} from '../utils/routeAbuseLimits.js';
 
 router.route('/register')
-    .post(isLoggedOut, catchAsyncErrors(users.register));
+    .post(isLoggedOut, registrationLimiter, catchAsyncErrors(users.register));
 
 router.route('/registered')
   .get(users.registered)
@@ -22,6 +28,7 @@ router.route('/registered')
 router.post(
   '/login',
   isLoggedOut,
+  loginLimiter,
   usernameToLowerCaseAndTrim,
   (req, res, next) => {
     passport.authenticate('local', (err, user, info) => {
@@ -59,10 +66,15 @@ router.route('/verified')
 export const addVerificationResendRoutes = (
   targetRouter,
   resendController = users.resendVerification,
+  resendLimiter = verificationResendLimiter,
 ) => {
   targetRouter.route('/resend-verification')
     .get((req, res) => res.redirect('/user/account'))
-    .post(isAuthenticatedForVerification, catchAsyncErrors(resendController));
+    .post(
+      isAuthenticatedForVerification,
+      resendLimiter,
+      catchAsyncErrors(resendController),
+    );
 };
 
 // The POST performs the resend. GET is compatibility-only and cannot mutate state.
@@ -71,7 +83,7 @@ addVerificationResendRoutes(router);
 // Clicked forgot password on website
 router.route('/forgot-password')
   .get(catchAsyncErrors(users.renderForgotPasswordReset))
-  .post(catchAsyncErrors(users.forgotPassword));
+  .post(forgotPasswordLimiter, catchAsyncErrors(users.forgotPassword));
 
 // Clicked forgot password reset link in email
 router.route('/forgot-password/:userId/:code')

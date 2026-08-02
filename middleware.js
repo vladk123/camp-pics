@@ -1,5 +1,3 @@
-import rateLimiting from 'express-rate-limit' // For limiting how many requests made in a period of time
-import speedLimiting from 'express-slow-down' // For limiting speed depending on how many requests made in a period of time
 import mongoose from 'mongoose';
 import { logger } from './utils/logging.js'
 import { redirectedFlash } from './utils/redirectedFlash.js';
@@ -136,28 +134,6 @@ export const isLoggedOut = (req, res, next) => {
 // Do not allow double-submission
 
 // Sanitize input
-
-///////////// REQUESTS/SECURITY /////////////
-export const rateLimiter = (minutes) => {
-    return(req, res, next) => {
-        rateLimiting({
-            windowMs: minutes * 60 * 1000, // 5 min
-            max: 50, // Limit to 50 requests in the the windowMs time period
-            message: 'Too many requests, please try again later.'
-        })
-        next()
-    }
-}
-export const speedLimiter = (minutes) => {
-    return(req, res, next) => {
-        speedLimiting({
-            windowMs: minutes * 60 * 1000, // 0.5 min
-            delayAfter: 20, // Slow down after 20 requests in the windowMs time period
-            delayMs: (hits) => hits * 1 * 1000, // Slow down request by an additional 1 second for each request after limit reached
-        })
-        next()
-    }
-}
 
 // Wrapping async functions with replacement to not have to type "try" and "catch" for each one. Don't need to write "try" because async functions are already known to return promises
 export const catchAsyncErrors = (fn) => {
