@@ -1,9 +1,8 @@
-
-
-let flashMessagesContainer = document.getElementById('flash-messages');
-
 function createFlashMsg(type, message, dataAttrName, timeoutSec) {
   if (!type || !message || !dataAttrName) return;
+
+  const flashMessagesContainer = document.getElementById('flash-messages');
+  if (!flashMessagesContainer) return;
 
   // Remove existing messages with same data name
   const existingMsg = document.querySelectorAll(`[data-flash-message="${dataAttrName}"]`);
@@ -57,3 +56,20 @@ function fadeOutAndRemove(element) {
   element.classList.add('fade-out');
   setTimeout(() => element.remove(), 500); // matches CSS transition time
 }
+
+(function initializeServerFlashMessages() {
+  const container = document.getElementById('flash-messages');
+  if (!container || container.dataset.flashInitialized === 'true') return;
+
+  container.dataset.flashInitialized = 'true';
+  const messages = [
+    ['success', container.dataset.flashSuccess, 'success-msg', 5],
+    ['info', container.dataset.flashInfo, 'info-msg', 10],
+    ['warning', container.dataset.flashWarning, 'warning-msg', 10],
+    ['error', container.dataset.flashError, 'error-msg', 15],
+  ];
+
+  messages.forEach(([type, message, dataAttrName, timeoutSec]) => {
+    if (message) createFlashMsg(type, message, dataAttrName, timeoutSec);
+  });
+})();

@@ -244,11 +244,11 @@ function findElement(root, predicate) {
 
 describe('dynamic administrator user rows', () => {
   test('blocked and unblocked rows contain matching POST controls and page CSRF token', async () => {
-    const template = await readFile('views/admin/dashboard.ejs', 'utf8');
-    const start = template.indexOf('function createUserRow(user)');
-    const end = template.indexOf('async function fetchMoreUploads()', start);
+    const browser = await readFile('public/js/adminDashboard.js', 'utf8');
+    const start = browser.indexOf('function createUserRow(user)');
+    const end = browser.indexOf('async function fetchMoreUploads()', start);
     assert.ok(start >= 0 && end > start);
-    const functionSource = template.slice(start, end);
+    const functionSource = browser.slice(start, end);
 
     const document = {
       createElement: tagName => new FakeElement(tagName),
@@ -265,7 +265,11 @@ describe('dynamic administrator user rows', () => {
       },
       encodeURIComponent,
     };
-    vm.runInNewContext(`${functionSource}\nthis.createUserRow = createUserRow;`, context);
+    vm.runInNewContext(
+      `const csrf = window.CampPicsCsrf;\n${functionSource}\n` +
+        'this.createUserRow = createUserRow;',
+      context,
+    );
 
     for (const fixture of [
       { blocked: false, action: 'block', label: 'Block' },
@@ -305,6 +309,6 @@ describe('dynamic administrator user rows', () => {
       functionSource,
       /innerHTML|outerHTML|insertAdjacentHTML|on(?:click|submit)\s*=/,
     );
-    assert.match(template, /confirm\(`\$\{action\} this user\?`\)/);
+    assert.match(browser, /confirm\(`\$\{action\} this user\?`\)/);
   });
 });

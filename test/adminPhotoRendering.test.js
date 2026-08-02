@@ -49,13 +49,14 @@ describe('administrator photo URL compatibility', () => {
     );
 
     const template = await readFile('views/admin/dashboard.ejs', 'utf8');
+    const browser = await readFile('public/js/adminDashboard.js', 'utf8');
     assert.match(template, /u\.adminPhotoUrl/);
     assert.match(
-      template,
+      browser,
       /getSafeHttpUrl\(upload\.adminPhotoUrl\)/,
     );
     assert.doesNotMatch(
-      template,
+      `${template}\n${browser}`,
       /getSafeHttpUrl\((?:u|upload)\.cloudinary(?:Id|PublicId)\)/,
     );
   });

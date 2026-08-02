@@ -46,17 +46,6 @@ if (navigator.share && navigator.canShare?.(shareData)) {
 }
 
 ////// DARK MODE
-const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-
-function getInitialTheme() {
-  const stored = localStorage.getItem('theme');
-  if (stored === 'light' || stored === 'dark') return stored;
-
-  return window.matchMedia('(prefers-color-scheme: dark)').matches
-    ? 'dark'
-    : 'light';
-}
-
 const darkModeToggleBtn = document.getElementById('themeToggle');
 
 darkModeToggleBtn.addEventListener('click', () => {
@@ -215,6 +204,20 @@ document.addEventListener("DOMContentLoaded", () => {
 // Reset search when reset clicked
 const clearSearchBtn = document.getElementById('clear-search')
 const searchInputBox = document.getElementById('search-input-box')
+
+function updateSearchPlaceholder() {
+  if (!searchInputBox) return;
+
+  searchInputBox.placeholder = window.innerWidth <= 775
+    ? 'Search for a park.'
+    : 'Search for a national or provincial park.';
+}
+
+updateSearchPlaceholder();
+if (searchInputBox) {
+  window.addEventListener('resize', updateSearchPlaceholder);
+}
+
 // clearSearchBtn?.addEventListener('click', ()=>{
 //   clearSearchBox()
 //   searchInputBox.focus()

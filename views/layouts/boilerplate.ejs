@@ -17,6 +17,7 @@
 		<script nonce="<%= cspNonce %>">
 			window.__GA4_EVENT__ = <%- ga4EventJson %>;
 		</script>
+		<script src="/js/theme.js"></script>
 
 		<title><%= `${meta?.title} - CampPics` || "CampPics" %></title>
 		<meta charset="UTF-8">
@@ -40,23 +41,6 @@
 		<meta name="twitter:description" content="<%= meta?.description || '' %>" />
 		<meta name="twitter:image" content="<%= meta?.image || 'https://camppics.ca/images/images/home-hero-summer.jpg' %>" />
 		<meta name="apple-mobile-web-app-title" content="CampPics" />
-
-
-		<!-- Set dark/light mode -->
-		<script nonce="<%= cspNonce %>">
-			(function () {
-			  const theme = (() => {
-				const stored = localStorage.getItem('theme');
-				if (stored === 'light' || stored === 'dark') return stored;
-				return window.matchMedia('(prefers-color-scheme: dark)').matches
-				  ? 'dark'
-				  : 'light';
-			  })();
-			
-			  document.documentElement.dataset.theme = theme;
-			})();
-		</script>
-			
 
 		<!--<link rel="icon" type="image/x-icon" href="/images/favicon.ico">   -->
 		<link href="/css/login.css" rel="stylesheet" />
@@ -90,7 +74,13 @@
 			switcher: true,
 			data: data || {} 
 		}) %>
-		<div id="flash-messages"></div>
+		<div
+			id="flash-messages"
+			<% if (success && success.length) { %>data-flash-success="<%= String(success) %>"<% } %>
+			<% if (info && info.length) { %>data-flash-info="<%= String(info) %>"<% } %>
+			<% if (warning && warning.length) { %>data-flash-warning="<%= String(warning) %>"<% } %>
+			<% if (error && error.length) { %>data-flash-error="<%= String(error) %>"<% } %>
+		></div>
 		<div id="main-page-content">
 			<div id="layout-wrapper">
 				<%- include('../partials/navbar') %> <!-- including the navbar -->
@@ -125,12 +115,5 @@
 		<script type="text/javascript" src="/js/flash-messages.js"></script>
 		<script type="text/javascript" src="/js/general.js"></script>
 		<script type="text/javascript" src="/js/login.js"></script>
-
-		<!-- Handle error messages -->
-		<% if(success && success.length) { %> <script nonce="<%= cspNonce %>"> createFlashMsg('success', '<%= success %>', 'success-msg', 5) </script> <% } %>
-		<% if(info && info.length) { %> <script nonce="<%= cspNonce %>"> createFlashMsg('info', '<%= info %>', 'info-msg', 10) </script> <% } %>
-		<% if(warning && warning.length) { %> <script nonce="<%= cspNonce %>"> createFlashMsg('warning', '<%= warning %>', 'warning-msg', 10) </script> <% } %>
-		<% if(error && error.length) { %> <script nonce="<%= cspNonce %>"> createFlashMsg('error', '<%= error %>', 'error-msg', 15) </script> <% } %>
-
 	</body>
 </html>

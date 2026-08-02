@@ -2984,16 +2984,34 @@ describe('dependency, dead-helper, global-protection, and documentation guards',
         'config',
         'controllers',
         'models',
-        'public/js',
         'package.json',
         'package-lock.json',
       ],
       { cwd: root, encoding: 'utf8' },
     );
+    const browserStatus = execFileSync(
+      'git',
+      ['status', '--short', '--', 'public/js'],
+      { cwd: root, encoding: 'utf8' },
+    );
+    const allowedExternalizationFiles = new Set([
+      'public/js/adminDashboard.js',
+      'public/js/flash-messages.js',
+      'public/js/forgotPassword.js',
+      'public/js/general.js',
+      'public/js/theme.js',
+    ]);
+    const unexpectedBrowserChanges = browserStatus
+      .split(/\r?\n/u)
+      .filter(Boolean)
+      .filter(line => !allowedExternalizationFiles.has(
+        line.slice(3).replaceAll('\\', '/'),
+      ));
     const packageJson = JSON.parse(await readSource('package.json'));
     const packageLock = JSON.parse(await readSource('package-lock.json'));
 
     assert.equal(status.trim(), '');
+    assert.deepEqual(unexpectedBrowserChanges, []);
     assert.deepEqual(packageJson.engines, { node: '24.x', npm: '11.x' });
     assert.deepEqual(packageLock.packages[''].engines, packageJson.engines);
   });

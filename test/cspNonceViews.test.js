@@ -106,14 +106,12 @@ describe('active EJS script inventory', () => {
         ]),
       ),
       {
-        'admin/dashboard.ejs': 1,
-        'layouts/boilerplate.ejs': 7,
+        'layouts/boilerplate.ejs': 2,
         'parks/allParks.ejs': 1,
         'parks/showPark.ejs': 1,
-        'partials/search.ejs': 1,
-        'user/forgotPassword.ejs': 1,
       },
     );
+    assert.equal(locations.length, 4);
     assert.ok(externalScriptCount > 0);
   });
 
@@ -281,15 +279,11 @@ describe('representative nonce-bearing template behavior', () => {
       warning: ['Warning'],
     });
 
-    const renders = {
+    for (const [name, html] of Object.entries({
       allParks,
       boilerplate,
-      dashboard,
-      forgotPassword,
-      search,
       showPark,
-    };
-    for (const [name, html] of Object.entries(renders)) {
+    })) {
       const inlineScripts = scriptTags(stripHtmlComments(html))
         .filter(script => !/\bsrc\s*=/iu.test(script.attributes));
       assert.ok(inlineScripts.length > 0, `${name} should render an inline script`);
@@ -301,20 +295,45 @@ describe('representative nonce-bearing template behavior', () => {
       );
     }
 
-    assert.equal(countRenderedInlineScripts(boilerplate), 8);
+    for (const [name, html] of Object.entries({
+      dashboard,
+      forgotPassword,
+      search,
+    })) {
+      assert.equal(
+        countRenderedInlineScripts(html),
+        0,
+        `${name} should contain no active inline scripts`,
+      );
+    }
+
+    assert.equal(countRenderedInlineScripts(boilerplate), 2);
     assert.equal(boilerplate.includes('<script id="server-xss">'), false);
     assert.equal(showPark.includes('<script id="server-xss">'), false);
     assert.equal(allParks.includes('<script id="server-xss">'), false);
     assert.equal(dashboard.includes('<script id="server-xss">'), false);
 
     assert.match(boilerplate, /GTM-TBCRW55F/u);
+    const gtmPosition = boilerplate.indexOf("'GTM-TBCRW55F'");
+    const ga4Position = boilerplate.indexOf('window.__GA4_EVENT__');
+    const themePosition = boilerplate.indexOf('/js/theme.js');
+    const cssPosition = boilerplate.indexOf('/css/login.css');
+    assert.ok(gtmPosition >= 0);
+    assert.ok(ga4Position > gtmPosition);
+    assert.ok(themePosition > ga4Position);
+    assert.ok(cssPosition > themePosition);
+    assert.match(boilerplate, /<script src="\/js\/theme\.js"><\/script>/u);
+    assert.doesNotMatch(
+      boilerplate.match(/<script[^>]+src="\/js\/theme\.js"[^>]*>/u)?.[0] || '',
+      /\b(?:async|defer|type\s*=\s*["']module["'])\b/iu,
+    );
     assert.ok(
-      boilerplate.indexOf('window.__GA4_EVENT__') <
+      ga4Position <
         boilerplate.indexOf('/js/general.js'),
     );
     assert.ok(
       boilerplate.indexOf('/js/passwordPolicy.js') <
-        boilerplate.indexOf('bindPasswordForm'),
+        boilerplate.indexOf('/js/forgotPassword.js'),
     );
     assert.ok(
       boilerplate.indexOf('/js/flash-messages.js') <
@@ -327,11 +346,14 @@ describe('representative nonce-bearing template behavior', () => {
     assert.ok(allParks.indexOf('window.ALL_PARKS') < allParks.indexOf('/js/allParks.js'));
     assert.ok(
       dashboard.indexOf('/js/mediaRendering.js') <
-        dashboard.indexOf('const adminMediaRendering'),
+        dashboard.indexOf('/js/adminDashboard.js'),
     );
-    assert.match(search, /updatePlaceholder\(\);[\s\S]*addEventListener\("resize"/u);
-    assert.match(forgotPassword, /CampPicsPasswordPolicy\.bindPasswordForm/u);
-    assert.match(dashboard, /fetchMoreUploads[\s\S]*fetchMoreUsers/u);
+    assert.ok(
+      dashboard.indexOf('admin-dashboard-state') <
+        dashboard.indexOf('/js/adminDashboard.js'),
+    );
+    assert.match(forgotPassword, /<script src="\/js\/forgotPassword\.js"><\/script>/u);
+    assert.doesNotMatch(search, /<script\b/iu);
   });
 });
 

@@ -69,6 +69,13 @@
   <% } %>
 </section>
 
+<div
+  id="admin-dashboard-state"
+  data-upload-page="<%= uploadPage %>"
+  data-user-page="<%= userPage %>"
+  hidden
+></div>
+
 <style>
 .upload-item, .user-item {
   margin-bottom: 15px;
@@ -122,152 +129,4 @@
 </style>
 
 <script src="/js/mediaRendering.js"></script>
-<script nonce="<%= cspNonce %>">
-let uploadPage = <%= uploadPage %>;
-let userPage = <%= userPage %>;
-const adminMediaRendering = window.CampPicsMedia;
-
-function createAdminMediaLink(upload) {
-  let href;
-  let thumbnailUrl;
-  let alt;
-
-  if (upload.mediaType === 'photo') {
-    href = adminMediaRendering.getSafeHttpUrl(upload.adminPhotoUrl);
-    thumbnailUrl = href;
-    alt = 'photo thumbnail';
-  } else if (upload.mediaType === 'video') {
-    const videoId = adminMediaRendering.extractYouTubeId(upload.youtubeId);
-    if (videoId) {
-      href = `https://www.youtube.com/watch?v=${videoId}`;
-      thumbnailUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
-      alt = 'YouTube thumbnail';
-    }
-  }
-
-  if (!href || !thumbnailUrl) return null;
-
-  const link = document.createElement('a');
-  link.href = href;
-  link.target = '_blank';
-  link.rel = 'noopener noreferrer';
-  link.appendChild(adminMediaRendering.createImageElement({
-    src: thumbnailUrl,
-    alt,
-    className: 'thumb',
-    fallbackSrc: '',
-  }));
-  return link;
-}
-
-function createUploadRow(upload) {
-  const row = document.createElement('div');
-  row.className = 'upload-item';
-
-  const summary = document.createElement('div');
-  const mediaType = document.createElement('strong');
-  mediaType.textContent = upload.mediaType == null ? '' : String(upload.mediaType);
-  summary.append(
-    mediaType,
-    document.createTextNode(
-      ` by ${upload.uploader?.fname || 'Unknown'} ` +
-      `(${upload.uploader?.username || ''}) \u2014 ` +
-      new Date(upload.createdAt).toLocaleString()
-    ),
-  );
-
-  const location = document.createElement('div');
-  location.textContent =
-    `Park: ${upload.parkName || 'N/A'}` +
-    `${upload.campgroundName ? ` | CG: ${upload.campgroundName}` : ''}` +
-    `${upload.campsiteName ? ` | Site: ${upload.campsiteName}` : ''}`;
-
-  row.append(summary, location);
-  const mediaLink = createAdminMediaLink(upload);
-  if (mediaLink) row.appendChild(mediaLink);
-  return row;
-}
-
-function createUserRow(user) {
-  const row = document.createElement('div');
-  row.className = 'user-item';
-
-  const verification = document.createElement('span');
-  verification.textContent = `[${Boolean(user.email_verified)}]`;
-  if (!user.email_verified) {
-    verification.style.backgroundColor = 'rgb(255, 112, 112)';
-  }
-
-  const name = document.createElement('strong');
-  name.textContent = user.fname == null ? '' : String(user.fname);
-  row.append(
-    verification,
-    document.createTextNode(' - '),
-    name,
-    document.createTextNode(
-      ` \u2014 ${user.username || ''} ` +
-      `(joined ${new Date(user.date_created).toLocaleDateString()})`
-    ),
-  );
-
-  const action = user.blocked ? 'unblock' : 'block';
-  const actionLabel = user.blocked ? 'Unblock' : 'Block';
-  const form = document.createElement('form');
-  form.action = `/a/user/${encodeURIComponent(String(user._id))}/${action}`;
-  form.method = 'POST';
-  form.className = 'inline-form user-status-form';
-  form.dataset.action = action;
-
-  const csrfField = document.createElement('input');
-  csrfField.type = 'hidden';
-  csrfField.name = '_csrf';
-  csrfField.value = window.CampPicsCsrf.getToken() || '';
-
-  const button = document.createElement('button');
-  button.type = 'submit';
-  button.className = `${action}-btn`;
-  button.textContent = actionLabel;
-
-  form.append(csrfField, button);
-  row.appendChild(form);
-  return row;
-}
-
-async function fetchMoreUploads() {
-  uploadPage++;
-  const res = await fetch(`/a/dashboard?uploadPage=${uploadPage}`, {
-    headers: { 'Accept': 'application/json' }
-  });
-  const data = await res.json();
-  const uploadsDiv = document.getElementById('uploads');
-
-  data.uploads.forEach(upload => {
-    uploadsDiv.appendChild(createUploadRow(upload));
-  });
-
-  if (!data.hasMoreUploads) document.getElementById('loadMoreUploads')?.remove();
-}
-
-async function fetchMoreUsers() {
-  userPage++;
-  const res = await fetch(`/a/dashboard?userPage=${userPage}`, {
-    headers: { 'Accept': 'application/json' }
-  });
-  const data = await res.json();
-  const usersDiv = document.getElementById('users');
-  data.users.forEach(user => {
-    usersDiv.appendChild(createUserRow(user));
-  });
-  if (!data.hasMoreUsers) document.getElementById('loadMoreUsers')?.remove();
-}
-
-document.getElementById('loadMoreUploads')?.addEventListener('click', fetchMoreUploads);
-document.getElementById('loadMoreUsers')?.addEventListener('click', fetchMoreUsers);
-document.addEventListener('submit', event => {
-  const form = event.target.closest('.user-status-form');
-  if (!form) return;
-
-  const action = form.dataset.action === 'unblock' ? 'Unblock' : 'Block';
-  if (!confirm(`${action} this user?`)) event.preventDefault();
-});
-</script>
+<script src="/js/adminDashboard.js"></script>
