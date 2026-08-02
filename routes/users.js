@@ -54,7 +54,7 @@ router.post(
 );
 
 router.route('/logout')
-  .post(users.logout)
+  .post(catchAsyncErrors(users.logout))
 
 // When user clicks on verification code in email
 router.route('/verify')

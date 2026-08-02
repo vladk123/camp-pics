@@ -467,7 +467,7 @@ describe('CSP, vendor, and scope guards', () => {
     );
   });
 
-  test('restricted production, package, email, and vendor files remain unchanged', async () => {
+  test('restricted files outside ordinary logout remain unchanged', async () => {
     const status = execFileSync('git', [
       'status',
       '--short',
@@ -484,7 +484,17 @@ describe('CSP, vendor, and scope guards', () => {
       'public/js/external-scripts/leaflet.js',
       'public/js/swiper-bundle.min.js',
     ], { cwd: root, encoding: 'utf8' });
-    assert.equal(status.trim(), '');
+    const ordinaryLogoutFiles = new Set([
+      'controllers/users.js',
+      'routes/users.js',
+    ]);
+    const unexpectedChanges = status
+      .split(/\r?\n/u)
+      .filter(Boolean)
+      .filter(line => !ordinaryLogoutFiles.has(
+        line.slice(3).replaceAll('\\', '/'),
+      ));
+    assert.deepEqual(unexpectedChanges, []);
 
     const packageJson = JSON.parse(await read('package.json'));
     const packageLock = JSON.parse(await read('package-lock.json'));

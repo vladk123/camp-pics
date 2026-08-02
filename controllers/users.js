@@ -221,24 +221,68 @@ export const login = async(req, res, next) => {
 
 }
 
-export const logout =  (req, res, next) => {
-    req.logout(function (err){
-        if(err) return next(err)
-        req.session.regenerate((err => {
-            if (err) return next(err);
-            const redirectUrl = '/';
-            redirectedFlash(req, res, 'success', 'Logged Out!', redirectUrl,
-                {GA4:{
+export const createLogoutController = ({
+    redirectWithFlash = redirectedFlash,
+    runCallback = runCallbackOperation,
+} = {}) => {
+    const logoutUnavailableError = new Error('Logout is unavailable.');
+    const sessionRegenerationUnavailableError =
+        new Error('Session regeneration is unavailable.');
+
+    return async(req, res, next) => {
+        let isAuthenticated = false;
+        try {
+            if (typeof req.isAuthenticated === 'function') {
+                isAuthenticated = req.isAuthenticated();
+            }
+        } catch (error) {
+            return next(error);
+        }
+
+        if (!isAuthenticated) {
+            return res.redirect('/');
+        }
+
+        if (typeof req.logout !== 'function') {
+            return next(logoutUnavailableError);
+        }
+
+        const logoutError = await runCallback(
+            callback => req.logout(callback),
+        );
+        if (logoutError) {
+            return next(logoutError);
+        }
+
+        const session = req.session;
+        if (typeof session?.regenerate !== 'function') {
+            return next(sessionRegenerationUnavailableError);
+        }
+
+        const regenerationError = await runCallback(
+            callback => session.regenerate(callback),
+        );
+        if (regenerationError) {
+            return next(regenerationError);
+        }
+
+        return redirectWithFlash(
+            req,
+            res,
+            'success',
+            'Logged Out!',
+            '/',
+            {
+                GA4: {
                     event: 'logout',
-                    // user_id: userId // Cannot do this - otherwise it'll keep tracking this id, potentially causing compliance issues?
-                    user_id: null // Better to clear it on log-out
-                }}
-            );
-        }))
-    });
+                    user_id: null,
+                },
+            },
+        );
+    };
+};
 
-
-}
+export const logout = createLogoutController();
 
 export const verify =  async(req, res, next) => {
     const expiredLinkRedirect = () => redirectedFlash(req, res, 'error', 'Sorry, that link is invalid or has expired...please try re-verifying by logging in and going to your Account settings.', '/')

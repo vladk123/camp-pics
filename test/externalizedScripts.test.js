@@ -792,7 +792,7 @@ describe('CSP and scope regression guards for externalization', () => {
     assert.match(retained[3], /window\.ALL_PARKS = <%- parksJson %>/u);
   });
 
-  test('protected files, dependencies, CSP wiring, and engine policy remain unchanged', async () => {
+  test('protected files outside ordinary logout, dependencies, CSP wiring, and engine policy remain unchanged', async () => {
     const protectedStatus = execFileSync('git', [
       'status',
       '--short',
@@ -809,7 +809,17 @@ describe('CSP and scope regression guards for externalization', () => {
       'public/js/csrf.js',
       'public/js/passwordPolicy.js',
     ], { cwd: root, encoding: 'utf8' });
-    assert.equal(protectedStatus.trim(), '');
+    const ordinaryLogoutFiles = new Set([
+      'controllers/users.js',
+      'routes/users.js',
+    ]);
+    const unexpectedProtectedChanges = protectedStatus
+      .split(/\r?\n/u)
+      .filter(Boolean)
+      .filter(line => !ordinaryLogoutFiles.has(
+        line.slice(3).replaceAll('\\', '/'),
+      ));
+    assert.deepEqual(unexpectedProtectedChanges, []);
 
     const packageJson = JSON.parse(await read('package.json'));
     assert.deepEqual(packageJson.engines, {

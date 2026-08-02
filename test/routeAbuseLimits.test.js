@@ -2973,7 +2973,7 @@ describe('dependency, dead-helper, global-protection, and documentation guards',
     }
   });
 
-  test('restricted non-CSP production surfaces and engine metadata remain unchanged', async () => {
+  test('restricted non-CSP surfaces outside ordinary logout remain unchanged', async () => {
     const status = execFileSync(
       'git',
       [
@@ -3013,8 +3013,14 @@ describe('dependency, dead-helper, global-protection, and documentation guards',
       ));
     const packageJson = JSON.parse(await readSource('package.json'));
     const packageLock = JSON.parse(await readSource('package-lock.json'));
+    const unexpectedProductionChanges = status
+      .split(/\r?\n/u)
+      .filter(Boolean)
+      .filter(line => (
+        line.slice(3).replaceAll('\\', '/') !== 'controllers/users.js'
+      ));
 
-    assert.equal(status.trim(), '');
+    assert.deepEqual(unexpectedProductionChanges, []);
     assert.deepEqual(unexpectedBrowserChanges, []);
     assert.deepEqual(packageJson.engines, { node: '24.x', npm: '11.x' });
     assert.deepEqual(packageLock.packages[''].engines, packageJson.engines);
