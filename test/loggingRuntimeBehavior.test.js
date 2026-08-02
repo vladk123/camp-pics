@@ -90,24 +90,37 @@ describe('runtime failure paths retain their responses', () => {
         const handler = createUserBlockHandler({
           blocked: fixture.blocked,
           UserModel: {
-            async findByIdAndUpdate(id, update) {
-              updates.push({ id, update });
+            async findOneAndUpdate(filter, update, options) {
+              updates.push({ filter, update, options });
               throw failure;
             },
           },
           log: logs.log,
           redirectWithFlash: redirects.redirectWithFlash,
         });
-        const req = { params: { id: 'target-user-id' } };
+        const req = {
+          params: { id: '64b7f2d4c9f1e8a123456789' },
+          user: { _id: '74b7f2d4c9f1e8a123456789' },
+        };
         const res = {};
 
         const result = await handler(req, res, () => {});
 
         assert.deepEqual(result, { redirected: true });
-        assert.deepEqual(updates, [{
-          id: 'target-user-id',
-          update: { blocked: fixture.blocked },
-        }]);
+        assert.equal(updates.length, 1);
+        assert.equal(
+          updates[0].filter._id.toHexString(),
+          '64b7f2d4c9f1e8a123456789',
+        );
+        assert.deepEqual(updates[0].update, {
+          $set: { blocked: fixture.blocked },
+        });
+        assert.deepEqual(updates[0].options, {
+          new: true,
+          runValidators: true,
+          projection: { _id: 1, blocked: 1 },
+          upsert: false,
+        });
         assert.deepEqual(redirects.calls, [[
           req,
           res,
@@ -116,7 +129,11 @@ describe('runtime failure paths retain their responses', () => {
           '/a/dashboard',
         ]]);
         assert.equal(logs.calls.length, 1);
-        assert.equal(logs.calls[0][3].error, failure);
+        assert.deepEqual(logs.calls[0][3], {
+          message:
+            `Admin user ${fixture.blocked ? 'block' : 'unblock'} operation failed.`,
+        });
+        assert.equal(Object.hasOwn(logs.calls[0][3], 'error'), false);
       });
     }
   });

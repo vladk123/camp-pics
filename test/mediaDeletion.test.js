@@ -237,12 +237,15 @@ function makeHarness({
       : undefined,
   });
 
-  async function remove(locationInput = {}) {
+  async function remove(
+    locationInput = {},
+    mediaId = ids.media.toString(),
+  ) {
     return service.deleteMedia({
       parkSlug: 'delete-park',
       locationInput,
       mediaType,
-      mediaId: ids.media.toString(),
+      mediaId,
       actorUserId: ids.actor,
       actorIsAdmin,
     });
@@ -255,9 +258,9 @@ function activeMedia(state, mediaType) {
   return state.park[mediaType === 'photo' ? 'photos' : 'videos'];
 }
 
-async function deletionError(harness, locationInput) {
+async function deletionError(harness, locationInput, mediaId) {
   try {
-    await harness.remove(locationInput);
+    await harness.remove(locationInput, mediaId);
   } catch (error) {
     return error;
   }
@@ -265,6 +268,20 @@ async function deletionError(harness, locationInput) {
 }
 
 describe('transactional photo deletion', () => {
+  test('a malformed route-style media ID is a safe not-found', async () => {
+    const harness = makeHarness();
+    const error = await deletionError(
+      harness,
+      undefined,
+      'malformed-photo-id',
+    );
+
+    assert.equal(error.code, MEDIA_DELETE_NOT_FOUND);
+    assert.equal(activeMedia(harness.state, 'photo').length, 1);
+    assert.equal(harness.calls.uploadFinds, 0);
+    assert.equal(harness.calls.parkSaves, 0);
+  });
+
   test('agrees across duplicate Upload records and changes every Mongo representation', async () => {
     const mediaId = objectId();
     const harness = makeHarness();
@@ -438,6 +455,20 @@ describe('transactional photo deletion', () => {
 });
 
 describe('transactional video deletion', () => {
+  test('a malformed route-style media ID is a safe not-found', async () => {
+    const harness = makeHarness({ mediaType: 'video' });
+    const error = await deletionError(
+      harness,
+      undefined,
+      'malformed-video-id',
+    );
+
+    assert.equal(error.code, MEDIA_DELETE_NOT_FOUND);
+    assert.equal(activeMedia(harness.state, 'video').length, 1);
+    assert.equal(harness.calls.uploadFinds, 0);
+    assert.equal(harness.calls.parkSaves, 0);
+  });
+
   test('Park, duplicate Uploads, and duplicate history entries commit together without a cleanup job', async () => {
     const harness = makeHarness({ mediaType: 'video' });
     harness.state.uploads.push({

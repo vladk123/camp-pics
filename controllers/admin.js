@@ -2,6 +2,10 @@ import { User } from '../models/user.js';
 import { Upload } from '../models/upload.js';
 import { extractYouTubeVideoId } from '../utils/youtube.js';
 import { logger } from '../utils/logging.js';
+import {
+  parseStrictMongoObjectId,
+  strictMongoObjectIdsEqual,
+} from '../utils/mongoObjectId.js';
 
 // import { getIP } from '../utils/getIP.js'
 import { redirectedFlash } from '../utils/redirectedFlash.js';
@@ -32,6 +36,11 @@ export const ADMIN_UPLOAD_USER_PROJECTION = Object.freeze({
   _id: 0,
   fname: 1,
   username: 1,
+});
+
+const ADMIN_USER_BLOCK_PROJECTION = Object.freeze({
+  _id: 1,
+  blocked: 1,
 });
 
 export function getSafeHttpUrl(value) {
@@ -186,9 +195,48 @@ export function createUserBlockHandler({
     : 'Failed to unblock user.';
 
   return async (req, res, next) => {
+    const targetId = parseStrictMongoObjectId(req.params?.id);
+    if (!targetId.valid) {
+      return redirectWithFlash(
+        req,
+        res,
+        'error',
+        'Invalid user target.',
+        '/a/dashboard',
+      );
+    }
+
+    if (strictMongoObjectIdsEqual(targetId.objectId, req.user?._id)) {
+      return redirectWithFlash(
+        req,
+        res,
+        'error',
+        'You cannot change your own blocked status.',
+        '/a/dashboard',
+      );
+    }
+
     try {
-      const { id } = req.params;
-      await UserModel.findByIdAndUpdate(id, { blocked });
+      const updatedUser = await UserModel.findOneAndUpdate(
+        { _id: targetId.objectId },
+        { $set: { blocked } },
+        {
+          new: true,
+          runValidators: true,
+          projection: ADMIN_USER_BLOCK_PROJECTION,
+          upsert: false,
+        },
+      );
+      if (!updatedUser) {
+        return redirectWithFlash(
+          req,
+          res,
+          'error',
+          'User was not found.',
+          '/a/dashboard',
+        );
+      }
+
       return redirectWithFlash(
         req,
         res,
@@ -196,10 +244,9 @@ export function createUserBlockHandler({
         successMessage,
         '/a/dashboard',
       );
-    } catch (err) {
+    } catch {
       await log(req, res, 'error', {
         message: `Admin user ${action} operation failed.`,
-        error: err,
       });
       return redirectWithFlash(
         req,
