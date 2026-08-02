@@ -6,7 +6,7 @@
   href="/css/swiper-bundle.min.css"
 />
 
-<script>
+<script nonce="<%= cspNonce %>">
   // Serialize safely to avoid XSS or JSON parsing issues
   window.PARK = <%- parkPageJson %>;
   window.CURRENT_USER_ID = "<%= currentUser ? currentUser._id : '' %>";

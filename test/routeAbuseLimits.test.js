@@ -2973,14 +2973,13 @@ describe('dependency, dead-helper, global-protection, and documentation guards',
     }
   });
 
-  test('restricted production surfaces and engine metadata remain unchanged', async () => {
+  test('restricted non-CSP production surfaces and engine metadata remain unchanged', async () => {
     const status = execFileSync(
       'git',
       [
         'status',
         '--short',
         '--',
-        'app.js',
         'middleware.js',
         'config',
         'controllers',

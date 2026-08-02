@@ -37,6 +37,11 @@ import flash from 'connect-flash';
 import { redirectedFlash } from './utils/redirectedFlash.js';
 import { logger } from './utils/logging.js'; //for logging errors
 import { startWithRuntimeConfig } from './config/runtimeStartup.js';
+import {
+	createCspNonceMiddleware,
+	cspNonceSource,
+} from './utils/cspNonce.js';
+import { consumeGa4Event } from './utils/ga4EventBootstrap.js';
 
 import userRoutes from './routes/users.js';
 import campRoutes from './routes/camp.js';
@@ -228,6 +233,7 @@ const connectSrcUrls = [
 const fontSrcUrls = [
 	'https://cdnjs.cloudflare.com'
 ];
+app.use(createCspNonceMiddleware());
 app.use(
 	helmet({
 		crossOriginEmbedderPolicy: false, // to allow images to load
@@ -240,7 +246,8 @@ app.use(
 			directives: {
 				defaultSrc: ["'self'"],
 				connectSrc: ["'self'", ...connectSrcUrls],
-				scriptSrc: [ "'self'", "'unsafe-inline'", ...scriptSrcUrls], //
+				scriptSrc: ["'self'", cspNonceSource, ...scriptSrcUrls], //
+				scriptSrcAttr: ["'none'"],
 				styleSrc: ["'self'", "'unsafe-inline'", ...styleSrcUrls], // 
 				workerSrc: ["'self'",], // "blob:"
 				objectSrc: [],
@@ -282,10 +289,9 @@ app.use((req, res, next) => {
     res.locals.warning = req.flash('warning');
     res.locals.error = req.flash('error');
 
-	// Google Analytics/Tag Manager( GA4)
-	res.locals.GA4_EVENT = req.session.__GA4_EVENT__ || null;
-	// Clear it so it fires once
-	delete req.session.__GA4_EVENT__;
+	// Google Analytics/Tag Manager (GA4). Consuming the session value here
+	// preserves the existing one-time event behavior.
+	res.locals.ga4EventJson = consumeGa4Event(req.session);
 
 	next();
 })

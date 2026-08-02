@@ -45,6 +45,7 @@ describe('park-search result EJS rendering', () => {
     const result = createParkSearchViewResult(serialized, 'banff');
 
     const rendered = await ejs.renderFile(templatePath, {
+      cspNonce: 'known-csp-nonce',
       layout() {},
       meta: {},
       data: { query: '<script>query()</script>', results: [result] },

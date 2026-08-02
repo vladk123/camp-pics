@@ -5,7 +5,7 @@
 <html lang="eng" data-theme="light">
 	<head>
 		<!-- Google Tag Manager -->
-		<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+		<script nonce="<%= cspNonce %>">(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
 			new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
 			j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 			'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
@@ -14,8 +14,8 @@
 		<!-- End Google Tag Manager -->
 
 		<!-- If any GA4 data is passed from redirectedFlash in backend -->
-		<script>
-			window.__GA4_EVENT__ = <%- JSON.stringify(GA4_EVENT) %>;
+		<script nonce="<%= cspNonce %>">
+			window.__GA4_EVENT__ = <%- ga4EventJson %>;
 		</script>
 
 		<title><%= `${meta?.title} - CampPics` || "CampPics" %></title>
@@ -43,7 +43,7 @@
 
 
 		<!-- Set dark/light mode -->
-		<script>
+		<script nonce="<%= cspNonce %>">
 			(function () {
 			  const theme = (() => {
 				const stored = localStorage.getItem('theme');
@@ -90,9 +90,6 @@
 			switcher: true,
 			data: data || {} 
 		}) %>
-		<script>
-			let flashMessages
-		</script>
 		<div id="flash-messages"></div>
 		<div id="main-page-content">
 			<div id="layout-wrapper">
@@ -130,10 +127,10 @@
 		<script type="text/javascript" src="/js/login.js"></script>
 
 		<!-- Handle error messages -->
-		<% if(success && success.length) { %> <script> createFlashMsg('success', '<%= success %>', 'success-msg', 5) </script> <% } %>
-		<% if(info && info.length) { %> <script> createFlashMsg('info', '<%= info %>', 'info-msg', 10) </script> <% } %>
-		<% if(warning && warning.length) { %> <script> createFlashMsg('warning', '<%= warning %>', 'warning-msg', 10) </script> <% } %>
-		<% if(error && error.length) { %> <script> createFlashMsg('error', '<%= error %>', 'error-msg', 15) </script> <% } %>
+		<% if(success && success.length) { %> <script nonce="<%= cspNonce %>"> createFlashMsg('success', '<%= success %>', 'success-msg', 5) </script> <% } %>
+		<% if(info && info.length) { %> <script nonce="<%= cspNonce %>"> createFlashMsg('info', '<%= info %>', 'info-msg', 10) </script> <% } %>
+		<% if(warning && warning.length) { %> <script nonce="<%= cspNonce %>"> createFlashMsg('warning', '<%= warning %>', 'warning-msg', 10) </script> <% } %>
+		<% if(error && error.length) { %> <script nonce="<%= cspNonce %>"> createFlashMsg('error', '<%= error %>', 'error-msg', 15) </script> <% } %>
 
 	</body>
 </html>

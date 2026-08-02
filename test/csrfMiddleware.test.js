@@ -16,6 +16,7 @@ import {
   INVALID_CSRF_TOKEN_CODE,
   INVALID_CSRF_TOKEN_MESSAGE,
 } from '../utils/csrf.js';
+import { createCspNonceMiddleware } from '../utils/cspNonce.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const state = {
@@ -101,12 +102,13 @@ before(async () => {
     cookie: { sameSite: 'strict' },
   }));
   app.use(methodOverride('_method'));
+  app.use(createCspNonceMiddleware());
   app.use((req, res, next) => {
     Object.assign(res.locals, {
       canonicalUrl: null,
       currentUser: null,
       error: [],
-      GA4_EVENT: null,
+      ga4EventJson: 'null',
       info: [],
       success: [],
       warning: [],
