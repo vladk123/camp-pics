@@ -13,8 +13,11 @@ import passport from 'passport';
 import { redirectedFlash } from '../utils/redirectedFlash.js';
 import { storeSessionAuthVersion } from '../utils/authLifecycle.js';
 import {
+  accountDeletionLimiter,
   forgotPasswordLimiter,
   loginLimiter,
+  passwordChangeLimiter,
+  passwordResetSubmissionLimiter,
   registrationLimiter,
   verificationResendLimiter,
 } from '../utils/routeAbuseLimits.js';
@@ -89,15 +92,25 @@ router.route('/forgot-password')
 router.route('/forgot-password/:userId/:code')
   .get(catchAsyncErrors(users.renderForgotPasswordReset))
   // When user submits form with new password
-  .post(catchAsyncErrors(users.updateForgotPasswordReset));
+  .post(
+    passwordResetSubmissionLimiter,
+    catchAsyncErrors(users.updateForgotPasswordReset),
+  );
 
 router.route('/forgot-password/:userId')
   .get(catchAsyncErrors(users.renderForgotPasswordReset))
-  .post(catchAsyncErrors(users.updateForgotPasswordReset));
+  .post(
+    passwordResetSubmissionLimiter,
+    catchAsyncErrors(users.updateForgotPasswordReset),
+  );
 
 // Filled out the "reset password" form on the accoutn page
 router.route('/change-password')
-  .post(isLoggedIn, catchAsyncErrors(users.changePassword));
+  .post(
+    isLoggedIn,
+    passwordChangeLimiter,
+    catchAsyncErrors(users.changePassword),
+  );
 
 // Account settings
 router.route('/account')
@@ -105,6 +118,10 @@ router.route('/account')
 
 // Delete account
 router.route('/delete-account')
-  .post(isLoggedIn, catchAsyncErrors(users.deleteAccount))
+  .post(
+    isLoggedIn,
+    accountDeletionLimiter,
+    catchAsyncErrors(users.deleteAccount),
+  )
 
 export default router

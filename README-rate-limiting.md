@@ -24,6 +24,26 @@ only to the listed POST route.
 | Verification-email resend | `POST /user/resend-verification` | 60 minutes | 5 |
 | Contact submission | `POST /other/contact` | 60 minutes | 5 |
 
+Password and account mutations use these additional policies:
+
+| Operation | Routes | Window | Maximum attempts |
+| --- | --- | ---: | ---: |
+| Forgotten-password reset-form submission | `POST /user/forgot-password/:userId/:code` and `POST /user/forgot-password/:userId` | 60 minutes | 10 |
+| Authenticated password change | `POST /user/change-password` | 60 minutes | 10 |
+| Account deletion | `POST /user/delete-account` | 60 minutes | 5 |
+
+Reset-form submissions are keyed by the default client-IP attribution because
+they are unauthenticated. Both reset-form POST variants share one
+reset-submission counter. That counter is separate from the forgotten-password
+email-request counter.
+
+Authenticated password changes and account deletion are keyed only by the
+authenticated User ID and use separate counters. Authentication runs first, so
+rejected unauthenticated requests do not consume either authenticated counter.
+The account-deletion limiter runs before current-password verification, the
+database transaction, media inventory and cleanup planning, cleanup-job
+creation, session destruction, and immediate cleanup processing.
+
 Authenticated media mutations use these additional policies:
 
 | Operation | Routes | Window | Maximum attempts |
@@ -38,7 +58,8 @@ all route variants for the same operation share that operation's counter. The
 photo-upload limiter runs after authentication and before multipart parsing or
 file buffering.
 
-All attempts count, including successful and invalid submissions.
+All attempts count, including successful, malformed, incorrect-password,
+invalid-link, expired-link, and validation-failing submissions.
 
 ## Response behavior
 
@@ -48,18 +69,17 @@ An exceeded route-specific limit returns HTTP 429 with a fixed plain-text respon
 
 The current counters live in process memory and reset whenever the process restarts. Separate web dynos would have separate counters. This is acceptable for the current single-instance, basic abuse-prevention stage, but it is not distributed-bot protection and rate limiting alone does not prevent distributed attacks.
 
-The authenticated media counters are also process-local. They reset whenever
-the process restarts, and separate web dynos do not share state. Before
-CampPics uses multiple web dynos, each limiter must move to its own shared-store
-instance with a unique prefix so all policies remain independent across
-processes.
+The authenticated media, password-change, account-deletion, and reset-form
+submission counters are also process-local. They reset whenever the process
+restarts, and separate web dynos do not share state. Before CampPics uses
+multiple web dynos, each limiter must move to its own shared-store instance
+with a unique prefix so all policies remain independent across processes.
 
 ## Deferred layers
 
 Later passes still need separate abuse-control policies for:
 
-- account deletion;
-- password-changing and password-reset submissions;
 - public campsite APIs;
-- the park search API; and
-- administrator mutations.
+- the park search API;
+- administrator mutations; and
+- shared-store migration before multiple dynos.

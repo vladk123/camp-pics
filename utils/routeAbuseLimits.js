@@ -41,6 +41,18 @@ export const ROUTE_ABUSE_POLICIES = Object.freeze({
     windowMs: 60 * 60 * 1000,
     limit: 60,
   }),
+  passwordResetSubmission: Object.freeze({
+    windowMs: 60 * 60 * 1000,
+    limit: 10,
+  }),
+  passwordChange: Object.freeze({
+    windowMs: 60 * 60 * 1000,
+    limit: 10,
+  }),
+  accountDeletion: Object.freeze({
+    windowMs: 60 * 60 * 1000,
+    limit: 5,
+  }),
 });
 
 export function authenticatedUserKeyGenerator(req) {
@@ -106,6 +118,17 @@ export function createRouteAbuseLimiters({
       ROUTE_ABUSE_POLICIES.mediaDeletion,
       authenticatedUserKeyGenerator,
     ),
+    passwordResetSubmissionLimiter: createLimiter(
+      ROUTE_ABUSE_POLICIES.passwordResetSubmission,
+    ),
+    passwordChangeLimiter: createLimiter(
+      ROUTE_ABUSE_POLICIES.passwordChange,
+      authenticatedUserKeyGenerator,
+    ),
+    accountDeletionLimiter: createLimiter(
+      ROUTE_ABUSE_POLICIES.accountDeletion,
+      authenticatedUserKeyGenerator,
+    ),
   });
 }
 
@@ -118,4 +141,7 @@ export const {
   photoUploadLimiter,
   videoUploadLimiter,
   mediaDeletionLimiter,
+  passwordResetSubmissionLimiter,
+  passwordChangeLimiter,
+  accountDeletionLimiter,
 } = createRouteAbuseLimiters();

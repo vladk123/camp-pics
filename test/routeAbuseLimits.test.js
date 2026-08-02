@@ -13,6 +13,7 @@ const routeAbuseModule = await import('../utils/routeAbuseLimits.js');
 const {
   ROUTE_ABUSE_LIMIT_MESSAGE,
   ROUTE_ABUSE_POLICIES,
+  accountDeletionLimiter,
   authenticatedUserKeyGenerator,
   contactLimiter,
   createRouteAbuseLimiters,
@@ -20,6 +21,8 @@ const {
   forgotPasswordLimiter,
   loginLimiter,
   mediaDeletionLimiter,
+  passwordChangeLimiter,
+  passwordResetSubmissionLimiter,
   photoUploadLimiter,
   registrationLimiter,
   verificationResendLimiter,
@@ -105,9 +108,33 @@ const mediaExpectedPolicies = Object.freeze([
   }),
 ]);
 
+const passwordAndAccountExpectedPolicies = Object.freeze([
+  Object.freeze({
+    limiterName: 'passwordResetSubmissionLimiter',
+    policyName: 'passwordResetSubmission',
+    windowMs: 60 * 60 * 1000,
+    limit: 10,
+  }),
+  Object.freeze({
+    limiterName: 'passwordChangeLimiter',
+    policyName: 'passwordChange',
+    windowMs: 60 * 60 * 1000,
+    limit: 10,
+    authenticatedUserKeyed: true,
+  }),
+  Object.freeze({
+    limiterName: 'accountDeletionLimiter',
+    policyName: 'accountDeletion',
+    windowMs: 60 * 60 * 1000,
+    limit: 5,
+    authenticatedUserKeyed: true,
+  }),
+]);
+
 const expectedPolicies = Object.freeze([
   ...existingExpectedPolicies,
   ...mediaExpectedPolicies,
+  ...passwordAndAccountExpectedPolicies,
 ]);
 
 const photoUploadRoutes = Object.freeze([
@@ -139,11 +166,15 @@ const mediaDeletionRoutes = Object.freeze([
 
 const sensitiveFixture = Object.freeze({
   userId: 'abcdefabcdefabcdefabcdef',
+  authenticatedUserId: '0123456789abcdef01234567',
+  resetUserId: 'fedcbafedcbafedcbafedcba',
+  resetCode: 'recognizable-reset-code-secret',
   username: 'recognizable-login-user@example.test',
+  email: 'recognizable-contact@example.test',
   password: 'Recognizable-Password-Secret!',
+  currentPassword: 'Recognizable-Current-Password-Secret!',
   forgot_username: 'recognizable-reset-user@example.test',
   fname: 'Recognizable Contact Name',
-  email: 'recognizable-contact@example.test',
   email_subject: 'Recognizable Contact Subject',
   email_body: 'Recognizable contact body secret',
   parkSlug: 'recognizable-park-slug-secret',
@@ -207,11 +238,13 @@ const sendPost = (url, body = sensitiveFixture) =>
 function addAuthenticatedUser(req, res, next) {
   req.user = {
     _id: req.get('X-Test-User-Id') || sensitiveFixture.userId,
-    username: sensitiveFixture.username,
-    email: sensitiveFixture.email,
+    username: req.get('X-Test-Username') || sensitiveFixture.username,
+    email: req.get('X-Test-Email') || sensitiveFixture.email,
     email_verified: true,
   };
-  req.session = { fixture: sensitiveFixture.session };
+  req.session = {
+    fixture: req.get('X-Test-Session') || sensitiveFixture.session,
+  };
   next();
 }
 
@@ -243,7 +276,7 @@ const methodHandlers = (route, method) => route.stack
   .map(layer => layer.handle);
 
 describe('route-abuse policy construction', () => {
-  test('constructs eight exact independent policies with one fixed handler', () => {
+  test('constructs eleven exact independent policies with one fixed handler', () => {
     const capturedOptions = [];
     const createdInstances = [];
     const limiters = createRouteAbuseLimiters({
@@ -255,11 +288,15 @@ describe('route-abuse policy construction', () => {
       },
     });
 
-    assert.equal(capturedOptions.length, 8);
-    assert.equal(createdInstances.length, 8);
-    assert.equal(new Set(createdInstances).size, 8);
-    assert.equal(new Set(Object.values(limiters)).size, 8);
+    assert.equal(capturedOptions.length, 11);
+    assert.equal(createdInstances.length, 11);
+    assert.equal(new Set(createdInstances).size, 11);
+    assert.equal(new Set(Object.values(limiters)).size, 11);
     assert.equal(Object.isFrozen(limiters), true);
+    assert.deepEqual(
+      Object.keys(ROUTE_ABUSE_POLICIES),
+      expectedPolicies.map(policy => policy.policyName),
+    );
     assert.equal(new Set(capturedOptions.map(options => options.handler)).size, 1);
 
     for (const [index, expected] of expectedPolicies.entries()) {
@@ -319,7 +356,7 @@ describe('route-abuse policy construction', () => {
     const limiterNames = expectedPolicies.map(policy => policy.limiterName);
     const productionLimiters = limiterNames.map(name => routeAbuseModule[name]);
 
-    assert.equal(new Set(productionLimiters).size, 8);
+    assert.equal(new Set(productionLimiters).size, 11);
     for (const limiterName of limiterNames) {
       assert.strictEqual(routeAbuseModule[limiterName], secondImport[limiterName]);
     }
@@ -541,6 +578,282 @@ describe('real route-abuse limiter behavior', () => {
     });
   }
 
+  test('both password-reset POST variants share one default-IP counter', async () => {
+    const limiters = createRouteAbuseLimiters();
+    let controllerCalls = 0;
+    const app = express();
+    app.set('trust proxy', 1);
+    const controller = (req, res) => {
+      controllerCalls += 1;
+      res.status(204).end();
+    };
+    app.post(
+      '/forgot-password/:userId/:code',
+      limiters.passwordResetSubmissionLimiter,
+      controller,
+    );
+    app.post(
+      '/forgot-password/:userId',
+      limiters.passwordResetSubmissionLimiter,
+      controller,
+    );
+
+    await withServer(app, async baseUrl => {
+      const withCode = `${baseUrl}/forgot-password/${sensitiveFixture.resetUserId}/${sensitiveFixture.resetCode}`;
+      const withoutCode = `${baseUrl}/forgot-password/${sensitiveFixture.resetUserId}`;
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        assert.equal((await sendMutation(withCode, {
+          forwardedFor: '198.51.100.91',
+        })).status, 204);
+      }
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        assert.equal((await sendMutation(withoutCode, {
+          forwardedFor: '198.51.100.91',
+        })).status, 204);
+      }
+      assert.equal((await sendMutation(withCode, {
+        forwardedFor: '198.51.100.91',
+      })).status, 429);
+    });
+
+    assert.equal(controllerCalls, 10);
+  });
+
+  test('password-reset submission counters are independent by default-attributed IP', async () => {
+    const limiters = createRouteAbuseLimiters();
+    const app = express();
+    app.set('trust proxy', 1);
+    app.post(
+      '/forgot-password/:userId/:code',
+      limiters.passwordResetSubmissionLimiter,
+      (req, res) => res.status(204).end(),
+    );
+
+    await withServer(app, async baseUrl => {
+      const url = `${baseUrl}/forgot-password/${sensitiveFixture.resetUserId}/${sensitiveFixture.resetCode}`;
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        assert.equal((await sendMutation(url, {
+          forwardedFor: '198.51.100.92',
+        })).status, 204);
+      }
+      assert.equal((await sendMutation(url, {
+        forwardedFor: '198.51.100.92',
+      })).status, 429);
+      assert.equal((await sendMutation(url, {
+        forwardedFor: '203.0.113.93',
+      })).status, 204);
+    });
+  });
+
+  test('reset submissions and forgot-password email requests have separate counters', async () => {
+    const limiters = createRouteAbuseLimiters();
+    const calls = { emailRequest: 0, resetSubmission: 0 };
+    const app = express();
+    app.post(
+      '/forgot-password/:userId/:code',
+      limiters.passwordResetSubmissionLimiter,
+      (req, res) => {
+        calls.resetSubmission += 1;
+        res.status(204).end();
+      },
+    );
+    app.post('/forgot-password', limiters.forgotPasswordLimiter, (req, res) => {
+      calls.emailRequest += 1;
+      res.status(204).end();
+    });
+
+    await withServer(app, async baseUrl => {
+      const resetUrl = `${baseUrl}/forgot-password/${sensitiveFixture.resetUserId}/${sensitiveFixture.resetCode}`;
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        assert.equal((await sendMutation(resetUrl)).status, 204);
+      }
+      assert.equal((await sendMutation(resetUrl)).status, 429);
+      assert.equal(
+        (await sendMutation(`${baseUrl}/forgot-password`)).status,
+        204,
+      );
+    });
+
+    assert.deepEqual(calls, { emailRequest: 1, resetSubmission: 10 });
+  });
+
+  for (const expected of passwordAndAccountExpectedPolicies.filter(
+    policy => policy.authenticatedUserKeyed,
+  )) {
+    test(`${expected.policyName} follows one User across IP, username, email, and session changes`, async () => {
+      const limiters = createRouteAbuseLimiters();
+      const app = express();
+      app.set('trust proxy', 1);
+      app.use(addAuthenticatedUser);
+      app.post('/mutation', limiters[expected.limiterName], (req, res) => {
+        res.status(204).end();
+      });
+
+      await withServer(app, async baseUrl => {
+        for (let attempt = 0; attempt < expected.limit; attempt += 1) {
+          const response = await sendMutation(`${baseUrl}/mutation`, {
+            forwardedFor: attempt % 2 === 0
+              ? '198.51.100.101'
+              : '203.0.113.102',
+            headers: {
+              'X-Test-Username': `changed-${attempt}@example.test`,
+              'X-Test-Email': `email-${attempt}@example.test`,
+              'X-Test-Session': `changed-session-${attempt}`,
+            },
+            userId: sensitiveFixture.authenticatedUserId,
+          });
+          assert.equal(response.status, 204);
+        }
+        assert.equal((await sendMutation(`${baseUrl}/mutation`, {
+          forwardedFor: '192.0.2.103',
+          headers: {
+            'X-Test-Username': 'final-name@example.test',
+            'X-Test-Email': 'final-email@example.test',
+            'X-Test-Session': 'final-session-value',
+          },
+          userId: sensitiveFixture.authenticatedUserId,
+        })).status, 429);
+      });
+    });
+
+    test(`${expected.policyName} keeps different Users independent on one IP`, async () => {
+      const limiters = createRouteAbuseLimiters();
+      const app = express();
+      const firstUserId = '111111111111111111111111';
+      const secondUserId = '222222222222222222222222';
+      app.set('trust proxy', 1);
+      app.use(addAuthenticatedUser);
+      app.post('/mutation', limiters[expected.limiterName], (req, res) => {
+        res.status(204).end();
+      });
+
+      await withServer(app, async baseUrl => {
+        for (let attempt = 0; attempt < expected.limit; attempt += 1) {
+          assert.equal((await sendMutation(`${baseUrl}/mutation`, {
+            forwardedFor: '198.51.100.104',
+            userId: firstUserId,
+          })).status, 204);
+        }
+        assert.equal((await sendMutation(`${baseUrl}/mutation`, {
+          forwardedFor: '198.51.100.104',
+          userId: firstUserId,
+        })).status, 429);
+        assert.equal((await sendMutation(`${baseUrl}/mutation`, {
+          forwardedFor: '198.51.100.104',
+          userId: secondUserId,
+        })).status, 204);
+      });
+    });
+
+    test(`${expected.policyName} gives all malformed authenticated IDs the fail-closed key`, async () => {
+      const limiters = createRouteAbuseLimiters();
+      const app = express();
+      app.use(addAuthenticatedUser);
+      app.post('/mutation', limiters[expected.limiterName], (req, res) => {
+        res.status(204).end();
+      });
+
+      await withServer(app, async baseUrl => {
+        for (let attempt = 0; attempt < expected.limit; attempt += 1) {
+          assert.equal((await sendMutation(`${baseUrl}/mutation`, {
+            userId: `malformed-authenticated-id-${attempt}`,
+          })).status, 204);
+        }
+        assert.equal((await sendMutation(`${baseUrl}/mutation`, {
+          userId: 'another-malformed-authenticated-id',
+        })).status, 429);
+        assert.equal((await sendMutation(`${baseUrl}/mutation`, {
+          userId: sensitiveFixture.authenticatedUserId,
+        })).status, 204);
+      });
+    });
+  }
+
+  test('password change, account deletion, and media counters are operation-independent', async () => {
+    const firstSet = createRouteAbuseLimiters();
+    const firstApp = express();
+    firstApp.use(addAuthenticatedUser);
+    firstApp.post('/change', firstSet.passwordChangeLimiter, (req, res) => {
+      res.status(204).end();
+    });
+    firstApp.post('/delete', firstSet.accountDeletionLimiter, (req, res) => {
+      res.status(204).end();
+    });
+    firstApp.post('/photo', firstSet.photoUploadLimiter, (req, res) => {
+      res.status(204).end();
+    });
+    firstApp.post('/video', firstSet.videoUploadLimiter, (req, res) => {
+      res.status(204).end();
+    });
+    firstApp.delete('/media', firstSet.mediaDeletionLimiter, (req, res) => {
+      res.status(204).end();
+    });
+
+    await withServer(firstApp, async baseUrl => {
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        assert.equal((await sendMutation(`${baseUrl}/change`)).status, 204);
+      }
+      assert.equal((await sendMutation(`${baseUrl}/change`)).status, 429);
+      assert.equal((await sendMutation(`${baseUrl}/delete`)).status, 204);
+      assert.equal((await sendMutation(`${baseUrl}/photo`)).status, 204);
+      assert.equal((await sendMutation(`${baseUrl}/video`)).status, 204);
+      assert.equal((await sendMutation(`${baseUrl}/media`, {
+        method: 'DELETE',
+      })).status, 204);
+    });
+
+    const secondSet = createRouteAbuseLimiters();
+    const secondApp = express();
+    secondApp.use(addAuthenticatedUser);
+    secondApp.post('/delete', secondSet.accountDeletionLimiter, (req, res) => {
+      res.status(204).end();
+    });
+    secondApp.post('/change', secondSet.passwordChangeLimiter, (req, res) => {
+      res.status(204).end();
+    });
+    secondApp.post('/photo', secondSet.photoUploadLimiter, (req, res) => {
+      res.status(204).end();
+    });
+
+    await withServer(secondApp, async baseUrl => {
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        assert.equal((await sendMutation(`${baseUrl}/delete`)).status, 204);
+      }
+      assert.equal((await sendMutation(`${baseUrl}/delete`)).status, 429);
+      assert.equal((await sendMutation(`${baseUrl}/change`)).status, 204);
+      assert.equal((await sendMutation(`${baseUrl}/photo`)).status, 204);
+    });
+  });
+
+  for (const expected of passwordAndAccountExpectedPolicies) {
+    test(`fresh limiter sets do not share ${expected.policyName} state`, async () => {
+      const firstSet = createRouteAbuseLimiters();
+      const firstApp = express();
+      firstApp.use(addAuthenticatedUser);
+      firstApp.post('/mutation', firstSet[expected.limiterName], (req, res) => {
+        res.status(204).end();
+      });
+
+      await withServer(firstApp, async baseUrl => {
+        for (let attempt = 0; attempt < expected.limit; attempt += 1) {
+          assert.equal((await sendMutation(`${baseUrl}/mutation`)).status, 204);
+        }
+        assert.equal((await sendMutation(`${baseUrl}/mutation`)).status, 429);
+      });
+
+      const secondSet = createRouteAbuseLimiters();
+      const secondApp = express();
+      secondApp.use(addAuthenticatedUser);
+      secondApp.post('/mutation', secondSet[expected.limiterName], (req, res) => {
+        res.status(204).end();
+      });
+
+      await withServer(secondApp, async baseUrl => {
+        assert.equal((await sendMutation(`${baseUrl}/mutation`)).status, 204);
+      });
+    });
+  }
+
   test('exhausting login leaves contact and registration available for the same client', async () => {
     const limiters = createRouteAbuseLimiters();
     const calls = { contact: 0, login: 0, registration: 0 };
@@ -751,10 +1064,17 @@ describe('real route-abuse limiter behavior', () => {
 });
 
 describe('POST/DELETE-only route wiring and middleware order', () => {
-  test('production route stacks contain the five limiters only on intended POSTs', () => {
+  test('production route stacks contain password and account limiters only on intended POSTs', async () => {
     const registration = getRoute(userRouter, '/register');
     const login = getRoute(userRouter, '/login');
     const forgotPassword = getRoute(userRouter, '/forgot-password');
+    const resetWithCode = getRoute(
+      userRouter,
+      '/forgot-password/:userId/:code',
+    );
+    const resetWithoutCode = getRoute(userRouter, '/forgot-password/:userId');
+    const changePassword = getRoute(userRouter, '/change-password');
+    const deleteAccount = getRoute(userRouter, '/delete-account');
     const resend = getRoute(userRouter, '/resend-verification');
     const contact = getRoute(otherRouter, '/contact');
 
@@ -773,16 +1093,62 @@ describe('POST/DELETE-only route wiring and middleware order', () => {
     ]);
     assert.strictEqual(methodHandlers(forgotPassword, 'post')[0], forgotPasswordLimiter);
     assert.strictEqual(methodHandlers(contact, 'post')[0], contactLimiter);
+    assert.deepEqual(methodHandlers(resetWithCode, 'post').slice(0, 1), [
+      passwordResetSubmissionLimiter,
+    ]);
+    assert.deepEqual(methodHandlers(resetWithoutCode, 'post').slice(0, 1), [
+      passwordResetSubmissionLimiter,
+    ]);
+    assert.deepEqual(methodHandlers(changePassword, 'post').slice(0, 2), [
+      isLoggedIn,
+      passwordChangeLimiter,
+    ]);
+    assert.deepEqual(methodHandlers(deleteAccount, 'post').slice(0, 2), [
+      isLoggedIn,
+      accountDeletionLimiter,
+    ]);
+    assert.equal(methodHandlers(resetWithCode, 'post').length, 2);
+    assert.equal(methodHandlers(resetWithoutCode, 'post').length, 2);
+    assert.equal(methodHandlers(changePassword, 'post').length, 3);
+    assert.equal(methodHandlers(deleteAccount, 'post').length, 3);
 
     assert.equal(methodHandlers(forgotPassword, 'get').includes(forgotPasswordLimiter), false);
     assert.equal(methodHandlers(resend, 'get').includes(verificationResendLimiter), false);
     assert.equal(methodHandlers(contact, 'get').includes(contactLimiter), false);
+    for (const resetRoute of [resetWithCode, resetWithoutCode]) {
+      assert.equal(
+        methodHandlers(resetRoute, 'get').includes(
+          passwordResetSubmissionLimiter,
+        ),
+        false,
+      );
+    }
+    assert.equal(
+      methodHandlers(forgotPassword, 'post').includes(
+        passwordResetSubmissionLimiter,
+      ),
+      false,
+    );
 
     const expectedWiring = [
       ['user', '/register', 'post', registrationLimiter],
       ['user', '/login', 'post', loginLimiter],
       ['user', '/resend-verification', 'post', verificationResendLimiter],
       ['user', '/forgot-password', 'post', forgotPasswordLimiter],
+      [
+        'user',
+        '/forgot-password/:userId/:code',
+        'post',
+        passwordResetSubmissionLimiter,
+      ],
+      [
+        'user',
+        '/forgot-password/:userId',
+        'post',
+        passwordResetSubmissionLimiter,
+      ],
+      ['user', '/change-password', 'post', passwordChangeLimiter],
+      ['user', '/delete-account', 'post', accountDeletionLimiter],
       ['other', '/contact', 'post', contactLimiter],
     ];
     const actualWiring = [];
@@ -794,6 +1160,9 @@ describe('POST/DELETE-only route wiring and middleware order', () => {
             contactLimiter,
             forgotPasswordLimiter,
             loginLimiter,
+            passwordResetSubmissionLimiter,
+            passwordChangeLimiter,
+            accountDeletionLimiter,
             registrationLimiter,
             verificationResendLimiter,
           ]) {
@@ -810,6 +1179,78 @@ describe('POST/DELETE-only route wiring and middleware order', () => {
       }
     }
     assert.deepEqual(actualWiring, expectedWiring);
+
+    const source = await readSource('routes/users.js');
+    assert.match(
+      source,
+      /router\.route\('\/forgot-password\/:userId\/:code'\)[\s\S]*?\.post\(\s*passwordResetSubmissionLimiter,\s*catchAsyncErrors\(users\.updateForgotPasswordReset\),\s*\);/,
+    );
+    assert.match(
+      source,
+      /router\.route\('\/forgot-password\/:userId'\)[\s\S]*?\.post\(\s*passwordResetSubmissionLimiter,\s*catchAsyncErrors\(users\.updateForgotPasswordReset\),\s*\);/,
+    );
+    assert.match(
+      source,
+      /router\.route\('\/change-password'\)\s*\.post\(\s*isLoggedIn,\s*passwordChangeLimiter,\s*catchAsyncErrors\(users\.changePassword\),\s*\);/,
+    );
+    assert.match(
+      source,
+      /router\.route\('\/delete-account'\)\s*\.post\(\s*isLoggedIn,\s*accountDeletionLimiter,\s*catchAsyncErrors\(users\.deleteAccount\),\s*\)/,
+    );
+  });
+
+  test('GET and unrelated user routes contain none of the new limiters', () => {
+    const newLimiters = [
+      passwordResetSubmissionLimiter,
+      passwordChangeLimiter,
+      accountDeletionLimiter,
+    ];
+    const unrelatedRoutes = [
+      ['/forgot-password', ['get']],
+      ['/forgot-password/:userId/:code', ['get']],
+      ['/forgot-password/:userId', ['get']],
+      ['/account', ['get']],
+      ['/logout', ['post']],
+      ['/verify', ['get']],
+      ['/verify/:code', ['get']],
+      ['/resend-verification', ['get', 'post']],
+    ];
+
+    for (const [routePath, methods] of unrelatedRoutes) {
+      const route = getRoute(userRouter, routePath);
+      for (const method of methods) {
+        assert.equal(
+          methodHandlers(route, method).some(handler =>
+            newLimiters.includes(handler)
+          ),
+          false,
+          `${method.toUpperCase()} ${routePath}`,
+        );
+      }
+    }
+
+    assert.equal(
+      methodHandlers(getRoute(userRouter, '/forgot-password'), 'post')
+        .includes(passwordResetSubmissionLimiter),
+      false,
+    );
+  });
+
+  test('new limiter names are absent from media, public API, and administrator routers', async () => {
+    const routeFiles = (await readdir(path.join(root, 'routes')))
+      .filter(name => name.endsWith('.js') && name !== 'users.js');
+    const names = [
+      'passwordResetSubmissionLimiter',
+      'passwordChangeLimiter',
+      'accountDeletionLimiter',
+    ];
+
+    for (const file of routeFiles) {
+      const source = await readSource(path.join('routes', file));
+      for (const name of names) {
+        assert.equal(source.includes(name), false, `${file}: ${name}`);
+      }
+    }
   });
 
   test('every media mutation route has the exact limiter middleware order', async () => {
@@ -1055,6 +1496,213 @@ describe('POST/DELETE-only route wiring and middleware order', () => {
       deletionService: 60,
     });
   });
+
+  test('a blocked password reset stops token lookup, hashing, persistence, and session invalidation', async () => {
+    const limiterSet = createRouteAbuseLimiters();
+    const calls = {
+      controller: 0,
+      passwordHashing: 0,
+      sessionInvalidation: 0,
+      tokenLookup: 0,
+      userUpdate: 0,
+    };
+    const resetController = async (req, res) => {
+      calls.controller += 1;
+      calls.tokenLookup += 1;
+      calls.passwordHashing += 1;
+      calls.userUpdate += 1;
+      calls.sessionInvalidation += 1;
+      res.status(204).end();
+    };
+    const app = express();
+    app.post(
+      '/user/forgot-password/:userId/:code',
+      limiterSet.passwordResetSubmissionLimiter,
+      catchAsyncErrors(resetController),
+    );
+
+    await withServer(app, async baseUrl => {
+      const url = `${baseUrl}/user/forgot-password/${sensitiveFixture.resetUserId}/${sensitiveFixture.resetCode}`;
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        assert.equal((await sendMutation(url)).status, 204);
+      }
+      assert.equal((await sendMutation(url)).status, 429);
+    });
+
+    assert.deepEqual(calls, {
+      controller: 10,
+      passwordHashing: 10,
+      sessionInvalidation: 10,
+      tokenLookup: 10,
+      userUpdate: 10,
+    });
+  });
+
+  test('a blocked password change stops credential verification, persistence, and auth-version updates', async () => {
+    const limiterSet = createRouteAbuseLimiters();
+    const calls = {
+      authVersionUpdate: 0,
+      controller: 0,
+      originalPasswordVerification: 0,
+      userSave: 0,
+    };
+    const changeController = async (req, res) => {
+      calls.controller += 1;
+      calls.originalPasswordVerification += 1;
+      calls.userSave += 1;
+      calls.authVersionUpdate += 1;
+      res.status(204).end();
+    };
+    const app = express();
+    app.use((req, res, next) => {
+      req.isAuthenticated = () => true;
+      addAuthenticatedUser(req, res, next);
+    });
+    app.post(
+      '/user/change-password',
+      isLoggedIn,
+      limiterSet.passwordChangeLimiter,
+      catchAsyncErrors(changeController),
+    );
+
+    await withServer(app, async baseUrl => {
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        assert.equal((await sendMutation(
+          `${baseUrl}/user/change-password`,
+        )).status, 204);
+      }
+      assert.equal((await sendMutation(
+        `${baseUrl}/user/change-password`,
+      )).status, 429);
+    });
+
+    assert.deepEqual(calls, {
+      authVersionUpdate: 10,
+      controller: 10,
+      originalPasswordVerification: 10,
+      userSave: 10,
+    });
+  });
+
+  test('a blocked account deletion stops authentication, transaction, cleanup planning, jobs, and session destruction', async () => {
+    const limiterSet = createRouteAbuseLimiters();
+    const calls = {
+      cleanupJob: 0,
+      cleanupPlanning: 0,
+      controller: 0,
+      deletionService: 0,
+      passwordAuthentication: 0,
+      sessionDestruction: 0,
+      transactionRunner: 0,
+    };
+    const deleteController = async (req, res) => {
+      calls.controller += 1;
+      calls.passwordAuthentication += 1;
+      calls.deletionService += 1;
+      calls.transactionRunner += 1;
+      calls.cleanupPlanning += 1;
+      calls.cleanupJob += 1;
+      calls.sessionDestruction += 1;
+      res.status(204).end();
+    };
+    const app = express();
+    app.use((req, res, next) => {
+      req.isAuthenticated = () => true;
+      addAuthenticatedUser(req, res, next);
+    });
+    app.post(
+      '/user/delete-account',
+      isLoggedIn,
+      limiterSet.accountDeletionLimiter,
+      catchAsyncErrors(deleteController),
+    );
+
+    await withServer(app, async baseUrl => {
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        assert.equal((await sendMutation(
+          `${baseUrl}/user/delete-account`,
+        )).status, 204);
+      }
+      assert.equal((await sendMutation(
+        `${baseUrl}/user/delete-account`,
+      )).status, 429);
+    });
+
+    assert.deepEqual(calls, {
+      cleanupJob: 5,
+      cleanupPlanning: 5,
+      controller: 5,
+      deletionService: 5,
+      passwordAuthentication: 5,
+      sessionDestruction: 5,
+      transactionRunner: 5,
+    });
+  });
+
+  for (const expected of passwordAndAccountExpectedPolicies.filter(
+    policy => policy.authenticatedUserKeyed,
+  )) {
+    test(`unauthenticated ${expected.policyName} requests stop before and do not consume the User limiter`, async () => {
+      const limiterSet = createRouteAbuseLimiters();
+      let limiterCalls = 0;
+      let controllerCalls = 0;
+      const app = express();
+      app.use((req, res, next) => {
+        const authenticated = req.get('X-Test-Authenticated') === 'yes';
+        req.isAuthenticated = () => authenticated;
+        req.flash = () => {};
+        req.session = {
+          save(callback) {
+            callback();
+          },
+        };
+        if (authenticated) {
+          req.user = {
+            _id: sensitiveFixture.authenticatedUserId,
+            email_verified: true,
+          };
+        }
+        next();
+      });
+      app.post(
+        '/mutation',
+        isLoggedIn,
+        (req, res, next) => {
+          limiterCalls += 1;
+          limiterSet[expected.limiterName](req, res, next);
+        },
+        (req, res) => {
+          controllerCalls += 1;
+          res.status(204).end();
+        },
+      );
+
+      await withServer(app, async baseUrl => {
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          const rejected = await sendMutation(`${baseUrl}/mutation`, {
+            headers: { 'X-Test-Authenticated': 'no' },
+            redirect: 'manual',
+          });
+          assert.equal(rejected.status, 302);
+          assert.equal(rejected.headers.get('location'), '/');
+        }
+        assert.equal(limiterCalls, 0);
+        assert.equal(controllerCalls, 0);
+
+        for (let attempt = 0; attempt < expected.limit; attempt += 1) {
+          assert.equal((await sendMutation(`${baseUrl}/mutation`, {
+            headers: { 'X-Test-Authenticated': 'yes' },
+          })).status, 204);
+        }
+        assert.equal((await sendMutation(`${baseUrl}/mutation`, {
+          headers: { 'X-Test-Authenticated': 'yes' },
+        })).status, 429);
+      });
+
+      assert.equal(limiterCalls, expected.limit + 1);
+      assert.equal(controllerCalls, expected.limit);
+    });
+  }
 
   test('authentication rejects before the photo limiter and consumes no authenticated allowance', async () => {
     const limiterSet = createRouteAbuseLimiters();
@@ -1340,6 +1988,9 @@ describe('dependency, dead-helper, global-protection, and documentation guards',
       /Photo upload[^\n]+10 minutes[^\n]+5/,
       /YouTube video addition[^\n]+60 minutes[^\n]+20/,
       /Media deletion[^\n]+60 minutes[^\n]+60/,
+      /Forgotten-password reset-form submission[^\n]+60 minutes[^\n]+10/,
+      /Authenticated password change[^\n]+60 minutes[^\n]+10/,
+      /Account deletion[^\n]+60 minutes[^\n]+5/,
     ]) assert.match(documentation, row);
     assert.match(documentation, /HTTP 429/);
     assert.match(documentation, /fixed plain-text response/);
@@ -1349,21 +2000,43 @@ describe('dependency, dead-helper, global-protection, and documentation guards',
     assert.match(documentation, /single-instance, basic abuse-prevention stage/);
     assert.match(
       documentation,
-      /own shared-store\s+instance with a unique prefix/,
+      /its own shared-store instance\s+with a unique prefix/,
     );
     assert.match(documentation, /not distributed-bot protection/);
     assert.match(documentation, /keyed only by the authenticated User ID/);
     assert.match(documentation, /independent counters/);
     assert.match(documentation, /all route variants for the same operation share/);
     assert.match(documentation, /before multipart parsing or\s+file buffering/);
-    assert.match(documentation, /authenticated media counters are also process-local/);
+    assert.match(
+      documentation,
+      /authenticated media, password-change, account-deletion, and reset-form\s+submission counters are also process-local/,
+    );
+    assert.match(documentation, /default client-IP attribution/);
+    assert.match(documentation, /Both reset-form POST variants share one\s+reset-submission counter/);
+    assert.match(documentation, /separate from the forgotten-password\s+email-request counter/);
+    assert.match(
+      documentation,
+      /Authenticated password changes and account deletion are keyed only by the\s+authenticated User ID and use separate counters/,
+    );
+    assert.match(
+      documentation,
+      /account-deletion limiter runs before current-password verification, the\s+database transaction, media inventory and cleanup planning, cleanup-job\s+creation, session destruction, and immediate cleanup processing/,
+    );
+    assert.match(
+      documentation,
+      /successful, malformed, incorrect-password,\s+invalid-link, expired-link, and validation-failing submissions/,
+    );
     for (const deferred of [
-      'account deletion',
-      'password-changing and password-reset submissions',
       'public campsite APIs',
       'park search API',
       'administrator mutations',
+      'shared-store migration before multiple dynos',
     ]) assert.ok(documentation.includes(deferred));
+    assert.doesNotMatch(documentation, /^[-*]\s+account deletion;/m);
+    assert.doesNotMatch(
+      documentation,
+      /^[-*]\s+password-changing and password-reset submissions;/m,
+    );
     assert.doesNotMatch(documentation, /^[-*]\s+uploads;/m);
     assert.doesNotMatch(documentation, /^[-*]\s+media deletion;/m);
 
