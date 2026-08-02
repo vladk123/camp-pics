@@ -53,6 +53,18 @@ export const ROUTE_ABUSE_POLICIES = Object.freeze({
     windowMs: 60 * 60 * 1000,
     limit: 5,
   }),
+  parkSearchApi: Object.freeze({
+    windowMs: 60 * 1000,
+    limit: 30,
+  }),
+  parkMediaApi: Object.freeze({
+    windowMs: 5 * 60 * 1000,
+    limit: 60,
+  }),
+  campsiteApi: Object.freeze({
+    windowMs: 5 * 60 * 1000,
+    limit: 60,
+  }),
 });
 
 export function authenticatedUserKeyGenerator(req) {
@@ -129,6 +141,15 @@ export function createRouteAbuseLimiters({
       ROUTE_ABUSE_POLICIES.accountDeletion,
       authenticatedUserKeyGenerator,
     ),
+    parkSearchApiLimiter: createLimiter(
+      ROUTE_ABUSE_POLICIES.parkSearchApi,
+    ),
+    parkMediaApiLimiter: createLimiter(
+      ROUTE_ABUSE_POLICIES.parkMediaApi,
+    ),
+    campsiteApiLimiter: createLimiter(
+      ROUTE_ABUSE_POLICIES.campsiteApi,
+    ),
   });
 }
 
@@ -144,4 +165,7 @@ export const {
   passwordResetSubmissionLimiter,
   passwordChangeLimiter,
   accountDeletionLimiter,
+  parkSearchApiLimiter,
+  parkMediaApiLimiter,
+  campsiteApiLimiter,
 } = createRouteAbuseLimiters();

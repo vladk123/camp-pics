@@ -58,28 +58,58 @@ all route variants for the same operation share that operation's counter. The
 photo-upload limiter runs after authentication and before multipart parsing or
 file buffering.
 
+Public JSON APIs use these additional policies:
+
+| Operation | Routes | Window | Maximum GET requests |
+| --- | --- | ---: | ---: |
+| Park-search API | `GET /camp/search-api` | 1 minute | 30 |
+| Park-media API | `GET /camp/park/:parkSlug/media` | 5 minutes | 60 |
+| Campsite-detail APIs | `GET /camp/park/:parkSlug/campsite/:campsiteSlug` and `GET /camp/park/:parkSlug/campground/:campgroundSlug/campsite/:campsiteSlug` | 5 minutes | 60 |
+
+All three public API policies use express-rate-limit's default client-IP
+attribution, which relies on Express `req.ip` and the existing trust-proxy
+configuration. The two campsite-detail route variants share one campsite API
+counter. Park search, park media, and campsite details have independent
+counters, and none shares a counter with authentication, contact, media,
+password, or account operations. The park-media JSON endpoint is covered by
+this pass; the rendered park page is not covered by the park-media API limiter.
+
+The public API limiters run before controller work. Park search is limited
+before query parsing, cache loading, ranking, and serialization. Park media and
+campsite details are limited before database queries, campsite resolution,
+aggregation, serialization, and permission-flag calculation. Missing or
+invalid search queries, empty results, not-found or malformed park and
+campsite requests, successful responses, and server-error responses all count.
+
 All attempts count, including successful, malformed, incorrect-password,
 invalid-link, expired-link, and validation-failing submissions.
 
 ## Response behavior
 
-An exceeded route-specific limit returns HTTP 429 with a fixed plain-text response and `Cache-Control: no-store`. The response does not redirect, create a flash message, log the rejection, or include account, request, counter, session, IP, reset, or verification details.
+An exceeded route-specific limit returns HTTP 429 with `Content-Type:
+text/plain`, `Cache-Control: no-store`, and this fixed plain-text response body:
+
+```text
+Too many attempts. Please try again later.
+```
+
+The response does not redirect, create a flash message, log the rejection, or
+include account, request, counter, session, IP, reset, verification, search
+query, slug, URL, header, or media details.
 
 ## Process-local limitation
 
 The current counters live in process memory and reset whenever the process restarts. Separate web dynos would have separate counters. This is acceptable for the current single-instance, basic abuse-prevention stage, but it is not distributed-bot protection and rate limiting alone does not prevent distributed attacks.
 
-The authenticated media, password-change, account-deletion, and reset-form
-submission counters are also process-local. They reset whenever the process
-restarts, and separate web dynos do not share state. Before CampPics uses
-multiple web dynos, each limiter must move to its own shared-store instance
+The public API, authenticated media, password-change, account-deletion, and
+reset-form submission counters are also process-local. They reset whenever the
+process restarts, and separate web dynos do not share state. Before CampPics
+uses multiple web dynos, each limiter must move to its own shared-store instance
 with a unique prefix so all policies remain independent across processes.
 
 ## Deferred layers
 
 Later passes still need separate abuse-control policies for:
 
-- public campsite APIs;
-- the park search API;
 - administrator mutations; and
 - shared-store migration before multiple dynos.

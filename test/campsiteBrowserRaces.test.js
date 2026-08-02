@@ -216,6 +216,38 @@ describe('latest campsite open requests', () => {
     assert.equal(errors.length, 1);
   });
 
+  test('a 429 runs only the generic error path without parsing JSON', async () => {
+    let jsonCalls = 0;
+    const sensitiveBody = 'recognizable-rate-limit-response-secret';
+    const { requests } = loadHelpers(async () => ({
+      ok: false,
+      status: 429,
+      async json() {
+        jsonCalls += 1;
+        return { sensitiveBody };
+      },
+    }));
+    const coordinator = requests.createCoordinator();
+    const successes = [];
+    const errors = [];
+
+    const result = await coordinator.openLatest({
+      parkSlug: 'park',
+      campsiteSlug: '12',
+      campgroundSlug: null,
+    }, {
+      onSuccess: data => successes.push(data),
+      onError: error => errors.push(error),
+    });
+
+    assert.equal(result.status, 'error');
+    assert.equal(jsonCalls, 0);
+    assert.deepEqual(successes, []);
+    assert.equal(errors.length, 1);
+    assert.equal(errors[0].message, 'Campsite request failed');
+    assert.equal(errors[0].message.includes(sensitiveBody), false);
+  });
+
   test('cancelOpen suppresses a pending success and a pending failure', async () => {
     const pendingSuccessResponse = deferred();
     const successHelpers = loadHelpers(() => pendingSuccessResponse.promise);

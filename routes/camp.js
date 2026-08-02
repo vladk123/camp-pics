@@ -4,14 +4,17 @@ import * as camp from '../controllers/camp.js';
 import * as media from '../controllers/media.js';
 import { isLoggedIn, catchAsyncErrors, uploadMemory } from '../middleware.js'; //
 import {
+  campsiteApiLimiter,
   mediaDeletionLimiter,
+  parkMediaApiLimiter,
+  parkSearchApiLimiter,
   photoUploadLimiter,
   videoUploadLimiter,
 } from '../utils/routeAbuseLimits.js';
 import { loadCache } from '../controllers/camp.js'
 
 router.route('/search-api')
-    .get(camp.searchApi)
+    .get(parkSearchApiLimiter, camp.searchApi)
 
 router.route('/search')
     .get(camp.searchResults)
@@ -25,13 +28,13 @@ router.route('/park/:parkSlug')
 // API Routes
 // Get a park
 router.route('/park/:parkSlug/media')
-    .get(camp.getPark)
+    .get(parkMediaApiLimiter, camp.getPark)
 // If it's a park with no campgrounds
 router.route('/park/:parkSlug/campsite/:campsiteSlug')
-    .get(camp.getCampsite)
+    .get(campsiteApiLimiter, camp.getCampsite)
 // If it's a park with campgrounds
 router.route('/park/:parkSlug/campground/:campgroundSlug/campsite/:campsiteSlug')
-    .get(camp.getCampgroundCampsite)
+    .get(campsiteApiLimiter, camp.getCampgroundCampsite)
 
 
 // Upload Routes

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { describe, test } from 'node:test';
@@ -15,12 +16,15 @@ const {
   ROUTE_ABUSE_POLICIES,
   accountDeletionLimiter,
   authenticatedUserKeyGenerator,
+  campsiteApiLimiter,
   contactLimiter,
   createRouteAbuseLimiters,
   fixedRateLimitHandler,
   forgotPasswordLimiter,
   loginLimiter,
   mediaDeletionLimiter,
+  parkMediaApiLimiter,
+  parkSearchApiLimiter,
   passwordChangeLimiter,
   passwordResetSubmissionLimiter,
   photoUploadLimiter,
@@ -34,6 +38,7 @@ const {
 } = await import('../routes/users.js');
 const { default: otherRouter } = await import('../routes/other.js');
 const { default: campRouter } = await import('../routes/camp.js');
+const camp = await import('../controllers/camp.js');
 const media = await import('../controllers/media.js');
 const {
   isAuthenticatedForVerification,
@@ -131,10 +136,35 @@ const passwordAndAccountExpectedPolicies = Object.freeze([
   }),
 ]);
 
+const publicApiExpectedPolicies = Object.freeze([
+  Object.freeze({
+    limiterName: 'parkSearchApiLimiter',
+    policyName: 'parkSearchApi',
+    windowMs: 60 * 1000,
+    limit: 30,
+    method: 'GET',
+  }),
+  Object.freeze({
+    limiterName: 'parkMediaApiLimiter',
+    policyName: 'parkMediaApi',
+    windowMs: 5 * 60 * 1000,
+    limit: 60,
+    method: 'GET',
+  }),
+  Object.freeze({
+    limiterName: 'campsiteApiLimiter',
+    policyName: 'campsiteApi',
+    windowMs: 5 * 60 * 1000,
+    limit: 60,
+    method: 'GET',
+  }),
+]);
+
 const expectedPolicies = Object.freeze([
   ...existingExpectedPolicies,
   ...mediaExpectedPolicies,
   ...passwordAndAccountExpectedPolicies,
+  ...publicApiExpectedPolicies,
 ]);
 
 const photoUploadRoutes = Object.freeze([
@@ -180,6 +210,8 @@ const sensitiveFixture = Object.freeze({
   parkSlug: 'recognizable-park-slug-secret',
   campgroundSlug: 'recognizable-campground-slug-secret',
   campsiteSlug: 'recognizable-campsite-slug-secret',
+  searchQuery: 'recognizable-search-query-secret',
+  ip: '198.51.100.244',
   mediaId: 'deadbeefdeadbeefdeadbeef',
   caption: 'Recognizable media caption secret',
   filename: 'recognizable-upload-filename-secret.jpg',
@@ -219,18 +251,23 @@ const sendMutation = (
     redirect = 'follow',
     userId = sensitiveFixture.userId,
   } = {},
-) => fetch(url, {
-  method,
-  redirect,
-  headers: {
-    'Content-Type': 'application/json',
-    'X-CampPics-Test': sensitiveFixture.header,
-    'X-Test-User-Id': userId,
-    ...(forwardedFor ? { 'X-Forwarded-For': forwardedFor } : {}),
-    ...headers,
-  },
-  body: JSON.stringify(body),
-});
+) => {
+  const normalizedMethod = method.toUpperCase();
+  return fetch(url, {
+    method: normalizedMethod,
+    redirect,
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CampPics-Test': sensitiveFixture.header,
+      'X-Test-User-Id': userId,
+      ...(forwardedFor ? { 'X-Forwarded-For': forwardedFor } : {}),
+      ...headers,
+    },
+    ...(!['GET', 'HEAD'].includes(normalizedMethod)
+      ? { body: JSON.stringify(body) }
+      : {}),
+  });
+};
 
 const sendPost = (url, body = sensitiveFixture) =>
   sendMutation(url, { body });
@@ -276,7 +313,7 @@ const methodHandlers = (route, method) => route.stack
   .map(layer => layer.handle);
 
 describe('route-abuse policy construction', () => {
-  test('constructs eleven exact independent policies with one fixed handler', () => {
+  test('constructs fourteen exact independent policies with one fixed handler', () => {
     const capturedOptions = [];
     const createdInstances = [];
     const limiters = createRouteAbuseLimiters({
@@ -288,10 +325,10 @@ describe('route-abuse policy construction', () => {
       },
     });
 
-    assert.equal(capturedOptions.length, 11);
-    assert.equal(createdInstances.length, 11);
-    assert.equal(new Set(createdInstances).size, 11);
-    assert.equal(new Set(Object.values(limiters)).size, 11);
+    assert.equal(capturedOptions.length, 14);
+    assert.equal(createdInstances.length, 14);
+    assert.equal(new Set(createdInstances).size, 14);
+    assert.equal(new Set(Object.values(limiters)).size, 14);
     assert.equal(Object.isFrozen(limiters), true);
     assert.deepEqual(
       Object.keys(ROUTE_ABUSE_POLICIES),
@@ -356,7 +393,7 @@ describe('route-abuse policy construction', () => {
     const limiterNames = expectedPolicies.map(policy => policy.limiterName);
     const productionLimiters = limiterNames.map(name => routeAbuseModule[name]);
 
-    assert.equal(new Set(productionLimiters).size, 11);
+    assert.equal(new Set(productionLimiters).size, 14);
     for (const limiterName of limiterNames) {
       assert.strictEqual(routeAbuseModule[limiterName], secondImport[limiterName]);
     }
@@ -644,6 +681,191 @@ describe('real route-abuse limiter behavior', () => {
       })).status, 204);
     });
   });
+
+  test('both campsite API variants share one default-IP counter while another IP has full capacity', async () => {
+    const limiters = createRouteAbuseLimiters();
+    let controllerCalls = 0;
+    const app = express();
+    app.set('trust proxy', 1);
+    const controller = (req, res) => {
+      controllerCalls += 1;
+      res.status(204).end();
+    };
+    app.get(
+      '/camp/park/:parkSlug/campsite/:campsiteSlug',
+      limiters.campsiteApiLimiter,
+      controller,
+    );
+    app.get(
+      '/camp/park/:parkSlug/campground/:campgroundSlug/campsite/:campsiteSlug',
+      limiters.campsiteApiLimiter,
+      controller,
+    );
+
+    const standalonePath =
+      `/camp/park/${sensitiveFixture.parkSlug}` +
+      `/campsite/${sensitiveFixture.campsiteSlug}`;
+    const campgroundPath =
+      `/camp/park/${sensitiveFixture.parkSlug}` +
+      `/campground/${sensitiveFixture.campgroundSlug}` +
+      `/campsite/${sensitiveFixture.campsiteSlug}`;
+
+    await captureConsole(async captured => {
+      await withServer(app, async baseUrl => {
+        for (const [forwardedFor, standaloneAttempts] of [
+          [sensitiveFixture.ip, 20],
+          ['203.0.113.245', 25],
+        ]) {
+          for (let attempt = 0; attempt < standaloneAttempts; attempt += 1) {
+            assert.equal((await sendMutation(
+              `${baseUrl}${standalonePath}`,
+              { forwardedFor, method: 'GET' },
+            )).status, 204);
+          }
+          for (
+            let attempt = standaloneAttempts;
+            attempt < ROUTE_ABUSE_POLICIES.campsiteApi.limit;
+            attempt += 1
+          ) {
+            assert.equal((await sendMutation(
+              `${baseUrl}${campgroundPath}`,
+              { forwardedFor, method: 'GET' },
+            )).status, 204);
+          }
+
+          const blocked = await sendMutation(
+            `${baseUrl}${campgroundPath}`,
+            { forwardedFor, method: 'GET' },
+          );
+          const body = await blocked.text();
+          assert.equal(blocked.status, 429);
+          assert.equal(body, ROUTE_ABUSE_LIMIT_MESSAGE);
+          for (const value of sensitiveValues) {
+            assert.equal(body.includes(value), false);
+            assert.equal(
+              JSON.stringify([...blocked.headers]).includes(value),
+              false,
+            );
+          }
+        }
+      });
+
+      assert.deepEqual(captured, []);
+    });
+
+    assert.equal(controllerCalls, 120);
+  });
+
+  test('public API operations and all existing route counters are independent for one IP', async () => {
+    const limiters = createRouteAbuseLimiters();
+    const calls = Object.fromEntries(
+      expectedPolicies.map(({ policyName }) => [policyName, 0]),
+    );
+    const app = express();
+    app.set('trust proxy', 1);
+    app.use(addAuthenticatedUser);
+    const addRoute = expected => {
+      const method = expected.method?.toLowerCase() || 'post';
+      app[method](
+        `/operation/${expected.policyName}`,
+        limiters[expected.limiterName],
+        (req, res) => {
+          calls[expected.policyName] += 1;
+          res.status(204).end();
+        },
+      );
+    };
+    for (const expected of expectedPolicies) addRoute(expected);
+
+    const requestOperation = (baseUrl, policyName, method = 'GET') =>
+      sendMutation(`${baseUrl}/operation/${policyName}`, {
+        forwardedFor: sensitiveFixture.ip,
+        method,
+      });
+
+    await withServer(app, async baseUrl => {
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        assert.equal(
+          (await requestOperation(baseUrl, 'parkSearchApi')).status,
+          204,
+        );
+      }
+      assert.equal(
+        (await requestOperation(baseUrl, 'parkSearchApi')).status,
+        429,
+      );
+      assert.equal(
+        (await requestOperation(baseUrl, 'parkMediaApi')).status,
+        204,
+      );
+      assert.equal(
+        (await requestOperation(baseUrl, 'campsiteApi')).status,
+        204,
+      );
+
+      for (const expected of expectedPolicies.filter(policy =>
+        !publicApiExpectedPolicies.includes(policy)
+      )) {
+        assert.equal((await requestOperation(
+          baseUrl,
+          expected.policyName,
+          expected.method || 'POST',
+        )).status, 204, expected.policyName);
+      }
+
+      for (let attempt = 1; attempt < 60; attempt += 1) {
+        assert.equal(
+          (await requestOperation(baseUrl, 'campsiteApi')).status,
+          204,
+        );
+      }
+      assert.equal(
+        (await requestOperation(baseUrl, 'campsiteApi')).status,
+        429,
+      );
+      assert.equal(
+        (await requestOperation(baseUrl, 'parkMediaApi')).status,
+        204,
+      );
+    });
+
+    assert.equal(calls.parkSearchApi, 30);
+    assert.equal(calls.campsiteApi, 60);
+    assert.equal(calls.parkMediaApi, 2);
+    for (const expected of expectedPolicies.filter(policy =>
+      !publicApiExpectedPolicies.includes(policy)
+    )) {
+      assert.equal(calls[expected.policyName], 1, expected.policyName);
+    }
+  });
+
+  for (const expected of publicApiExpectedPolicies) {
+    test(`fresh limiter sets do not share ${expected.policyName} state`, async () => {
+      const createApp = limiterSet => {
+        const app = express();
+        app.set('trust proxy', 1);
+        app.get('/public-api', limiterSet[expected.limiterName], (req, res) => {
+          res.status(204).end();
+        });
+        return app;
+      };
+      const send = baseUrl => sendMutation(`${baseUrl}/public-api`, {
+        forwardedFor: sensitiveFixture.ip,
+        method: 'GET',
+      });
+
+      await withServer(createApp(createRouteAbuseLimiters()), async baseUrl => {
+        for (let attempt = 0; attempt < expected.limit; attempt += 1) {
+          assert.equal((await send(baseUrl)).status, 204);
+        }
+        assert.equal((await send(baseUrl)).status, 429);
+      });
+
+      await withServer(createApp(createRouteAbuseLimiters()), async baseUrl => {
+        assert.equal((await send(baseUrl)).status, 204);
+      });
+    });
+  }
 
   test('reset submissions and forgot-password email requests have separate counters', async () => {
     const limiters = createRouteAbuseLimiters();
@@ -1060,6 +1282,193 @@ describe('real route-abuse limiter behavior', () => {
     await withServer(secondApp, async baseUrl => {
       assert.equal((await sendMutation(`${baseUrl}/photo`)).status, 204);
     });
+  });
+});
+
+describe('public JSON API route wiring and downstream blocking', () => {
+  const publicApiWiring = [
+    ['/search-api', parkSearchApiLimiter, camp.searchApi],
+    ['/park/:parkSlug/media', parkMediaApiLimiter, camp.getPark],
+    [
+      '/park/:parkSlug/campsite/:campsiteSlug',
+      campsiteApiLimiter,
+      camp.getCampsite,
+    ],
+    [
+      '/park/:parkSlug/campground/:campgroundSlug/campsite/:campsiteSlug',
+      campsiteApiLimiter,
+      camp.getCampgroundCampsite,
+    ],
+  ];
+
+  test('production GET stacks have the exact limiter-then-controller order', async () => {
+    for (const [routePath, limiter, controller] of publicApiWiring) {
+      assert.deepEqual(
+        methodHandlers(getRoute(campRouter, routePath), 'get'),
+        [limiter, controller],
+        routePath,
+      );
+    }
+
+    const actualWiring = [];
+    const publicLimiters = [
+      parkSearchApiLimiter,
+      parkMediaApiLimiter,
+      campsiteApiLimiter,
+    ];
+    for (const layer of campRouter.stack) {
+      if (!layer.route) continue;
+      for (const routeLayer of layer.route.stack) {
+        if (publicLimiters.includes(routeLayer.handle)) {
+          actualWiring.push([
+            layer.route.path,
+            routeLayer.method,
+            routeLayer.handle,
+          ]);
+        }
+      }
+    }
+    assert.deepEqual(
+      actualWiring,
+      publicApiWiring.map(([routePath, limiter]) => [
+        routePath,
+        'get',
+        limiter,
+      ]),
+    );
+
+    const source = await readSource('routes/camp.js');
+    assert.match(
+      source,
+      /router\.route\('\/search-api'\)\s*\.get\(parkSearchApiLimiter, camp\.searchApi\)/u,
+    );
+    assert.match(
+      source,
+      /router\.route\('\/park\/:parkSlug\/media'\)\s*\.get\(parkMediaApiLimiter, camp\.getPark\)/u,
+    );
+    assert.match(
+      source,
+      /router\.route\('\/park\/:parkSlug\/campsite\/:campsiteSlug'\)\s*\.get\(campsiteApiLimiter, camp\.getCampsite\)/u,
+    );
+    assert.match(
+      source,
+      /router\.route\('\/park\/:parkSlug\/campground\/:campgroundSlug\/campsite\/:campsiteSlug'\)\s*\.get\(campsiteApiLimiter, camp\.getCampgroundCampsite\)/u,
+    );
+  });
+
+  test('new public API limiters are excluded from HTML, mutation, authentication, and administrator routes', async () => {
+    const publicLimiters = [
+      parkSearchApiLimiter,
+      parkMediaApiLimiter,
+      campsiteApiLimiter,
+    ];
+    const excludedCampPaths = [
+      '/search',
+      '/all-parks',
+      '/park/:parkSlug',
+      ...photoUploadRoutes,
+      ...videoUploadRoutes,
+      ...mediaDeletionRoutes.map(([routePath]) => routePath),
+    ];
+
+    for (const routePath of excludedCampPaths) {
+      const route = getRoute(campRouter, routePath);
+      assert.equal(
+        route.stack.some(layer => publicLimiters.includes(layer.handle)),
+        false,
+        routePath,
+      );
+    }
+
+    const routeFiles = (await readdir(path.join(root, 'routes')))
+      .filter(name => name.endsWith('.js') && name !== 'camp.js');
+    for (const file of routeFiles) {
+      const source = await readSource(path.join('routes', file));
+      for (const name of [
+        'parkSearchApiLimiter',
+        'parkMediaApiLimiter',
+        'campsiteApiLimiter',
+      ]) {
+        assert.equal(source.includes(name), false, `${file}: ${name}`);
+      }
+    }
+  });
+
+  test('blocked public requests stop before cache and database work', async () => {
+    const cases = [
+      {
+        limiterName: 'parkSearchApiLimiter',
+        limit: 30,
+        path: `/camp/search-api?q=${sensitiveFixture.searchQuery}`,
+        calls: {
+          parser: 0,
+          cacheLoader: 0,
+          ranker: 0,
+          serializer: 0,
+        },
+      },
+      {
+        limiterName: 'parkMediaApiLimiter',
+        limit: 60,
+        path: `/camp/park/${sensitiveFixture.parkSlug}/media`,
+        calls: {
+          parkQuery: 0,
+          serializer: 0,
+          permissionCalculation: 0,
+        },
+      },
+      {
+        limiterName: 'campsiteApiLimiter',
+        limit: 60,
+        path:
+          `/camp/park/${sensitiveFixture.parkSlug}` +
+          `/campground/${sensitiveFixture.campgroundSlug}` +
+          `/campsite/${sensitiveFixture.campsiteSlug}`,
+        calls: {
+          resolver: 0,
+          parkQuery: 0,
+          exactIdSecondRead: 0,
+          aggregation: 0,
+          serializer: 0,
+          permissionCalculation: 0,
+        },
+      },
+    ];
+
+    for (const fixture of cases) {
+      const limiters = createRouteAbuseLimiters();
+      const app = express();
+      app.set('trust proxy', 1);
+      app.get(
+        fixture.path.split('?')[0],
+        limiters[fixture.limiterName],
+        (req, res) => {
+          for (const key of Object.keys(fixture.calls)) fixture.calls[key] += 1;
+          res.status(204).end();
+        },
+      );
+
+      await withServer(app, async baseUrl => {
+        for (let attempt = 0; attempt < fixture.limit; attempt += 1) {
+          assert.equal((await sendMutation(`${baseUrl}${fixture.path}`, {
+            forwardedFor: sensitiveFixture.ip,
+            method: 'GET',
+          })).status, 204);
+        }
+        const beforeBlocked = { ...fixture.calls };
+        const blocked = await sendMutation(`${baseUrl}${fixture.path}`, {
+          forwardedFor: sensitiveFixture.ip,
+          method: 'GET',
+        });
+        assert.equal(blocked.status, 429);
+        assert.deepEqual(fixture.calls, beforeBlocked);
+      });
+
+      assert.deepEqual(
+        new Set(Object.values(fixture.calls)),
+        new Set([fixture.limit]),
+      );
+    }
   });
 });
 
@@ -1991,6 +2400,9 @@ describe('dependency, dead-helper, global-protection, and documentation guards',
       /Forgotten-password reset-form submission[^\n]+60 minutes[^\n]+10/,
       /Authenticated password change[^\n]+60 minutes[^\n]+10/,
       /Account deletion[^\n]+60 minutes[^\n]+5/,
+      /Park-search API[^\n]+1 minute[^\n]+30/,
+      /Park-media API[^\n]+5 minutes[^\n]+60/,
+      /Campsite-detail APIs[^\n]+5 minutes[^\n]+60/,
     ]) assert.match(documentation, row);
     assert.match(documentation, /HTTP 429/);
     assert.match(documentation, /fixed plain-text response/);
@@ -2009,7 +2421,7 @@ describe('dependency, dead-helper, global-protection, and documentation guards',
     assert.match(documentation, /before multipart parsing or\s+file buffering/);
     assert.match(
       documentation,
-      /authenticated media, password-change, account-deletion, and reset-form\s+submission counters are also process-local/,
+      /public API, authenticated media, password-change, account-deletion, and\s+reset-form submission counters are also process-local/,
     );
     assert.match(documentation, /default client-IP attribution/);
     assert.match(documentation, /Both reset-form POST variants share one\s+reset-submission counter/);
@@ -2026,12 +2438,32 @@ describe('dependency, dead-helper, global-protection, and documentation guards',
       documentation,
       /successful, malformed, incorrect-password,\s+invalid-link, expired-link, and validation-failing submissions/,
     );
+    assert.match(documentation, /default client-IP\s+attribution/);
+    assert.match(documentation, /relies on Express `req\.ip`/);
+    assert.match(
+      documentation,
+      /two campsite-detail route variants share one campsite API\s+counter/,
+    );
+    assert.match(
+      documentation,
+      /Park search, park media, and campsite details have independent\s+counters/,
+    );
+    assert.match(documentation, /park-media JSON endpoint is covered by\s+this pass/);
+    assert.match(
+      documentation,
+      /Park search is limited\s+before query parsing, cache loading, ranking, and serialization/,
+    );
+    assert.match(
+      documentation,
+      /Park media and\s+campsite details are limited before database queries/,
+    );
+    assert.match(documentation, /search\s+query, slug, URL, header, or media details/);
     for (const deferred of [
-      'public campsite APIs',
-      'park search API',
       'administrator mutations',
       'shared-store migration before multiple dynos',
     ]) assert.ok(documentation.includes(deferred));
+    assert.equal(documentation.includes('- public campsite APIs;'), false);
+    assert.equal(documentation.includes('- the park search API;'), false);
     assert.doesNotMatch(documentation, /^[-*]\s+account deletion;/m);
     assert.doesNotMatch(
       documentation,
@@ -2043,5 +2475,31 @@ describe('dependency, dead-helper, global-protection, and documentation guards',
     for (const value of sensitiveValues) {
       assert.equal(documentation.includes(value), false);
     }
+  });
+
+  test('restricted production surfaces and engine metadata remain unchanged', async () => {
+    const status = execFileSync(
+      'git',
+      [
+        'status',
+        '--short',
+        '--',
+        'app.js',
+        'middleware.js',
+        'config',
+        'controllers',
+        'models',
+        'public/js',
+        'package.json',
+        'package-lock.json',
+      ],
+      { cwd: root, encoding: 'utf8' },
+    );
+    const packageJson = JSON.parse(await readSource('package.json'));
+    const packageLock = JSON.parse(await readSource('package-lock.json'));
+
+    assert.equal(status.trim(), '');
+    assert.deepEqual(packageJson.engines, { node: '24.x', npm: '11.x' });
+    assert.deepEqual(packageLock.packages[''].engines, packageJson.engines);
   });
 });

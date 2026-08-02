@@ -130,7 +130,7 @@ describe('park-search source guards', () => {
     assert.doesNotMatch(templateSource, /href="\/camp<%= result\.slug %>"/u);
   });
 
-  test('schemas, indexes, search route wiring, and cache data stay untouched', () => {
+  test('schemas, indexes, search handler, and cache data stay untouched', () => {
     const status = execFileSync(
       'git',
       [
@@ -146,7 +146,7 @@ describe('park-search source guards', () => {
     assert.equal(status.trim(), '');
     assert.match(
       campRoutesSource,
-      /router\.route\('\/search-api'\)\s*\.get\(camp\.searchApi\)/u,
+      /router\.route\('\/search-api'\)\s*\.get\(parkSearchApiLimiter, camp\.searchApi\)/u,
     );
     assert.match(
       campRoutesSource,
