@@ -25,7 +25,7 @@ const expectedDependencies = {
   'express-rate-limit': '^8.6.1',
   'express-session': '^1.18.2',
   'express-slow-down': '^3.0.0',
-  'form-data': '^4.0.4',
+  'form-data': '^4.0.6',
   helmet: '^8.1.0',
   'mailgun.js': '^12.1.1',
   'method-override': '^3.0.0',
@@ -77,6 +77,30 @@ describe('dependency and runtime cleanup guards', () => {
     assert.deepEqual(lockRoot.dependencies, packageJson.dependencies);
     assert.deepEqual(packageJson.engines, { node: '24.x', npm: '11.x' });
     assert.deepEqual(lockRoot.engines, packageJson.engines);
+    assert.equal(packageJson.dependencies['form-data'], '^4.0.6');
+    assert.equal(lockRoot.dependencies['form-data'], '^4.0.6');
+    assert.equal(
+      packageLock.packages['node_modules/form-data'].version,
+      '4.0.6',
+    );
+    assert.equal(
+      packageLock.packages['node_modules/form-data'].dependencies.hasown,
+      '^2.0.4',
+    );
+    assert.equal(
+      packageLock.packages['node_modules/form-data'].dependencies['mime-types'],
+      '^2.1.35',
+    );
+    assert.equal(packageLock.packages['node_modules/hasown'].version, '2.0.4');
+    assert.equal(packageLock.packages['node_modules/mime-types'].version, '3.0.1');
+    assert.match(
+      withoutComments(sendEmailSource),
+      /^\s*import\s+FormData\s+from\s+['"]form-data['"];/mu,
+    );
+    assert.match(
+      withoutComments(sendEmailSource),
+      /new\s+Mailgun\(FormData\)/u,
+    );
     assert.equal(packageJson.dependencies.ejs, '3.1.10');
     assert.equal(lockRoot.dependencies.ejs, '3.1.10');
     assert.equal(packageLock.packages['node_modules/ejs'].version, '3.1.10');
