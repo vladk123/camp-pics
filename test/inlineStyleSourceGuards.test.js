@@ -484,14 +484,15 @@ describe('CSP, vendor, and scope guards', () => {
       'public/js/external-scripts/leaflet.js',
       'public/js/swiper-bundle.min.js',
     ], { cwd: root, encoding: 'utf8' });
-    const ordinaryLogoutFiles = new Set([
+    const allowedRestrictedFiles = new Set([
       'controllers/users.js',
       'routes/users.js',
+      'package.json',
     ]);
     const unexpectedChanges = status
       .split(/\r?\n/u)
       .filter(Boolean)
-      .filter(line => !ordinaryLogoutFiles.has(
+      .filter(line => !allowedRestrictedFiles.has(
         line.slice(3).replaceAll('\\', '/'),
       ));
     assert.deepEqual(unexpectedChanges, []);
@@ -500,5 +501,13 @@ describe('CSP, vendor, and scope guards', () => {
     const packageLock = JSON.parse(await read('package-lock.json'));
     assert.deepEqual(packageJson.engines, { node: '24.x', npm: '11.x' });
     assert.deepEqual(packageLock.packages[''].engines, packageJson.engines);
+    assert.equal(
+      packageJson.scripts['auth:audit-artifacts'],
+      'node scripts/reconcileAuthArtifacts.js',
+    );
+    assert.equal(
+      packageJson.scripts['auth:cleanup-expired-artifacts'],
+      'node scripts/reconcileAuthArtifacts.js --apply',
+    );
   });
 });

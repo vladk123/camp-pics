@@ -809,14 +809,15 @@ describe('CSP and scope regression guards for externalization', () => {
       'public/js/csrf.js',
       'public/js/passwordPolicy.js',
     ], { cwd: root, encoding: 'utf8' });
-    const ordinaryLogoutFiles = new Set([
+    const allowedProtectedFiles = new Set([
       'controllers/users.js',
       'routes/users.js',
+      'package.json',
     ]);
     const unexpectedProtectedChanges = protectedStatus
       .split(/\r?\n/u)
       .filter(Boolean)
-      .filter(line => !ordinaryLogoutFiles.has(
+      .filter(line => !allowedProtectedFiles.has(
         line.slice(3).replaceAll('\\', '/'),
       ));
     assert.deepEqual(unexpectedProtectedChanges, []);
@@ -826,6 +827,14 @@ describe('CSP and scope regression guards for externalization', () => {
       node: '24.x',
       npm: '11.x',
     });
+    assert.equal(
+      packageJson.scripts['auth:audit-artifacts'],
+      'node scripts/reconcileAuthArtifacts.js',
+    );
+    assert.equal(
+      packageJson.scripts['auth:cleanup-expired-artifacts'],
+      'node scripts/reconcileAuthArtifacts.js --apply',
+    );
 
     const app = await read('app.js');
     const scriptDirective = app.match(/scriptSrc:\s*\[([^\]]+)\]/u)?.[1];

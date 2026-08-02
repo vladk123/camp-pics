@@ -3017,12 +3017,23 @@ describe('dependency, dead-helper, global-protection, and documentation guards',
       .split(/\r?\n/u)
       .filter(Boolean)
       .filter(line => (
-        line.slice(3).replaceAll('\\', '/') !== 'controllers/users.js'
+        !new Set([
+          'controllers/users.js',
+          'package.json',
+        ]).has(line.slice(3).replaceAll('\\', '/'))
       ));
 
     assert.deepEqual(unexpectedProductionChanges, []);
     assert.deepEqual(unexpectedBrowserChanges, []);
     assert.deepEqual(packageJson.engines, { node: '24.x', npm: '11.x' });
     assert.deepEqual(packageLock.packages[''].engines, packageJson.engines);
+    assert.equal(
+      packageJson.scripts['auth:audit-artifacts'],
+      'node scripts/reconcileAuthArtifacts.js',
+    );
+    assert.equal(
+      packageJson.scripts['auth:cleanup-expired-artifacts'],
+      'node scripts/reconcileAuthArtifacts.js --apply',
+    );
   });
 });
