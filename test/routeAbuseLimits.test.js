@@ -15,6 +15,7 @@ const {
   ROUTE_ABUSE_LIMIT_MESSAGE,
   ROUTE_ABUSE_POLICIES,
   accountDeletionLimiter,
+  adminUserStatusLimiter,
   authenticatedUserKeyGenerator,
   campsiteApiLimiter,
   contactLimiter,
@@ -38,11 +39,14 @@ const {
 } = await import('../routes/users.js');
 const { default: otherRouter } = await import('../routes/other.js');
 const { default: campRouter } = await import('../routes/camp.js');
+const { default: adminRouter } = await import('../routes/admin.js');
 const camp = await import('../controllers/camp.js');
 const media = await import('../controllers/media.js');
+const { createUserBlockHandler } = await import('../controllers/admin.js');
 const {
   isAuthenticatedForVerification,
   catchAsyncErrors,
+  isAdmin,
   isLoggedIn,
   isLoggedOut,
   usernameToLowerCaseAndTrim,
@@ -160,11 +164,26 @@ const publicApiExpectedPolicies = Object.freeze([
   }),
 ]);
 
-const expectedPolicies = Object.freeze([
+const existingFourteenExpectedPolicies = Object.freeze([
   ...existingExpectedPolicies,
   ...mediaExpectedPolicies,
   ...passwordAndAccountExpectedPolicies,
   ...publicApiExpectedPolicies,
+]);
+
+const adminExpectedPolicies = Object.freeze([
+  Object.freeze({
+    limiterName: 'adminUserStatusLimiter',
+    policyName: 'adminUserStatus',
+    windowMs: 15 * 60 * 1000,
+    limit: 30,
+    authenticatedUserKeyed: true,
+  }),
+]);
+
+const expectedPolicies = Object.freeze([
+  ...existingFourteenExpectedPolicies,
+  ...adminExpectedPolicies,
 ]);
 
 const photoUploadRoutes = Object.freeze([
@@ -197,10 +216,14 @@ const mediaDeletionRoutes = Object.freeze([
 const sensitiveFixture = Object.freeze({
   userId: 'abcdefabcdefabcdefabcdef',
   authenticatedUserId: '0123456789abcdef01234567',
+  administratorId: '111111111111111111111111',
+  targetUserId: '222222222222222222222222',
   resetUserId: 'fedcbafedcbafedcbafedcba',
   resetCode: 'recognizable-reset-code-secret',
   username: 'recognizable-login-user@example.test',
   email: 'recognizable-contact@example.test',
+  administratorUsername: 'recognizable-administrator@example.test',
+  administratorEmail: 'recognizable-admin-email@example.test',
   password: 'Recognizable-Password-Secret!',
   currentPassword: 'Recognizable-Current-Password-Secret!',
   forgot_username: 'recognizable-reset-user@example.test',
@@ -285,6 +308,13 @@ function addAuthenticatedUser(req, res, next) {
   next();
 }
 
+function addAuthenticatedAdministrator(req, res, next) {
+  addAuthenticatedUser(req, res, () => {
+    req.user.isAdmin = true;
+    next();
+  });
+}
+
 async function captureConsole(callback) {
   const methods = ['error', 'info', 'log', 'warn'];
   const originals = new Map();
@@ -313,7 +343,7 @@ const methodHandlers = (route, method) => route.stack
   .map(layer => layer.handle);
 
 describe('route-abuse policy construction', () => {
-  test('constructs fourteen exact independent policies with one fixed handler', () => {
+  test('constructs fifteen exact independent policies with one fixed handler', () => {
     const capturedOptions = [];
     const createdInstances = [];
     const limiters = createRouteAbuseLimiters({
@@ -325,10 +355,10 @@ describe('route-abuse policy construction', () => {
       },
     });
 
-    assert.equal(capturedOptions.length, 14);
-    assert.equal(createdInstances.length, 14);
-    assert.equal(new Set(createdInstances).size, 14);
-    assert.equal(new Set(Object.values(limiters)).size, 14);
+    assert.equal(capturedOptions.length, 15);
+    assert.equal(createdInstances.length, 15);
+    assert.equal(new Set(createdInstances).size, 15);
+    assert.equal(new Set(Object.values(limiters)).size, 15);
     assert.equal(Object.isFrozen(limiters), true);
     assert.deepEqual(
       Object.keys(ROUTE_ABUSE_POLICIES),
@@ -382,10 +412,32 @@ describe('route-abuse policy construction', () => {
       assert.equal(Object.hasOwn(options, 'max'), false);
     }
 
+    assert.deepEqual(
+      existingFourteenExpectedPolicies.map(expected => ({
+        policyName: expected.policyName,
+        ...ROUTE_ABUSE_POLICIES[expected.policyName],
+      })),
+      existingFourteenExpectedPolicies.map(expected => ({
+        policyName: expected.policyName,
+        windowMs: expected.windowMs,
+        limit: expected.limit,
+      })),
+    );
+
     const serializedOptions = JSON.stringify(capturedOptions);
+    const exportedLimiterMetadata = JSON.stringify({
+      exportNames: Object.keys(routeAbuseModule),
+      limiterProperties: Reflect.ownKeys(adminUserStatusLimiter).map(String),
+      policy: ROUTE_ABUSE_POLICIES.adminUserStatus,
+    });
     for (const value of sensitiveValues) {
       assert.equal(serializedOptions.includes(value), false);
+      assert.equal(exportedLimiterMetadata.includes(value), false);
     }
+    assert.equal(
+      exportedLimiterMetadata.includes('user:invalid-authenticated-id'),
+      false,
+    );
   });
 
   test('creates production instances once during cached module initialization', async () => {
@@ -393,7 +445,7 @@ describe('route-abuse policy construction', () => {
     const limiterNames = expectedPolicies.map(policy => policy.limiterName);
     const productionLimiters = limiterNames.map(name => routeAbuseModule[name]);
 
-    assert.equal(new Set(productionLimiters).size, 14);
+    assert.equal(new Set(productionLimiters).size, 15);
     for (const limiterName of limiterNames) {
       assert.strictEqual(routeAbuseModule[limiterName], secondImport[limiterName]);
     }
@@ -418,7 +470,7 @@ describe('route-abuse policy construction', () => {
     assert.match(keyGeneratorSource, /const id = req\?\.user\?\._id/);
     assert.doesNotMatch(
       keyGeneratorSource,
-      /username|email|session|\.ip\b|\.path\b|headers|socket/,
+      /username|email|session|params|\.ip\b|\.path\b|headers|socket/,
     );
 
     for (const header of [
@@ -520,6 +572,7 @@ describe('authenticated-user limiter keying', () => {
     const req = {
       user,
       ip: '198.51.100.42',
+      params: { id: sensitiveFixture.targetUserId },
       path: `/${sensitiveFixture.parkSlug}`,
       session: { id: sensitiveFixture.session },
     };
@@ -529,6 +582,7 @@ describe('authenticated-user limiter keying', () => {
 
     assert.equal(authenticatedUserKeyGenerator(req), expectedKey);
     req.ip = '203.0.113.77';
+    req.params = { id: 'different-target-user-id-secret' };
     req.path = `/${sensitiveFixture.campsiteSlug}`;
     req.session = { id: 'different-session-secret' };
     user.username = 'different-username-secret';
@@ -990,6 +1044,380 @@ describe('real route-abuse limiter behavior', () => {
       });
     });
   }
+
+  test('administrator Block and Unblock share one User counter across simulated IPs', async () => {
+    const limiters = createRouteAbuseLimiters();
+    const calls = { block: 0, unblock: 0 };
+    const app = express();
+    app.set('trust proxy', 1);
+    app.use(addAuthenticatedAdministrator);
+    app.post(
+      '/a/user/:id/block',
+      isAdmin,
+      limiters.adminUserStatusLimiter,
+      (req, res) => {
+        calls.block += 1;
+        res.status(204).end();
+      },
+    );
+    app.post(
+      '/a/user/:id/unblock',
+      isAdmin,
+      limiters.adminUserStatusLimiter,
+      (req, res) => {
+        calls.unblock += 1;
+        res.status(204).end();
+      },
+    );
+
+    await withServer(app, async baseUrl => {
+      for (let attempt = 0; attempt < 12; attempt += 1) {
+        assert.equal((await sendMutation(
+          `${baseUrl}/a/user/${sensitiveFixture.targetUserId}/block`,
+          {
+            forwardedFor: attempt % 2 === 0
+              ? '198.51.100.120'
+              : '203.0.113.121',
+            userId: sensitiveFixture.administratorId,
+          },
+        )).status, 204);
+      }
+      for (let attempt = 0; attempt < 18; attempt += 1) {
+        assert.equal((await sendMutation(
+          `${baseUrl}/a/user/${sensitiveFixture.targetUserId}/unblock`,
+          {
+            forwardedFor: attempt % 2 === 0
+              ? '192.0.2.122'
+              : '198.51.100.123',
+            userId: sensitiveFixture.administratorId,
+          },
+        )).status, 204);
+      }
+
+      assert.equal((await sendMutation(
+        `${baseUrl}/a/user/${sensitiveFixture.targetUserId}/block`,
+        {
+          forwardedFor: '203.0.113.124',
+          userId: sensitiveFixture.administratorId,
+        },
+      )).status, 429);
+    });
+
+    assert.deepEqual(calls, { block: 12, unblock: 18 });
+  });
+
+  test('administrator counters separate Users on one IP and fail closed for malformed IDs', async () => {
+    const limiters = createRouteAbuseLimiters();
+    const firstAdministrator = '333333333333333333333333';
+    const secondAdministrator = '444444444444444444444444';
+    const sharedIp = '198.51.100.125';
+    const app = express();
+    app.set('trust proxy', 1);
+    app.use(addAuthenticatedAdministrator);
+    app.post(
+      '/a/user/:id/block',
+      isAdmin,
+      limiters.adminUserStatusLimiter,
+      (req, res) => res.status(204).end(),
+    );
+    app.post(
+      '/a/user/:id/unblock',
+      isAdmin,
+      limiters.adminUserStatusLimiter,
+      (req, res) => res.status(204).end(),
+    );
+
+    const sendStatusMutation = (baseUrl, action, userId) => sendMutation(
+      `${baseUrl}/a/user/${sensitiveFixture.targetUserId}/${action}`,
+      { forwardedFor: sharedIp, userId },
+    );
+
+    await withServer(app, async baseUrl => {
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        assert.equal(
+          (await sendStatusMutation(baseUrl, 'block', firstAdministrator)).status,
+          204,
+        );
+        assert.equal(
+          (await sendStatusMutation(baseUrl, 'unblock', secondAdministrator)).status,
+          204,
+        );
+      }
+      assert.equal(
+        (await sendStatusMutation(baseUrl, 'unblock', firstAdministrator)).status,
+        429,
+      );
+      assert.equal(
+        (await sendStatusMutation(baseUrl, 'block', secondAdministrator)).status,
+        429,
+      );
+
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        assert.equal((await sendStatusMutation(
+          baseUrl,
+          attempt % 2 === 0 ? 'block' : 'unblock',
+          `malformed-administrator-${attempt}`,
+        )).status, 204);
+      }
+      assert.equal((await sendStatusMutation(
+        baseUrl,
+        'block',
+        'another-malformed-administrator',
+      )).status, 429);
+      assert.equal((await sendStatusMutation(
+        baseUrl,
+        'unblock',
+        sensitiveFixture.administratorId,
+      )).status, 204);
+    });
+  });
+
+  test('exhausting administrator status mutations leaves every existing operation and a fresh limiter set available', async () => {
+    const firstSet = createRouteAbuseLimiters();
+    const calls = Object.fromEntries(
+      expectedPolicies.map(({ policyName }) => [policyName, 0]),
+    );
+    const firstApp = express();
+    firstApp.set('trust proxy', 1);
+    firstApp.use(addAuthenticatedAdministrator);
+    firstApp.post(
+      '/operation/adminUserStatus',
+      isAdmin,
+      firstSet.adminUserStatusLimiter,
+      (req, res) => {
+        calls.adminUserStatus += 1;
+        res.status(204).end();
+      },
+    );
+    for (const expected of existingFourteenExpectedPolicies) {
+      const method = expected.method?.toLowerCase() || 'post';
+      firstApp[method](
+        `/operation/${expected.policyName}`,
+        firstSet[expected.limiterName],
+        (req, res) => {
+          calls[expected.policyName] += 1;
+          res.status(204).end();
+        },
+      );
+    }
+
+    await withServer(firstApp, async baseUrl => {
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        assert.equal((await sendMutation(
+          `${baseUrl}/operation/adminUserStatus`,
+          {
+            forwardedFor: sensitiveFixture.ip,
+            userId: sensitiveFixture.administratorId,
+          },
+        )).status, 204);
+      }
+      assert.equal((await sendMutation(
+        `${baseUrl}/operation/adminUserStatus`,
+        {
+          forwardedFor: sensitiveFixture.ip,
+          userId: sensitiveFixture.administratorId,
+        },
+      )).status, 429);
+
+      for (const expected of existingFourteenExpectedPolicies) {
+        assert.equal((await sendMutation(
+          `${baseUrl}/operation/${expected.policyName}`,
+          {
+            forwardedFor: sensitiveFixture.ip,
+            method: expected.method || 'POST',
+            userId: sensitiveFixture.administratorId,
+          },
+        )).status, 204, expected.policyName);
+      }
+    });
+
+    assert.equal(calls.adminUserStatus, 30);
+    for (const expected of existingFourteenExpectedPolicies) {
+      assert.equal(calls[expected.policyName], 1, expected.policyName);
+    }
+
+    const secondSet = createRouteAbuseLimiters();
+    const secondApp = express();
+    secondApp.use(addAuthenticatedAdministrator);
+    secondApp.post(
+      '/operation/adminUserStatus',
+      isAdmin,
+      secondSet.adminUserStatusLimiter,
+      (req, res) => res.status(204).end(),
+    );
+    await withServer(secondApp, async baseUrl => {
+      assert.equal((await sendMutation(
+        `${baseUrl}/operation/adminUserStatus`,
+        { userId: sensitiveFixture.administratorId },
+      )).status, 204);
+    });
+  });
+
+  test('isAdmin rejects anonymous and non-administrator requests before counter consumption', async () => {
+    const limiters = createRouteAbuseLimiters();
+    let controllerCalls = 0;
+    let limiterCalls = 0;
+    const app = express();
+    app.use((req, res, next) => {
+      const role = req.get('X-Test-Role');
+      if (role !== 'anonymous') {
+        req.user = {
+          _id: req.get('X-Test-User-Id'),
+          isAdmin: role === 'administrator',
+        };
+      }
+      next();
+    });
+    app.post(
+      '/a/user/:id/block',
+      isAdmin,
+      (req, res, next) => {
+        limiterCalls += 1;
+        limiters.adminUserStatusLimiter(req, res, next);
+      },
+      (req, res) => {
+        controllerCalls += 1;
+        res.status(204).end();
+      },
+    );
+
+    const urlPath = `/a/user/${sensitiveFixture.targetUserId}/block`;
+    await withServer(app, async baseUrl => {
+      for (const role of ['anonymous', 'non-administrator']) {
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          const response = await sendMutation(`${baseUrl}${urlPath}`, {
+            headers: { 'X-Test-Role': role },
+            redirect: 'manual',
+            userId: sensitiveFixture.administratorId,
+          });
+          assert.equal(response.status, 302);
+          assert.equal(response.headers.get('location'), '/');
+        }
+      }
+      assert.equal(limiterCalls, 0);
+      assert.equal(controllerCalls, 0);
+
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        assert.equal((await sendMutation(`${baseUrl}${urlPath}`, {
+          headers: { 'X-Test-Role': 'administrator' },
+          userId: sensitiveFixture.administratorId,
+        })).status, 204);
+      }
+      assert.equal((await sendMutation(`${baseUrl}${urlPath}`, {
+        headers: { 'X-Test-Role': 'administrator' },
+        userId: sensitiveFixture.administratorId,
+      })).status, 429);
+    });
+
+    assert.equal(limiterCalls, 31);
+    assert.equal(controllerCalls, 30);
+  });
+
+  test('administrator request 31 stops before controller validation, persistence, redirects, and logging', async () => {
+    const limiters = createRouteAbuseLimiters();
+    const nonexistentTarget = '555555555555555555555555';
+    const successfulTarget = '666666666666666666666666';
+    const failingTarget = '777777777777777777777777';
+    const updateCalls = [];
+    const redirectCalls = [];
+    const logCalls = [];
+    let controllerCalls = 0;
+    const controller = createUserBlockHandler({
+      blocked: true,
+      UserModel: {
+        async findOneAndUpdate(filter, update, options) {
+          const targetId = filter._id.toHexString();
+          updateCalls.push({ options, targetId, update });
+          if (targetId === failingTarget) {
+            throw new Error('recognizable-database-failure-secret');
+          }
+          return targetId === nonexistentTarget
+            ? null
+            : { _id: filter._id, blocked: true };
+        },
+      },
+      async log(req, res, type, details) {
+        logCalls.push({ details, type });
+      },
+      redirectWithFlash(req, res, type, message, location) {
+        redirectCalls.push({ location, message, type });
+        return res.status(204).end();
+      },
+    });
+    const app = express();
+    app.set('trust proxy', 1);
+    app.use(express.json());
+    app.use(addAuthenticatedAdministrator);
+    app.post(
+      '/a/user/:id/block',
+      isAdmin,
+      limiters.adminUserStatusLimiter,
+      catchAsyncErrors(async (req, res, next) => {
+        controllerCalls += 1;
+        return controller(req, res, next);
+      }),
+    );
+
+    const targetSequence = [
+      'recognizable-malformed-target-secret',
+      sensitiveFixture.administratorId,
+      nonexistentTarget,
+      successfulTarget,
+      failingTarget,
+    ];
+
+    await withServer(app, async baseUrl => {
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        const targetId = targetSequence[attempt % targetSequence.length];
+        assert.equal((await sendMutation(
+          `${baseUrl}/a/user/${targetId}/block`,
+          { userId: sensitiveFixture.administratorId },
+        )).status, 204);
+      }
+
+      assert.equal(controllerCalls, 30);
+      assert.equal(updateCalls.length, 18);
+      assert.equal(redirectCalls.length, 30);
+      assert.equal(logCalls.length, 6);
+      assert.ok(logCalls.every(call =>
+        call.type === 'error' &&
+        call.details.message === 'Admin user block operation failed.' &&
+        Object.hasOwn(call.details, 'error') === false
+      ));
+
+      await captureConsole(async captured => {
+        const blocked = await sendMutation(
+          `${baseUrl}/a/user/${sensitiveFixture.targetUserId}/block`,
+          {
+            body: sensitiveFixture,
+            forwardedFor: sensitiveFixture.ip,
+            headers: {
+              'X-Test-Email': sensitiveFixture.administratorEmail,
+              'X-Test-Session': sensitiveFixture.session,
+              'X-Test-Username': sensitiveFixture.administratorUsername,
+            },
+            userId: sensitiveFixture.administratorId,
+          },
+        );
+        const body = await blocked.text();
+        const publicMetadata = JSON.stringify([...blocked.headers]);
+
+        assert.equal(blocked.status, 429);
+        assert.equal(body, ROUTE_ABUSE_LIMIT_MESSAGE);
+        assert.match(blocked.headers.get('content-type'), /^text\/plain\b/);
+        assert.equal(blocked.headers.get('cache-control'), 'no-store');
+        assert.equal(controllerCalls, 30);
+        assert.equal(updateCalls.length, 18);
+        assert.equal(redirectCalls.length, 30);
+        assert.equal(logCalls.length, 6);
+        assert.deepEqual(captured, []);
+        for (const value of sensitiveValues) {
+          assert.equal(body.includes(value), false);
+          assert.equal(publicMetadata.includes(value), false);
+        }
+      });
+    });
+  });
 
   test('password change, account deletion, and media counters are operation-independent', async () => {
     const firstSet = createRouteAbuseLimiters();
@@ -1660,6 +2088,42 @@ describe('POST/DELETE-only route wiring and middleware order', () => {
         assert.equal(source.includes(name), false, `${file}: ${name}`);
       }
     }
+  });
+
+  test('administrator status limiter appears only on the two intended production POST routes', () => {
+    const unrelatedRouters = [userRouter, otherRouter, campRouter];
+    for (const router of unrelatedRouters) {
+      for (const layer of router.stack) {
+        if (!layer.route) continue;
+        assert.equal(
+          layer.route.stack.some(
+            routeLayer => routeLayer.handle === adminUserStatusLimiter,
+          ),
+          false,
+          layer.route.path,
+        );
+      }
+    }
+
+    const actualWiring = [];
+    for (const layer of adminRouter.stack) {
+      if (!layer.route) continue;
+      for (const routeLayer of layer.route.stack) {
+        if (routeLayer.handle === adminUserStatusLimiter) {
+          actualWiring.push([layer.route.path, routeLayer.method]);
+        }
+      }
+    }
+
+    assert.deepEqual(actualWiring, [
+      ['/user/:id/block', 'post'],
+      ['/user/:id/unblock', 'post'],
+    ]);
+    assert.equal(
+      methodHandlers(getRoute(adminRouter, '/dashboard'), 'get')
+        .includes(adminUserStatusLimiter),
+      false,
+    );
   });
 
   test('every media mutation route has the exact limiter middleware order', async () => {
@@ -2403,6 +2867,7 @@ describe('dependency, dead-helper, global-protection, and documentation guards',
       /Park-search API[^\n]+1 minute[^\n]+30/,
       /Park-media API[^\n]+5 minutes[^\n]+60/,
       /Campsite-detail APIs[^\n]+5 minutes[^\n]+60/,
+      /Administrator user-status mutation[^\n]+15 minutes[^\n]+30/,
     ]) assert.match(documentation, row);
     assert.match(documentation, /HTTP 429/);
     assert.match(documentation, /fixed plain-text response/);
@@ -2412,7 +2877,7 @@ describe('dependency, dead-helper, global-protection, and documentation guards',
     assert.match(documentation, /single-instance, basic abuse-prevention stage/);
     assert.match(
       documentation,
-      /its own shared-store instance\s+with a unique prefix/,
+      /every limiter must move to a separate shared-store instance\s+with a unique prefix/,
     );
     assert.match(documentation, /not distributed-bot protection/);
     assert.match(documentation, /keyed only by the authenticated User ID/);
@@ -2421,7 +2886,7 @@ describe('dependency, dead-helper, global-protection, and documentation guards',
     assert.match(documentation, /before multipart parsing or\s+file buffering/);
     assert.match(
       documentation,
-      /public API, authenticated media, password-change, account-deletion, and\s+reset-form submission counters are also process-local/,
+      /public API, authenticated media, password-change, account-deletion,\s+administrator user-status, and reset-form submission counters are also\s+process-local/,
     );
     assert.match(documentation, /default client-IP attribution/);
     assert.match(documentation, /Both reset-form POST variants share one\s+reset-submission counter/);
@@ -2458,10 +2923,41 @@ describe('dependency, dead-helper, global-protection, and documentation guards',
       /Park media and\s+campsite details are limited before database queries/,
     );
     assert.match(documentation, /search\s+query, slug, URL, header, or media details/);
-    for (const deferred of [
-      'administrator mutations',
-      'shared-store migration before multiple dynos',
-    ]) assert.ok(documentation.includes(deferred));
+    assert.match(
+      documentation,
+      /administrator user-status limiter is keyed only by the authenticated\s+administrator User ID/,
+    );
+    assert.match(documentation, /Block and Unblock share one counter/);
+    assert.match(
+      documentation,
+      /`isAdmin` executes\s+before the limiter/,
+    );
+    assert.match(
+      documentation,
+      /runs before target-ID validation, self-target comparison, database work/,
+    );
+    assert.match(
+      documentation,
+      /malformed targets,\s+self-target attempts, nonexistent targets, successful operations, and database\s+failures/,
+    );
+    assert.match(
+      documentation,
+      /Route-specific process-local coverage is now implemented\s+for the currently identified public and mutation endpoints/,
+    );
+    for (const limitation of [
+      /distributed attacks/,
+      /rotating-IP scraping/,
+      /compromised\s+administrator accounts/,
+      /abuse across multiple dynos/,
+    ]) assert.match(documentation, limitation);
+    assert.match(
+      documentation,
+      /migration of every limiter to a separate shared-store instance with a unique\s+prefix before multiple dynos/,
+    );
+    assert.doesNotMatch(
+      documentation,
+      /^[-*]\s+administrator mutations;/m,
+    );
     assert.equal(documentation.includes('- public campsite APIs;'), false);
     assert.equal(documentation.includes('- the park search API;'), false);
     assert.doesNotMatch(documentation, /^[-*]\s+account deletion;/m);

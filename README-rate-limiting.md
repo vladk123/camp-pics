@@ -44,6 +44,22 @@ The account-deletion limiter runs before current-password verification, the
 database transaction, media inventory and cleanup planning, cleanup-job
 creation, session destruction, and immediate cleanup processing.
 
+Administrator user-status mutations use this additional policy:
+
+| Operation | Routes | Window | Maximum attempts |
+| --- | --- | ---: | ---: |
+| Administrator user-status mutation | `POST /a/user/:id/block` and `POST /a/user/:id/unblock` | 15 minutes | 30 |
+
+The administrator user-status limiter is keyed only by the authenticated
+administrator User ID. Block and Unblock share one counter. `isAdmin` executes
+before the limiter, so unauthenticated users and authenticated
+non-administrators are rejected without consuming its capacity. The limiter
+runs before target-ID validation, self-target comparison, database work,
+redirect or flash creation, and operational failure logging. Every Block and
+Unblock attempt that reaches it counts, including malformed targets,
+self-target attempts, nonexistent targets, successful operations, and database
+failures.
+
 Authenticated media mutations use these additional policies:
 
 | Operation | Routes | Window | Maximum attempts |
@@ -101,15 +117,19 @@ query, slug, URL, header, or media details.
 
 The current counters live in process memory and reset whenever the process restarts. Separate web dynos would have separate counters. This is acceptable for the current single-instance, basic abuse-prevention stage, but it is not distributed-bot protection and rate limiting alone does not prevent distributed attacks.
 
-The public API, authenticated media, password-change, account-deletion, and
-reset-form submission counters are also process-local. They reset whenever the
-process restarts, and separate web dynos do not share state. Before CampPics
-uses multiple web dynos, each limiter must move to its own shared-store instance
+The public API, authenticated media, password-change, account-deletion,
+administrator user-status, and reset-form submission counters are also
+process-local. They reset whenever the process restarts, and separate web dynos
+do not share state. Route-specific process-local coverage is now implemented
+for the currently identified public and mutation endpoints, but rate limiting
+alone does not prevent distributed attacks, rotating-IP scraping, compromised
+administrator accounts, or abuse across multiple dynos. Before CampPics uses
+multiple web dynos, every limiter must move to a separate shared-store instance
 with a unique prefix so all policies remain independent across processes.
 
 ## Deferred layers
 
-Later passes still need separate abuse-control policies for:
+Later passes still need:
 
-- administrator mutations; and
-- shared-store migration before multiple dynos.
+- migration of every limiter to a separate shared-store instance with a unique
+  prefix before multiple dynos.

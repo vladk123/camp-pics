@@ -65,6 +65,10 @@ export const ROUTE_ABUSE_POLICIES = Object.freeze({
     windowMs: 5 * 60 * 1000,
     limit: 60,
   }),
+  adminUserStatus: Object.freeze({
+    windowMs: 15 * 60 * 1000,
+    limit: 30,
+  }),
 });
 
 export function authenticatedUserKeyGenerator(req) {
@@ -150,6 +154,10 @@ export function createRouteAbuseLimiters({
     campsiteApiLimiter: createLimiter(
       ROUTE_ABUSE_POLICIES.campsiteApi,
     ),
+    adminUserStatusLimiter: createLimiter(
+      ROUTE_ABUSE_POLICIES.adminUserStatus,
+      authenticatedUserKeyGenerator,
+    ),
   });
 }
 
@@ -168,4 +176,5 @@ export const {
   parkSearchApiLimiter,
   parkMediaApiLimiter,
   campsiteApiLimiter,
+  adminUserStatusLimiter,
 } = createRouteAbuseLimiters();

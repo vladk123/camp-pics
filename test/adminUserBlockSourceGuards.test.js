@@ -4,21 +4,78 @@ import { describe, test } from 'node:test';
 
 import { isAdmin } from '../middleware.js';
 import adminRouter from '../routes/admin.js';
+import { adminUserStatusLimiter } from '../utils/routeAbuseLimits.js';
 
 function routeFor(path) {
   return adminRouter.stack.find(layer => layer.route?.path === path)?.route;
 }
 
 describe('administrator Block/Unblock route guards', () => {
-  for (const path of ['/user/:id/block', '/user/:id/unblock']) {
-    test(`${path} remains POST-only with isAdmin first`, () => {
+  for (const [path, controllerName] of [
+    ['/user/:id/block', 'blockUser'],
+    ['/user/:id/unblock', 'unblockUser'],
+  ]) {
+    test(`${path} remains POST-only with the exact authorization and limiter order`, async () => {
       const route = routeFor(path);
+      const source = await readFile('routes/admin.js', 'utf8');
 
       assert.ok(route);
       assert.deepEqual(Object.keys(route.methods), ['post']);
+      assert.equal(route.stack.length, 3);
       assert.equal(route.stack[0].handle, isAdmin);
+      assert.equal(route.stack[1].handle, adminUserStatusLimiter);
+      assert.match(
+        source,
+        new RegExp(
+          `router\\.route\\('${path.replaceAll('/', '\\/')}'\\)\\s*` +
+          `\\.post\\(isAdmin, adminUserStatusLimiter, ` +
+          `catchAsyncErrors\\(admin\\.${controllerName}\\)\\);`,
+          'u',
+        ),
+      );
     });
   }
+
+  test('Block and Unblock reference the exact same production limiter instance', () => {
+    const blockRoute = routeFor('/user/:id/block');
+    const unblockRoute = routeFor('/user/:id/unblock');
+
+    assert.equal(blockRoute.stack[1].handle, adminUserStatusLimiter);
+    assert.equal(unblockRoute.stack[1].handle, adminUserStatusLimiter);
+    assert.equal(blockRoute.stack[1].handle, unblockRoute.stack[1].handle);
+  });
+
+  test('dashboard and all other administrator handlers have no status limiter', () => {
+    const limiterRoutes = [];
+    for (const layer of adminRouter.stack) {
+      if (!layer.route) continue;
+      for (const routeLayer of layer.route.stack) {
+        if (routeLayer.handle === adminUserStatusLimiter) {
+          limiterRoutes.push([layer.route.path, routeLayer.method]);
+        }
+      }
+    }
+
+    assert.deepEqual(limiterRoutes, [
+      ['/user/:id/block', 'post'],
+      ['/user/:id/unblock', 'post'],
+    ]);
+    assert.equal(
+      routeFor('/dashboard').stack.some(
+        layer => layer.handle === adminUserStatusLimiter,
+      ),
+      false,
+    );
+  });
+
+  test('global CSRF protection remains before the administrator router mount', async () => {
+    const source = await readFile('app.js', 'utf8');
+    const csrfIndex = source.indexOf('app.use(csrfSynchronisedProtection)');
+    const adminMountIndex = source.indexOf("app.use('/a', adminRoutes)");
+
+    assert.ok(csrfIndex >= 0);
+    assert.ok(adminMountIndex > csrfIndex);
+  });
 });
 
 describe('administrator target source guards', () => {
