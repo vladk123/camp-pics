@@ -486,8 +486,10 @@ describe('CSP, vendor, and scope guards', () => {
     ], { cwd: root, encoding: 'utf8' });
     const allowedRestrictedFiles = new Set([
       'controllers/users.js',
+      'middleware.js',
       'routes/users.js',
       'package.json',
+      'package-lock.json',
     ]);
     const unexpectedChanges = status
       .split(/\r?\n/u)

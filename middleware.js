@@ -1,27 +1,11 @@
-import mongoose from 'mongoose';
-import { logger } from './utils/logging.js'
 import { redirectedFlash } from './utils/redirectedFlash.js';
 import { sessionAuthVersionMatches } from './utils/authLifecycle.js';
 
 import multer from 'multer';
-import { CloudinaryStorage } from 'multer-storage-cloudinary';
-import cloudinary from './config/cloudinary.js';
-import { URL } from 'url'
 
 //////////TO DO / TD ///////////////
 
 //////////CONNECTIONS///////////////
-// // Check 
-// export const checkMongoConnection = async (req, res, next) => {
-//     if (mongoose.connection.readyState !== 1) {
-//         // return res.status(503).json({ error: "Cannot connect to MongoDB database" });
-//         // await logger(req, res, )
-//         throw new Error ("Mongo Connection failed.")
-//     }
-//     next();
-// };
-
-
 ///////// AUTH /////////////
 
 // 

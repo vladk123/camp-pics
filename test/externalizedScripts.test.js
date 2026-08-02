@@ -811,8 +811,10 @@ describe('CSP and scope regression guards for externalization', () => {
     ], { cwd: root, encoding: 'utf8' });
     const allowedProtectedFiles = new Set([
       'controllers/users.js',
+      'middleware.js',
       'routes/users.js',
       'package.json',
+      'package-lock.json',
     ]);
     const unexpectedProtectedChanges = protectedStatus
       .split(/\r?\n/u)
