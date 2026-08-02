@@ -416,6 +416,7 @@ describe('CSP production source guards', () => {
       'connect-mongo': '^5.1.0',
       'csrf-sync': '^4.2.1',
       dotenv: '^17.2.3',
+      ejs: '3.1.10',
       'ejs-mate': '^4.0.0',
       express: '^5.1.0',
       'express-rate-limit': '^8.6.1',

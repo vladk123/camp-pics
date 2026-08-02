@@ -19,6 +19,7 @@ const expectedDependencies = {
   'connect-mongo': '^5.1.0',
   'csrf-sync': '^4.2.1',
   dotenv: '^17.2.3',
+  ejs: '3.1.10',
   'ejs-mate': '^4.0.0',
   express: '^5.1.0',
   'express-rate-limit': '^8.6.1',
@@ -62,9 +63,10 @@ function withoutComments(source) {
 
 describe('dependency and runtime cleanup guards', () => {
   test('manifests contain only the authorized dependency changes', async () => {
-    const [packageSource, lockSource] = await Promise.all([
+    const [packageSource, lockSource, sendEmailSource] = await Promise.all([
       readFile(path.join(root, 'package.json'), 'utf8'),
       readFile(path.join(root, 'package-lock.json'), 'utf8'),
+      readFile(path.join(root, 'utils/sendEmail.js'), 'utf8'),
     ]);
     const packageJson = JSON.parse(packageSource);
     const packageLock = JSON.parse(lockSource);
@@ -75,6 +77,19 @@ describe('dependency and runtime cleanup guards', () => {
     assert.deepEqual(lockRoot.dependencies, packageJson.dependencies);
     assert.deepEqual(packageJson.engines, { node: '24.x', npm: '11.x' });
     assert.deepEqual(lockRoot.engines, packageJson.engines);
+    assert.equal(packageJson.dependencies.ejs, '3.1.10');
+    assert.equal(lockRoot.dependencies.ejs, '3.1.10');
+    assert.equal(packageLock.packages['node_modules/ejs'].version, '3.1.10');
+    assert.equal(packageJson.dependencies['ejs-mate'], '^4.0.0');
+    assert.equal(packageLock.packages['node_modules/ejs-mate'].version, '4.0.0');
+    assert.match(
+      withoutComments(sendEmailSource),
+      /^\s*import\s+ejs\s+from\s+['"]ejs['"];/mu,
+    );
+    assert.match(
+      withoutComments(sendEmailSource),
+      /renderTemplate\s*=\s*ejs\.renderFile/u,
+    );
     assert.equal(packageJson.dependencies.cloudinary, '1.41.3');
     assert.equal(packageLock.packages['node_modules/cloudinary'].version, '1.41.3');
     assert.equal(
