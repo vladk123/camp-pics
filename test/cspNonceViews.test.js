@@ -424,7 +424,7 @@ describe('CSP production source guards', () => {
       'express-slow-down': '^3.0.0',
       'form-data': '^4.0.6',
       helmet: '^8.3.0',
-      'mailgun.js': '^12.1.1',
+      'mailgun.js': '^12.9.0',
       'method-override': '^3.0.0',
       mongoose: '^8.24.2',
       multer: '^2.2.0',

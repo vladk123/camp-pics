@@ -27,7 +27,7 @@ const expectedDependencies = {
   'express-slow-down': '^3.0.0',
   'form-data': '^4.0.6',
   helmet: '^8.3.0',
-  'mailgun.js': '^12.1.1',
+  'mailgun.js': '^12.9.0',
   'method-override': '^3.0.0',
   mongoose: '^8.24.2',
   multer: '^2.2.0',
@@ -63,18 +63,41 @@ function withoutComments(source) {
 
 describe('dependency and runtime cleanup guards', () => {
   test('manifests contain only the authorized dependency changes', async () => {
-    const [packageSource, lockSource, sendEmailSource] = await Promise.all([
+    const [
+      packageSource,
+      lockSource,
+      sendEmailSource,
+      installedMailgunSource,
+    ] = await Promise.all([
       readFile(path.join(root, 'package.json'), 'utf8'),
       readFile(path.join(root, 'package-lock.json'), 'utf8'),
       readFile(path.join(root, 'utils/sendEmail.js'), 'utf8'),
+      readFile(path.join(root, 'node_modules/mailgun.js/package.json'), 'utf8'),
     ]);
     const packageJson = JSON.parse(packageSource);
     const packageLock = JSON.parse(lockSource);
     const lockRoot = packageLock.packages[''];
+    const installedMailgun = JSON.parse(installedMailgunSource);
+    const lockedMailgun = packageLock.packages['node_modules/mailgun.js'];
 
     assert.deepEqual(packageJson.dependencies, expectedDependencies);
     assert.deepEqual(lockRoot.dependencies, expectedDependencies);
     assert.deepEqual(lockRoot.dependencies, packageJson.dependencies);
+    assert.equal(packageJson.dependencies['mailgun.js'], '^12.9.0');
+    assert.equal(lockRoot.dependencies['mailgun.js'], '^12.9.0');
+    assert.equal(lockedMailgun.version, '12.9.0');
+    assert.equal(
+      lockedMailgun.resolved,
+      'https://registry.npmjs.org/mailgun.js/-/mailgun.js-12.9.0.tgz',
+    );
+    assert.equal(installedMailgun.version, lockedMailgun.version);
+    assert.deepEqual(lockedMailgun.dependencies, installedMailgun.dependencies);
+    assert.deepEqual(lockedMailgun.dependencies, {
+      axios: '^1.15.0',
+      'base-64': '^1.0.0',
+      'url-join': '^4.0.1',
+    });
+    assert.deepEqual(lockedMailgun.engines, installedMailgun.engines);
     assert.equal(packageJson.dependencies.helmet, '^8.3.0');
     assert.equal(lockRoot.dependencies.helmet, '^8.3.0');
     assert.equal(
