@@ -426,7 +426,7 @@ describe('CSP production source guards', () => {
       helmet: '^8.1.0',
       'mailgun.js': '^12.1.1',
       'method-override': '^3.0.0',
-      mongoose: '^8.19.1',
+      mongoose: '^8.24.2',
       multer: '^2.2.0',
       passport: '^0.7.0',
       'passport-local': '^1.0.0',
