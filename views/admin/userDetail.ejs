@@ -1,0 +1,133 @@
+<% layout('/layouts/boilerplate') %>
+<link rel="stylesheet" href="/css/adminUserDetail.css">
+<%- include('../partials/search') %>
+
+<div class="admin-user-detail-page">
+  <%- include('./partials/adminNav', { currentPath }) %>
+
+  <header class="admin-user-detail-header">
+    <div>
+      <a class="admin-user-detail-back" href="/a/dashboard">Back to dashboard</a>
+      <p class="admin-user-detail-eyebrow">User administration</p>
+      <h1><%= user.fname || user.username || 'Unnamed user' %></h1>
+      <p class="admin-user-detail-subtitle">
+        Review safe account information, stored login timestamps and uploads.
+      </p>
+    </div>
+  </header>
+
+  <% const createdDate = user.date_created ? new Date(user.date_created) : new Date(NaN); %>
+  <% const createdDateIsValid = !Number.isNaN(createdDate.getTime()); %>
+  <section class="admin-user-detail-panel admin-user-summary" aria-labelledby="user-summary-heading">
+    <header class="admin-user-detail-panel__header">
+      <div>
+        <h2 id="user-summary-heading">Account summary</h2>
+        <p>Safe account identity and current access status.</p>
+      </div>
+      <div class="admin-user-summary__badges" aria-label="Account statuses">
+        <span class="admin-email-status<% if (!user.email_verified) { %> admin-email-status--unverified<% } %>">
+          <%= user.email_verified ? 'Verified' : 'Unverified' %>
+        </span>
+        <span class="admin-account-status<% if (user.blocked) { %> admin-account-status--blocked<% } %>">
+          <%= user.blocked ? 'Blocked' : 'Active' %>
+        </span>
+      </div>
+    </header>
+
+    <dl class="admin-user-summary__details">
+      <div>
+        <dt>Display name</dt>
+        <dd><%= user.fname || 'Unnamed user' %></dd>
+      </div>
+      <div>
+        <dt>Email</dt>
+        <dd><%= user.username || 'Email unavailable' %></dd>
+      </div>
+      <% if (createdDateIsValid) { %>
+        <div>
+          <dt>Account created</dt>
+          <dd><time datetime="<%= createdDate.toISOString() %>"><%= createdDate.toLocaleString() %></time></dd>
+        </div>
+      <% } %>
+      <div>
+        <dt>Total uploads</dt>
+        <dd><%= totalUploadCount %></dd>
+      </div>
+    </dl>
+
+    <% if (user.canChangeBlockedStatus) { %>
+      <div class="admin-user-summary__action">
+        <% if (user.blocked) { %>
+          <form action="/a/user/<%= user._id %>/unblock" method="POST" class="inline-form user-status-form" data-action="unblock">
+            <%- include('../partials/csrfField') %>
+            <button type="submit" class="unblock-btn">Unblock</button>
+          </form>
+        <% } else { %>
+          <form action="/a/user/<%= user._id %>/block" method="POST" class="inline-form user-status-form" data-action="block">
+            <%- include('../partials/csrfField') %>
+            <button type="submit" class="block-btn">Block</button>
+          </form>
+        <% } %>
+      </div>
+    <% } %>
+  </section>
+
+  <section class="admin-user-detail-panel" aria-labelledby="login-activity-heading">
+    <header class="admin-user-detail-panel__header">
+      <div>
+        <h2 id="login-activity-heading">Login activity</h2>
+        <p>Login timestamps are shown for account administration and security review.</p>
+      </div>
+    </header>
+
+    <% if (loginActivity.length > 0) { %>
+      <ol class="admin-login-activity-list">
+        <% loginActivity.forEach((timestamp, index) => { %>
+          <li>
+            <span><%= index === 0 ? 'Latest recorded login' : 'Previous recorded login' %></span>
+            <time datetime="<%= timestamp.toISOString() %>"><%= timestamp.toLocaleString() %></time>
+          </li>
+        <% }) %>
+      </ol>
+    <% } else { %>
+      <p class="admin-empty-state">No recorded login activity.</p>
+    <% } %>
+  </section>
+
+  <section class="admin-user-detail-panel" aria-labelledby="user-uploads-heading">
+    <header class="admin-user-detail-panel__header">
+      <div>
+        <h2 id="user-uploads-heading">Uploads</h2>
+        <p><%= totalUploadCount %> total upload<%= totalUploadCount === 1 ? '' : 's' %>.</p>
+      </div>
+    </header>
+
+    <% if (uploads.length > 0) { %>
+      <div class="admin-upload-list">
+        <% uploads.forEach(upload => { %>
+          <%- include('./partials/uploadCard', {
+            upload,
+            showUploader: false,
+            extractYouTubeVideoId,
+          }) %>
+        <% }) %>
+      </div>
+    <% } else { %>
+      <p class="admin-empty-state">No uploads found for this user.</p>
+    <% } %>
+
+    <nav class="admin-user-pagination" aria-label="User uploads pagination">
+      <div class="admin-user-pagination__links">
+        <% if (hasPreviousPage) { %>
+          <a href="/a/users/<%= user._id %>?page=<%= currentPage - 1 %>">Previous</a>
+        <% } %>
+        <% if (hasNextPage) { %>
+          <a href="/a/users/<%= user._id %>?page=<%= currentPage + 1 %>">Next</a>
+        <% } %>
+      </div>
+      <p>Page <%= currentPage %> of <%= totalPages %></p>
+    </nav>
+  </section>
+</div>
+
+<script src="/js/adminUserStatus.js"></script>

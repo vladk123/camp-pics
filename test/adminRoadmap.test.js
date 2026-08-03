@@ -48,6 +48,7 @@ const REQUIRED_ITEM_IDS = [
   'browser-csp-vendor-verification',
   'source-controlled-admin-roadmap',
   'redesign-admin-dashboard',
+  'admin-user-detail',
   'upload-incentive-banner',
   'shared-rate-limit-store-before-multi-dyno',
   'review-token-ttl-and-retention',
@@ -168,6 +169,7 @@ describe('authoritative administrator roadmap configuration', () => {
       'restore-production-shaped-staging-database',
       'source-controlled-admin-roadmap',
       'redesign-admin-dashboard',
+      'admin-user-detail',
       'auth-session-hardening',
       'csrf-csp-safe-rendering',
       'bounded-media-upload-hardening',
@@ -183,12 +185,12 @@ describe('authoritative administrator roadmap configuration', () => {
     );
     assert.equal(activeIds.some(id => completedIds.includes(id)), false);
     assert.deepEqual(getRoadmapSummary(), {
-      total: 22,
+      total: 23,
       active: 12,
       planned: 5,
       inProgress: 0,
       blocked: 7,
-      completed: 10,
+      completed: 11,
     });
   });
 
@@ -264,6 +266,47 @@ describe('authoritative administrator roadmap configuration', () => {
       'Existing administrator APIs and Block/Unblock behavior remain unchanged.',
       'Recent-upload Park and Campground links now open the corresponding public location in a new tab.',
     ]);
+  });
+
+  test('records completed administrator user details and broadened announcements', () => {
+    const userDetail = allItems().find(
+      candidate => candidate.id === 'admin-user-detail',
+    );
+    const announcements = allItems().find(
+      candidate => candidate.id === 'upload-incentive-banner',
+    );
+
+    assert.equal(userDetail.status, 'completed');
+    assert.equal(userDetail.completedOn, '2026-08-03');
+    assert.deepEqual(userDetail.dependencies, ['redesign-admin-dashboard.']);
+    assert.equal(
+      userDetail.notIncluded.includes('Session or token inspection.'),
+      true,
+    );
+    assert.equal(announcements.status, 'planned');
+    assert.equal(announcements.completedOn, null);
+    assert.equal(announcements.title, 'Site-wide announcements and campaigns');
+    for (const requirement of [
+      'One active announcement at a time.',
+      'Administrator enable/disable and editing.',
+      'Optional automatic modal display.',
+      'Revision-based browser dismissal.',
+      'Optional administrator-selected navbar link text.',
+      'Optional start and end dates.',
+      'Safe plain-text content and an optional validated internal link.',
+      'Monthly upload promotion and winner announcements as initial use cases.',
+    ]) {
+      assert.equal(announcements.scope.includes(requirement), true, requirement);
+    }
+    for (const excluded of [
+      'Advanced targeting.',
+      'Rich text.',
+      'Images.',
+      'Analytics dashboards.',
+      'Account-level dismissal.',
+    ]) {
+      assert.equal(announcements.notIncluded.includes(excluded), true, excluded);
+    }
   });
 
   test('produces deterministic plain text with active and completed work', () => {

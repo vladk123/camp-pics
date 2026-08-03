@@ -53,7 +53,19 @@ test('every active unsafe or JavaScript-upload form includes exactly one shared 
     }
   }
 
-  assert.equal(protectedFormCount, 15);
+  assert.equal(protectedFormCount, 17);
+
+  const adminUserDetail = stripHtmlComments(
+    await readSource('views/admin/userDetail.ejs'),
+  );
+  assert.equal(
+    (adminUserDetail.match(/<form\b[\s\S]*?<\/form>/gi) || []).length,
+    2,
+  );
+  assert.equal(
+    (adminUserDetail.match(/include\([^)]*csrfField[^)]*\)/g) || []).length,
+    2,
+  );
 });
 
 test('the shared CSRF partial contains one escaped _csrf field', async () => {

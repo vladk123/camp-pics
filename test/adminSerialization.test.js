@@ -19,6 +19,7 @@ const ADMIN_USER_KEYS = [
   'date_created',
   'email_verified',
   'blocked',
+  'userDetailUrl',
 ];
 
 const ADMIN_UPLOAD_KEYS = [
@@ -146,7 +147,7 @@ async function invokeDashboard(handler, accept) {
 }
 
 describe('administrator dashboard serialization', () => {
-  test('users serialize to exactly the six dashboard fields', () => {
+  test('users serialize to exactly the seven safe dashboard fields', () => {
     const serialized = serializeAdminUser(sensitiveUser());
 
     assert.deepEqual(Object.keys(serialized), ADMIN_USER_KEYS);
@@ -157,6 +158,7 @@ describe('administrator dashboard serialization', () => {
       date_created: new Date('2026-01-02T00:00:00.000Z'),
       email_verified: true,
       blocked: false,
+      userDetailUrl: null,
     });
   });
 
@@ -273,7 +275,9 @@ describe('dynamic administrator user rows', () => {
       encodeURIComponent,
     };
     vm.runInNewContext(
-      `const csrf = window.CampPicsCsrf;\n${functionSource}\n` +
+      'const DASHBOARD_USER_DETAIL_URL_PATTERN = ' +
+        '/^\\/a\\/users\\/[a-f0-9]{24}$/u;\n' +
+        `const csrf = window.CampPicsCsrf;\n${functionSource}\n` +
         'this.createUserRow = createUserRow;',
       context,
     );
@@ -324,6 +328,10 @@ describe('dynamic administrator user rows', () => {
       functionSource,
       /innerHTML|outerHTML|insertAdjacentHTML|on(?:click|submit)\s*=/,
     );
-    assert.match(browser, /confirm\(`\$\{action\} this user\?`\)/);
+    const userStatusBrowser = await readFile(
+      'public/js/adminUserStatus.js',
+      'utf8',
+    );
+    assert.match(userStatusBrowser, /confirm\(`\$\{action\} this user\?`\)/);
   });
 });

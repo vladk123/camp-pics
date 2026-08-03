@@ -48,9 +48,12 @@ describe('administrator photo URL compatibility', () => {
       'https://res.cloudinary.com/demo/image/upload/v1/example.jpg',
     );
 
-    const template = await readFile('views/admin/dashboard.ejs', 'utf8');
+    const template = await readFile(
+      'views/admin/partials/uploadCard.ejs',
+      'utf8',
+    );
     const browser = await readFile('public/js/adminDashboard.js', 'utf8');
-    assert.match(template, /u\.adminPhotoUrl/);
+    assert.match(template, /upload\.adminPhotoUrl/);
     assert.match(
       browser,
       /getSafeHttpUrl\(upload\.adminPhotoUrl\)/,

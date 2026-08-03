@@ -352,6 +352,8 @@ describe('representative nonce-bearing template behavior', () => {
     assert.ok(allParks.indexOf('window.ALL_PARKS') < allParks.indexOf('/js/allParks.js'));
     assert.ok(
       dashboard.indexOf('/js/mediaRendering.js') <
+        dashboard.indexOf('/js/adminUserStatus.js') &&
+        dashboard.indexOf('/js/adminUserStatus.js') <
         dashboard.indexOf('/js/adminDashboard.js'),
     );
     assert.ok(

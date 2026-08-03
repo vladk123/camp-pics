@@ -90,7 +90,7 @@ function uploadRecord() {
 }
 
 function userRecord(overrides = {}) {
-  return {
+  const user = {
     _id: '64b7f2d4c9f1e8a123456789',
     fname: 'Camper',
     username: 'camper@example.test',
@@ -98,6 +98,10 @@ function userRecord(overrides = {}) {
     email_verified: true,
     blocked: false,
     ...overrides,
+  };
+  return {
+    ...user,
+    userDetailUrl: overrides.userDetailUrl ?? `/a/users/${user._id}`,
   };
 }
 
@@ -237,6 +241,7 @@ describe('administrator dashboard summary controller', () => {
     assert.deepEqual(routePaths, [
       '/dashboard',
       '/roadmap',
+      '/users/:userId',
       '/user/:id/block',
       '/user/:id/unblock',
     ]);
@@ -591,6 +596,7 @@ function createBrowserHarness({
 describe('administrator dashboard browser behavior', () => {
   test('builds equivalent safe upload and user structures with unchanged controls', async () => {
     const source = await read('public/js/adminDashboard.js');
+    const userStatusSource = await read('public/js/adminUserStatus.js');
     const hostile = '<img src=x onerror=alert(1)><script>attack()</script>';
     const harness = createBrowserHarness({
       fetchImplementation: async url => ({
@@ -623,6 +629,7 @@ describe('administrator dashboard browser behavior', () => {
       }),
     });
     const initialWindowKeys = Object.keys(harness.window).sort();
+    vm.runInContext(userStatusSource, harness.context);
     vm.runInContext(source, harness.context);
     await harness.uploadButton.listeners.get('click')[0]();
     await harness.userButton.listeners.get('click')[0]();
@@ -740,6 +747,7 @@ describe('administrator dashboard browser behavior', () => {
 
   test('initializes once, creates no public global and tolerates an absent dashboard', async () => {
     const source = await read('public/js/adminDashboard.js');
+    const userStatusSource = await read('public/js/adminUserStatus.js');
     const harness = createBrowserHarness({
       fetchImplementation: async () => ({
         ok: true,
@@ -747,6 +755,7 @@ describe('administrator dashboard browser behavior', () => {
       }),
     });
     const initialWindowKeys = Object.keys(harness.window).sort();
+    vm.runInContext(userStatusSource, harness.context);
     vm.runInContext(source, harness.context);
     vm.runInContext(source, harness.context);
     assert.equal(harness.uploadButton.listeners.get('click').length, 1);
@@ -759,7 +768,7 @@ describe('administrator dashboard browser behavior', () => {
       window: {},
     }));
     assert.doesNotMatch(
-      source,
+      `${source}\n${userStatusSource}`,
       /innerHTML|outerHTML|insertAdjacentHTML|document\.write|\.style\b|setAttribute\s*\(\s*['"]style|\bon[a-z]+\s*=/iu,
     );
   });

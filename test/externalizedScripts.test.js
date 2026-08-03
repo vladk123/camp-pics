@@ -599,6 +599,7 @@ describe('external administrator dashboard behavior', () => {
 
   test('constructs safe media and user rows with CSRF controls and confirmations', async () => {
     const source = await read('public/js/adminDashboard.js');
+    const userStatusSource = await read('public/js/adminUserStatus.js');
     const unsafe = '<img src=x onerror=alert(1)></div><script>attack()</script>';
     const photoUrl = 'https://cdn.example.test/photo.jpg';
     const harness = createAdminHarness({
@@ -650,6 +651,7 @@ describe('external administrator dashboard behavior', () => {
     });
     const initialWindowKeys = Object.keys(harness.window).sort();
 
+    vm.runInContext(userStatusSource, harness.context);
     vm.runInContext(source, harness.context);
     await harness.uploadButton.listeners.get('click')[0]();
     await harness.userButton.listeners.get('click')[0]();
@@ -717,7 +719,7 @@ describe('external administrator dashboard behavior', () => {
     ]);
 
     assert.doesNotMatch(
-      source,
+      `${source}\n${userStatusSource}`,
       /innerHTML|outerHTML|insertAdjacentHTML|\bon[a-z]+\s*=/iu,
     );
     assert.match(source, /^\(function initializeAdminDashboard\(\)/u);
@@ -749,6 +751,8 @@ describe('external administrator dashboard behavior', () => {
     assert.match(html, /data-user-page="&lt;script&gt;attack\(\)&lt;\/script&gt;"/u);
     assert.ok(
       html.indexOf('/js/mediaRendering.js') <
+        html.indexOf('/js/adminUserStatus.js') &&
+        html.indexOf('/js/adminUserStatus.js') <
         html.indexOf('/js/adminDashboard.js'),
     );
     assert.equal(externalScriptBodies(html).length, 0);

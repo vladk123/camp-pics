@@ -55,74 +55,11 @@
 
     <div id="uploads" class="admin-upload-list">
       <% uploads.forEach(u => { %>
-        <% const uploadedDate = new Date(u.createdAt); %>
-        <% const uploadedDateIsValid = !Number.isNaN(uploadedDate.getTime()); %>
-        <article class="upload-item admin-upload-card">
-          <div class="admin-upload-card__media">
-            <% const youtubeVideoId = extractYouTubeVideoId(u.youtubeId); %>
-            <% if (u.mediaType === 'photo' && u.adminPhotoUrl) { %>
-              <a class="admin-upload-card__media-link" href="<%= u.adminPhotoUrl %>" target="_blank" rel="noopener noreferrer">
-                <img src="<%= u.adminPhotoUrl %>" class="thumb admin-upload-card__thumbnail" alt="Photo upload preview">
-                <span>Open photo</span>
-              </a>
-            <% } else if (u.mediaType === 'video' && youtubeVideoId) { %>
-              <a class="admin-upload-card__media-link" href="https://www.youtube.com/watch?v=<%= youtubeVideoId %>" target="_blank" rel="noopener noreferrer">
-                <img src="https://img.youtube.com/vi/<%= youtubeVideoId %>/hqdefault.jpg" class="thumb admin-upload-card__thumbnail" alt="YouTube video preview">
-                <span>Open video</span>
-              </a>
-            <% } else { %>
-              <div class="admin-upload-card__placeholder">Preview unavailable</div>
-            <% } %>
-          </div>
-
-          <div class="admin-upload-card__content">
-            <header class="admin-upload-card__header">
-              <span class="admin-status-badge admin-status-badge--media">
-                <%= u.mediaType === 'photo' ? 'Photo' : u.mediaType === 'video' ? 'Video' : 'Unknown media' %>
-              </span>
-              <time<% if (uploadedDateIsValid) { %> datetime="<%= uploadedDate.toISOString() %>"<% } %>>
-                <%= uploadedDateIsValid ? uploadedDate.toLocaleString() : 'Upload date unavailable' %>
-              </time>
-            </header>
-            <dl class="admin-upload-card__details">
-              <div>
-                <dt>Uploader</dt>
-                <dd>
-                  <strong><%= u.uploader.fname || 'Unknown' %></strong>
-                  <% if (u.uploader.username) { %><span><%= u.uploader.username %></span><% } %>
-                </dd>
-              </div>
-              <div>
-                <dt>Park</dt>
-                <dd>
-                  <% if (u.parkUrl) { %>
-                    <a class="admin-upload-card__location-link" href="<%= u.parkUrl %>" target="_blank" rel="noopener noreferrer"><%= u.parkName || 'Not recorded' %></a>
-                  <% } else { %>
-                    <%= u.parkName || 'Not recorded' %>
-                  <% } %>
-                </dd>
-              </div>
-              <% if (u.campgroundName) { %>
-                <div>
-                  <dt>Campground</dt>
-                  <dd>
-                    <% if (u.campgroundUrl) { %>
-                      <a class="admin-upload-card__location-link" href="<%= u.campgroundUrl %>" target="_blank" rel="noopener noreferrer"><%= u.campgroundName %></a>
-                    <% } else { %>
-                      <%= u.campgroundName %>
-                    <% } %>
-                  </dd>
-                </div>
-              <% } %>
-              <% if (u.campsiteName) { %>
-                <div>
-                  <dt>Campsite</dt>
-                  <dd><%= u.campsiteName %></dd>
-                </div>
-              <% } %>
-            </dl>
-          </div>
-        </article>
+        <%- include('./partials/uploadCard', {
+          upload: u,
+          showUploader: true,
+          extractYouTubeVideoId,
+        }) %>
       <% }) %>
     </div>
 
@@ -165,7 +102,11 @@
             <% const joinedDateIsValid = !Number.isNaN(joinedDate.getTime()); %>
             <tr class="user-item admin-user-row">
               <td class="admin-user-cell admin-user-cell--identity" data-label="User">
-                <strong><%= u.fname || 'Unnamed user' %></strong>
+                <% if (u.userDetailUrl) { %>
+                  <strong><a class="admin-user-detail-link" href="<%= u.userDetailUrl %>"><%= u.fname || 'Unnamed user' %></a></strong>
+                <% } else { %>
+                  <strong><%= u.fname || 'Unnamed user' %></strong>
+                <% } %>
                 <span><%= u.username || 'Email unavailable' %></span>
               </td>
               <td class="admin-user-cell" data-label="Email status">
@@ -222,4 +163,5 @@
 ></div>
 
 <script src="/js/mediaRendering.js"></script>
+<script src="/js/adminUserStatus.js"></script>
 <script src="/js/adminDashboard.js"></script>

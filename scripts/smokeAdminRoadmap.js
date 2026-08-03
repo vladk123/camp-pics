@@ -28,6 +28,7 @@ const REQUIRED_ITEM_IDS = [
   'browser-csp-vendor-verification',
   'source-controlled-admin-roadmap',
   'redesign-admin-dashboard',
+  'admin-user-detail',
   'upload-incentive-banner',
   'shared-rate-limit-store-before-multi-dyno',
   'review-token-ttl-and-retention',

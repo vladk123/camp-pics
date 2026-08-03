@@ -12,6 +12,9 @@ router.route('/dashboard')
 router.route('/roadmap')
   .get(isAdmin, catchAsyncErrors(admin.roadmap));
 
+router.route('/users/:userId')
+  .get(isAdmin, catchAsyncErrors(admin.userDetail));
+
 router.route('/user/:id/block')
   .post(isAdmin, adminUserStatusLimiter, catchAsyncErrors(admin.blockUser));
 

@@ -9,6 +9,8 @@
     /^\/camp\/park\/[a-z0-9]+(?:-[a-z0-9]+)*$/u;
   const DASHBOARD_CAMPGROUND_URL_PATTERN =
     /^\/camp\/park\/[a-z0-9]+(?:-[a-z0-9]+)*#[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+  const DASHBOARD_USER_DETAIL_URL_PATTERN =
+    /^\/a\/users\/[a-f0-9]{24}$/u;
 
   const parsePositivePage = value => {
     if (typeof value !== 'string' || !/^[1-9]\d*$/.test(value)) return 1;
@@ -227,10 +229,29 @@
     row.className = 'user-item admin-user-row';
 
     const identity = createUserCell('User', ' admin-user-cell--identity');
-    identity.append(
-      createTextElement('strong', '', user.fname || 'Unnamed user'),
-      createTextElement('span', '', user.username || 'Email unavailable'),
+    const identityName = createTextElement(
+      'strong',
+      '',
+      user.fname || 'Unnamed user',
     );
+    if (
+      typeof user.userDetailUrl === 'string' &&
+      DASHBOARD_USER_DETAIL_URL_PATTERN.test(user.userDetailUrl)
+    ) {
+      const detailLink = createTextElement(
+        'a',
+        'admin-user-detail-link',
+        identityName.textContent,
+      );
+      detailLink.href = user.userDetailUrl;
+      identityName.textContent = '';
+      identityName.append(detailLink);
+    }
+    identity.append(identityName, createTextElement(
+      'span',
+      '',
+      user.username || 'Email unavailable',
+    ));
 
     const emailStatus = createUserCell('Email status');
     emailStatus.append(createTextElement(
@@ -388,11 +409,4 @@
 
   uploadButton?.addEventListener('click', fetchMoreUploads);
   userButton?.addEventListener('click', fetchMoreUsers);
-  document.addEventListener('submit', event => {
-    const form = event.target.closest?.('.user-status-form');
-    if (!form) return;
-
-    const action = form.dataset.action === 'unblock' ? 'Unblock' : 'Block';
-    if (!window.confirm(`${action} this user?`)) event.preventDefault();
-  });
 })();

@@ -66,7 +66,8 @@
 .block-btn:focus-visible,
 .unblock-btn:focus-visible,
 .admin-upload-card__media-link:focus-visible,
-.admin-upload-card__location-link:focus-visible {
+.admin-upload-card__location-link:focus-visible,
+.admin-user-detail-link:focus-visible {
   outline: 3px solid var(--orange);
   outline-offset: 3px;
 }
@@ -416,6 +417,19 @@
 .admin-user-cell--identity span {
   margin-top: 0.2rem;
   color: var(--admin-muted);
+}
+
+.admin-user-detail-link {
+  color: var(--admin-accent-strong);
+  overflow-wrap: anywhere;
+  text-decoration-line: underline;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.18em;
+}
+
+.admin-user-detail-link:hover {
+  color: var(--admin-accent);
+  text-decoration-thickness: 0.14em;
 }
 
 .admin-email-status,

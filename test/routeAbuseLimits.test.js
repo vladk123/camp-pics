@@ -2995,6 +2995,7 @@ describe('dependency, dead-helper, global-protection, and documentation guards',
     const allowedExternalizationFiles = new Set([
       'public/js/adminDashboard.js',
       'public/js/adminRoadmap.js',
+      'public/js/adminUserStatus.js',
       'public/js/allParks.js',
       'public/js/flash-messages.js',
       'public/js/forgotPassword.js',

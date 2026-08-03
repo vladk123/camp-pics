@@ -1,0 +1,70 @@
+<% const uploadedDate = new Date(upload.createdAt); %>
+<% const uploadedDateIsValid = !Number.isNaN(uploadedDate.getTime()); %>
+<article class="upload-item admin-upload-card">
+  <div class="admin-upload-card__media">
+    <% const youtubeVideoId = extractYouTubeVideoId(upload.youtubeId); %>
+    <% if (upload.mediaType === 'photo' && upload.adminPhotoUrl) { %>
+      <a class="admin-upload-card__media-link" href="<%= upload.adminPhotoUrl %>" target="_blank" rel="noopener noreferrer">
+        <img src="<%= upload.adminPhotoUrl %>" class="thumb admin-upload-card__thumbnail" alt="Photo upload preview">
+        <span>Open photo</span>
+      </a>
+    <% } else if (upload.mediaType === 'video' && youtubeVideoId) { %>
+      <a class="admin-upload-card__media-link" href="https://www.youtube.com/watch?v=<%= youtubeVideoId %>" target="_blank" rel="noopener noreferrer">
+        <img src="https://img.youtube.com/vi/<%= youtubeVideoId %>/hqdefault.jpg" class="thumb admin-upload-card__thumbnail" alt="YouTube video preview">
+        <span>Open video</span>
+      </a>
+    <% } else { %>
+      <div class="admin-upload-card__placeholder">Preview unavailable</div>
+    <% } %>
+  </div>
+
+  <div class="admin-upload-card__content">
+    <header class="admin-upload-card__header">
+      <span class="admin-status-badge admin-status-badge--media">
+        <%= upload.mediaType === 'photo' ? 'Photo' : upload.mediaType === 'video' ? 'Video' : 'Unknown media' %>
+      </span>
+      <time<% if (uploadedDateIsValid) { %> datetime="<%= uploadedDate.toISOString() %>"<% } %>>
+        <%= uploadedDateIsValid ? uploadedDate.toLocaleString() : 'Upload date unavailable' %>
+      </time>
+    </header>
+    <dl class="admin-upload-card__details">
+      <% if (showUploader) { %>
+        <div>
+          <dt>Uploader</dt>
+          <dd>
+            <strong><%= upload.uploader.fname || 'Unknown' %></strong>
+            <% if (upload.uploader.username) { %><span><%= upload.uploader.username %></span><% } %>
+          </dd>
+        </div>
+      <% } %>
+      <div>
+        <dt>Park</dt>
+        <dd>
+          <% if (upload.parkUrl) { %>
+            <a class="admin-upload-card__location-link" href="<%= upload.parkUrl %>" target="_blank" rel="noopener noreferrer"><%= upload.parkName || 'Not recorded' %></a>
+          <% } else { %>
+            <%= upload.parkName || 'Not recorded' %>
+          <% } %>
+        </dd>
+      </div>
+      <% if (upload.campgroundName) { %>
+        <div>
+          <dt>Campground</dt>
+          <dd>
+            <% if (upload.campgroundUrl) { %>
+              <a class="admin-upload-card__location-link" href="<%= upload.campgroundUrl %>" target="_blank" rel="noopener noreferrer"><%= upload.campgroundName %></a>
+            <% } else { %>
+              <%= upload.campgroundName %>
+            <% } %>
+          </dd>
+        </div>
+      <% } %>
+      <% if (upload.campsiteName) { %>
+        <div>
+          <dt>Campsite</dt>
+          <dd><%= upload.campsiteName %></dd>
+        </div>
+      <% } %>
+    </dl>
+  </div>
+</article>

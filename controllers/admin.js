@@ -27,6 +27,17 @@ export const ADMIN_USER_PROJECTION = Object.freeze({
   blocked: 1,
 });
 
+export const ADMIN_USER_DETAIL_PROJECTION = Object.freeze({
+  _id: 1,
+  fname: 1,
+  username: 1,
+  date_created: 1,
+  email_verified: 1,
+  blocked: 1,
+  'other_login.last_login': 1,
+  'other_login.previous_logins.timestamp': 1,
+});
+
 export const ADMIN_UPLOAD_PROJECTION = Object.freeze({
   _id: 0,
   mediaType: 1,
@@ -65,6 +76,8 @@ const ADMIN_PARK_URL_PATTERN =
   /^\/camp\/park\/[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const ADMIN_CAMPGROUND_URL_PATTERN =
   /^\/camp\/park\/[a-z0-9]+(?:-[a-z0-9]+)*#[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+const ADMIN_USER_DETAIL_PAGE_SIZE = 20;
+const ADMIN_LOGIN_ACTIVITY_LIMIT = 20;
 
 function isValidAdminLocationSlug(value) {
   return typeof value === 'string' &&
@@ -80,6 +93,11 @@ export function getAdminCampgroundUrl(parkSlug, campgroundSlug) {
   const parkUrl = getAdminParkUrl(parkSlug);
   if (!parkUrl || !isValidAdminLocationSlug(campgroundSlug)) return null;
   return `${parkUrl}#${encodeURIComponent(campgroundSlug)}`;
+}
+
+export function getAdminUserDetailUrl(value) {
+  const userId = parseAdminLocationObjectId(value);
+  return userId.valid ? `/a/users/${userId.stringValue}` : null;
 }
 
 function getValidatedAdminLocationUrl(value, pattern) {
@@ -176,7 +194,45 @@ export function serializeAdminUser(user) {
     date_created: user?.date_created ?? null,
     email_verified: user?.email_verified ?? null,
     blocked: user?.blocked ?? null,
+    userDetailUrl: getAdminUserDetailUrl(user?._id),
   };
+}
+
+export function normalizeAdminLoginActivity(user) {
+  const timestamps = [user?.other_login?.last_login];
+  if (Array.isArray(user?.other_login?.previous_logins)) {
+    for (const login of user.other_login.previous_logins) {
+      timestamps.push(login?.timestamp);
+    }
+  }
+
+  const uniqueByIsoString = new Map();
+  for (const value of timestamps) {
+    if (!(value instanceof Date) && typeof value !== 'string') continue;
+    const timestamp = new Date(value);
+    if (Number.isNaN(timestamp.getTime())) continue;
+    uniqueByIsoString.set(timestamp.toISOString(), timestamp);
+  }
+
+  return [...uniqueByIsoString.values()]
+    .sort((left, right) => right.getTime() - left.getTime())
+    .slice(0, ADMIN_LOGIN_ACTIVITY_LIMIT);
+}
+
+export function serializeAdminUserDetail(user, currentAdministratorId) {
+  const userId = parseAdminLocationObjectId(user?._id);
+  return Object.freeze({
+    _id: userId.valid ? userId.stringValue : null,
+    fname: user?.fname ?? null,
+    username: user?.username ?? null,
+    date_created: user?.date_created ?? null,
+    email_verified: user?.email_verified === true,
+    blocked: user?.blocked === true,
+    canChangeBlockedStatus: userId.valid && !strictMongoObjectIdsEqual(
+      userId.objectId,
+      currentAdministratorId,
+    ),
+  });
 }
 
 export function serializeAdminUpload(upload, locationUrls = {}) {
@@ -346,6 +402,109 @@ export function createAdminDashboardHandler({
 }
 
 export const dashboard = createAdminDashboardHandler();
+
+function parseAdminUserDetailPage(value) {
+  if (typeof value !== 'string' || !/^[1-9]\d*$/u.test(value)) return 1;
+  const page = Number(value);
+  return Number.isSafeInteger(page) ? page : 1;
+}
+
+export function createAdminUserDetailHandler({
+  UserModel = User,
+  UploadModel = Upload,
+  ParkModel = Park,
+  log = logger,
+  redirectWithFlash = redirectedFlash,
+} = {}) {
+  return async (req, res, next) => {
+    const targetId = parseStrictMongoObjectId(req.params?.userId);
+    if (!targetId.valid) {
+      return redirectWithFlash(
+        req,
+        res,
+        'error',
+        'Invalid user target.',
+        '/a/dashboard',
+      );
+    }
+
+    try {
+      const userRecord = await UserModel.findOne({ _id: targetId.objectId })
+        .select(ADMIN_USER_DETAIL_PROJECTION)
+        .lean();
+      if (!userRecord) {
+        return redirectWithFlash(
+          req,
+          res,
+          'error',
+          'User was not found.',
+          '/a/dashboard',
+        );
+      }
+
+      const ownershipFilter = { userId: targetId.objectId };
+      const totalUploadCount = await UploadModel.countDocuments(ownershipFilter);
+      const totalPages = Math.max(
+        1,
+        Math.ceil(totalUploadCount / ADMIN_USER_DETAIL_PAGE_SIZE),
+      );
+      const requestedPage = parseAdminUserDetailPage(req.query?.page);
+      const currentPage = Math.min(requestedPage, totalPages);
+      const uploadRecords = await UploadModel.find(ownershipFilter)
+        .select(ADMIN_UPLOAD_PROJECTION)
+        .sort({ createdAt: -1 })
+        .skip((currentPage - 1) * ADMIN_USER_DETAIL_PAGE_SIZE)
+        .limit(ADMIN_USER_DETAIL_PAGE_SIZE)
+        .lean();
+
+      const uploadParkIds = collectAdminUploadParkIds(uploadRecords);
+      let parkRecords = [];
+      if (uploadParkIds.length > 0) {
+        parkRecords = await ParkModel.find({ _id: { $in: uploadParkIds } })
+          .select(ADMIN_PARK_LOCATION_PROJECTION)
+          .lean();
+      }
+      const parksById = buildAdminParkLocationMap(parkRecords);
+      const uploads = uploadRecords.map(upload => serializeAdminUpload(
+        upload,
+        resolveAdminUploadLocationUrls(upload, parksById),
+      ));
+      const user = serializeAdminUserDetail(userRecord, req.user?._id);
+      const currentPath = `/a/users/${targetId.stringValue}`;
+
+      return res.render('admin/userDetail', {
+        meta: {
+          title: `${user.fname || user.username || 'User'} - Admin`,
+        },
+        user,
+        loginActivity: normalizeAdminLoginActivity(userRecord),
+        uploads,
+        currentPage,
+        totalPages,
+        totalUploadCount,
+        hasPreviousPage: currentPage > 1,
+        hasNextPage: currentPage < totalPages,
+        currentPath,
+        extractYouTubeVideoId,
+        csrfToken: res.locals?.csrfToken ?? null,
+        data: { currentPath },
+      });
+    } catch {
+      await log(req, res, 'error', {
+        message: 'Admin user details failed to load.',
+      });
+      return redirectWithFlash(
+        req,
+        res,
+        'error',
+        'Failed to load user details.',
+        '/a/dashboard',
+      );
+    }
+  };
+}
+
+export const userDetail = createAdminUserDetailHandler();
 
 export async function roadmap(req, res) {
   const currentPath = '/a/roadmap';
