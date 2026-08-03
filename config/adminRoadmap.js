@@ -20,7 +20,7 @@ function deepFreeze(value) {
 
 const roadmapDefinition = {
   version: 1,
-  updatedOn: '2026-08-02',
+  updatedOn: '2026-08-03',
   phases: [
     {
       id: 'operations-launch-readiness',
@@ -296,7 +296,7 @@ const roadmapDefinition = {
         {
           id: 'redesign-admin-dashboard',
           title: 'Redesign the administrator dashboard',
-          status: 'planned',
+          status: 'completed',
           purpose: 'Replace the current dense administrator page with a clear responsive operational dashboard.',
           scope: [
             'Responsive layout.',
@@ -319,8 +319,13 @@ const roadmapDefinition = {
             'Existing administrator functions remain intact.',
             'Focused browser and rendering tests pass.',
           ],
-          notes: [],
-          completedOn: null,
+          notes: [
+            'The completed first dashboard pass includes a responsive layout and summary cards.',
+            'Uploads and users now have clearer sections with accessible status badges and controls.',
+            'Loading, empty and error states are included for the existing pagination controls.',
+            'Existing administrator APIs and Block/Unblock behavior remain unchanged.',
+          ],
+          completedOn: '2026-08-03',
         },
         {
           id: 'upload-incentive-banner',

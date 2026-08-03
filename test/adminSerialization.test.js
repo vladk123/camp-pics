@@ -245,7 +245,7 @@ function findElement(root, predicate) {
 describe('dynamic administrator user rows', () => {
   test('blocked and unblocked rows contain matching POST controls and page CSRF token', async () => {
     const browser = await readFile('public/js/adminDashboard.js', 'utf8');
-    const start = browser.indexOf('function createUserRow(user)');
+    const start = browser.indexOf('function createTextElement(');
     const end = browser.indexOf('async function fetchMoreUploads()', start);
     assert.ok(start >= 0 && end > start);
     const functionSource = browser.slice(start, end);
@@ -286,7 +286,10 @@ describe('dynamic administrator user rows', () => {
       const form = findElement(row, element => element.tagName === 'FORM');
       const input = findElement(row, element => element.tagName === 'INPUT');
       const button = findElement(row, element => element.tagName === 'BUTTON');
-      const verification = findElement(row, element => element.tagName === 'SPAN');
+      const verification = findElement(
+        row,
+        element => element.className.split(/\s+/u).includes('admin-email-status'),
+      );
 
       assert.equal(form.action, `/a/user/user%2Fid/${fixture.action}`);
       assert.equal(form.method, 'POST');
@@ -298,7 +301,10 @@ describe('dynamic administrator user rows', () => {
       assert.equal(button.type, 'submit');
       assert.equal(button.className, `${fixture.action}-btn`);
       assert.equal(button.textContent, fixture.label);
-      assert.equal(verification.textContent, `[${fixture.blocked}]`);
+      assert.equal(
+        verification.textContent,
+        fixture.blocked ? 'Verified' : 'Unverified',
+      );
       assert.equal(
         verification.className,
         fixture.blocked

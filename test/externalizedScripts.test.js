@@ -727,6 +727,12 @@ describe('external administrator dashboard behavior', () => {
     const template = await read('views/admin/dashboard.ejs');
     const boilerplate = await read('views/layouts/boilerplate.ejs');
     const html = ejs.render(template, {
+      dashboardStats: {
+        totalUploads: 0,
+        totalUsers: 0,
+        verifiedUsers: 0,
+        blockedUsers: 0,
+      },
       extractYouTubeVideoId: () => null,
       hasMoreUploads: false,
       hasMoreUsers: false,

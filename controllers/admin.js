@@ -101,6 +101,13 @@ export function serializeAdminUpload(upload) {
   };
 }
 
+function requireNumericDashboardCount(value, name) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new TypeError(`Invalid administrator dashboard count: ${name}.`);
+  }
+  return value;
+}
+
 export function createAdminDashboardHandler({
   UserModel = User,
   UploadModel = Upload,
@@ -162,10 +169,41 @@ export function createAdminDashboardHandler({
       }
 
       // Regular render (first load)
+      const [
+        dashboardTotalUploads,
+        dashboardTotalUsers,
+        verifiedUsers,
+        blockedUsers,
+      ] = await Promise.all([
+        UploadModel.countDocuments({}),
+        UserModel.countDocuments({}),
+        UserModel.countDocuments({ email_verified: true }),
+        UserModel.countDocuments({ blocked: true }),
+      ]);
+      const dashboardStats = Object.freeze({
+        totalUploads: requireNumericDashboardCount(
+          dashboardTotalUploads,
+          'totalUploads',
+        ),
+        totalUsers: requireNumericDashboardCount(
+          dashboardTotalUsers,
+          'totalUsers',
+        ),
+        verifiedUsers: requireNumericDashboardCount(
+          verifiedUsers,
+          'verifiedUsers',
+        ),
+        blockedUsers: requireNumericDashboardCount(
+          blockedUsers,
+          'blockedUsers',
+        ),
+      });
+
       return res.render('admin/dashboard', {
 			meta: {
-				title: 'Admin',
+				title: 'Admin dashboard',
 			},
+        dashboardStats,
         uploads,
         users,
         uploadPage,

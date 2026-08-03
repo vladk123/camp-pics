@@ -97,7 +97,7 @@ function assertDeeplyFrozen(value) {
 describe('authoritative administrator roadmap configuration', () => {
   test('has the exact baseline version, date, phases and stable item IDs', () => {
     assert.equal(adminRoadmap.version, 1);
-    assert.equal(adminRoadmap.updatedOn, '2026-08-02');
+    assert.equal(adminRoadmap.updatedOn, '2026-08-03');
     assert.deepEqual(adminRoadmap.phases.map(phase => phase.id), REQUIRED_PHASE_IDS);
     assert.deepEqual(allItems().map(item => item.id), REQUIRED_ITEM_IDS);
     assertDeeplyFrozen(adminRoadmap);
@@ -163,9 +163,10 @@ describe('authoritative administrator roadmap configuration', () => {
       activePhases.map(phase => phase.id),
       REQUIRED_PHASE_IDS.slice(0, 3),
     );
-    assert.equal(activeIds.length, 14);
+    assert.equal(activeIds.length, 13);
     assert.deepEqual(completedIds, [
       'source-controlled-admin-roadmap',
+      'redesign-admin-dashboard',
       'auth-session-hardening',
       'csrf-csp-safe-rendering',
       'bounded-media-upload-hardening',
@@ -182,11 +183,11 @@ describe('authoritative administrator roadmap configuration', () => {
     assert.equal(activeIds.some(id => completedIds.includes(id)), false);
     assert.deepEqual(getRoadmapSummary(), {
       total: 22,
-      active: 14,
-      planned: 6,
+      active: 13,
+      planned: 5,
       inProgress: 1,
       blocked: 7,
-      completed: 8,
+      completed: 9,
     });
   });
 
@@ -207,12 +208,27 @@ describe('authoritative administrator roadmap configuration', () => {
     ]);
   });
 
+  test('records the completed first administrator dashboard pass', () => {
+    const item = allItems().find(
+      candidate => candidate.id === 'redesign-admin-dashboard',
+    );
+
+    assert.equal(item.status, 'completed');
+    assert.equal(item.completedOn, '2026-08-03');
+    assert.deepEqual(item.notes, [
+      'The completed first dashboard pass includes a responsive layout and summary cards.',
+      'Uploads and users now have clearer sections with accessible status badges and controls.',
+      'Loading, empty and error states are included for the existing pagination controls.',
+      'Existing administrator APIs and Block/Unblock behavior remain unchanged.',
+    ]);
+  });
+
   test('produces deterministic plain text with active and completed work', () => {
     const first = formatAdminRoadmapPlainText();
     const second = formatAdminRoadmapPlainText();
 
     assert.equal(first, second);
-    assert.match(first, /^CampPics administrator roadmap\nVersion: 1\nUpdated: 2026-08-02\n/u);
+    assert.match(first, /^CampPics administrator roadmap\nVersion: 1\nUpdated: 2026-08-03\n/u);
     assert.match(first, /\nActive work\n/u);
     assert.match(first, /Operations and launch readiness/u);
     assert.match(first, /Schedule the media cleanup worker \[in_progress\] \(schedule-media-cleanup-worker\)/u);

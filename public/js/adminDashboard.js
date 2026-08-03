@@ -1,6 +1,11 @@
 (function initializeAdminDashboard() {
   'use strict';
 
+  const UPLOAD_FAILURE_MESSAGE =
+    'Unable to load more uploads. Please try again.';
+  const USER_FAILURE_MESSAGE =
+    'Unable to load more users. Please try again.';
+
   const parsePositivePage = value => {
     if (typeof value !== 'string' || !/^[1-9]\d*$/.test(value)) return 1;
 
@@ -9,10 +14,48 @@
   };
 
   const state = document.getElementById('admin-dashboard-state');
-  let uploadPage = parsePositivePage(state?.dataset.uploadPage);
-  let userPage = parsePositivePage(state?.dataset.userPage);
+  if (!state || state.dataset.dashboardInitialized === 'true') return;
+  state.dataset.dashboardInitialized = 'true';
+
+  let uploadPage = parsePositivePage(state.dataset.uploadPage);
+  let userPage = parsePositivePage(state.dataset.userPage);
+  let uploadsLoading = false;
+  let usersLoading = false;
+
   const adminMediaRendering = window.CampPicsMedia;
   const csrf = window.CampPicsCsrf;
+  const uploadsContainer = document.getElementById('uploads');
+  const usersContainer = document.getElementById('users');
+  const uploadButton = document.getElementById('loadMoreUploads');
+  const userButton = document.getElementById('loadMoreUsers');
+  const uploadsStatus = document.getElementById('uploadsStatus');
+  const usersStatus = document.getElementById('usersStatus');
+  const uploadsEmpty = document.getElementById('uploadsEmpty');
+  const usersEmpty = document.getElementById('usersEmpty');
+  const uploadsVisibleCount = document.getElementById('uploadsVisibleCount');
+  const usersVisibleCount = document.getElementById('usersVisibleCount');
+
+  function createTextElement(tagName, className, text) {
+    const element = document.createElement(tagName);
+    if (className) element.className = className;
+    element.textContent = text == null ? '' : String(text);
+    return element;
+  }
+
+  function formatDate(value, includeTime) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return {
+        dateTime: '',
+        label: includeTime ? 'Upload date unavailable' : 'Date unavailable',
+      };
+    }
+
+    return {
+      dateTime: date.toISOString(),
+      label: includeTime ? date.toLocaleString() : date.toLocaleDateString(),
+    };
+  }
 
   function createAdminMediaLink(upload) {
     if (!adminMediaRendering) return null;
@@ -20,86 +63,158 @@
     let href;
     let thumbnailUrl;
     let alt;
+    let label;
 
     if (upload.mediaType === 'photo') {
       href = adminMediaRendering.getSafeHttpUrl(upload.adminPhotoUrl);
       thumbnailUrl = href;
-      alt = 'photo thumbnail';
+      alt = 'Photo upload preview';
+      label = 'Open photo';
     } else if (upload.mediaType === 'video') {
       const videoId = adminMediaRendering.extractYouTubeId(upload.youtubeId);
       if (videoId) {
         href = `https://www.youtube.com/watch?v=${videoId}`;
         thumbnailUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
-        alt = 'YouTube thumbnail';
+        alt = 'YouTube video preview';
+        label = 'Open video';
       }
     }
 
     if (!href || !thumbnailUrl) return null;
 
     const link = document.createElement('a');
+    link.className = 'admin-upload-card__media-link';
     link.href = href;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
-    link.appendChild(adminMediaRendering.createImageElement({
-      src: thumbnailUrl,
-      alt,
-      className: 'thumb',
-      fallbackSrc: '',
-    }));
+    link.append(
+      adminMediaRendering.createImageElement({
+        src: thumbnailUrl,
+        alt,
+        className: 'thumb admin-upload-card__thumbnail',
+        fallbackSrc: '',
+      }),
+      createTextElement('span', '', label),
+    );
     return link;
   }
 
-  function createUploadRow(upload) {
-    const row = document.createElement('div');
-    row.className = 'upload-item';
-
-    const summary = document.createElement('div');
-    const mediaType = document.createElement('strong');
-    mediaType.textContent = upload.mediaType == null
-      ? ''
-      : String(upload.mediaType);
-    summary.append(
-      mediaType,
-      document.createTextNode(
-        ` by ${upload.uploader?.fname || 'Unknown'} ` +
-        `(${upload.uploader?.username || ''}) \u2014 ` +
-        new Date(upload.createdAt).toLocaleString(),
-      ),
+  function createUploadDetail(label, value) {
+    const group = document.createElement('div');
+    group.append(
+      createTextElement('dt', '', label),
+      createTextElement('dd', '', value),
     );
+    return group;
+  }
 
-    const location = document.createElement('div');
-    location.textContent =
-      `Park: ${upload.parkName || 'N/A'}` +
-      `${upload.campgroundName ? ` | CG: ${upload.campgroundName}` : ''}` +
-      `${upload.campsiteName ? ` | Site: ${upload.campsiteName}` : ''}`;
+  function createUploadRow(upload) {
+    const row = document.createElement('article');
+    row.className = 'upload-item admin-upload-card';
 
-    row.append(summary, location);
+    const media = document.createElement('div');
+    media.className = 'admin-upload-card__media';
     const mediaLink = createAdminMediaLink(upload);
-    if (mediaLink) row.appendChild(mediaLink);
+    media.append(mediaLink || createTextElement(
+      'div',
+      'admin-upload-card__placeholder',
+      'Preview unavailable',
+    ));
+
+    const content = document.createElement('div');
+    content.className = 'admin-upload-card__content';
+    const header = document.createElement('header');
+    header.className = 'admin-upload-card__header';
+    const mediaType = upload.mediaType === 'photo'
+      ? 'Photo'
+      : upload.mediaType === 'video'
+        ? 'Video'
+        : 'Unknown media';
+    const mediaBadge = createTextElement(
+      'span',
+      'admin-status-badge admin-status-badge--media',
+      mediaType,
+    );
+    const uploadDate = formatDate(upload.createdAt, true);
+    const time = createTextElement('time', '', uploadDate.label);
+    if (uploadDate.dateTime) time.dateTime = uploadDate.dateTime;
+    header.append(mediaBadge, time);
+
+    const details = document.createElement('dl');
+    details.className = 'admin-upload-card__details';
+    const uploader = document.createElement('div');
+    const uploaderValue = document.createElement('dd');
+    uploaderValue.append(createTextElement(
+      'strong',
+      '',
+      upload.uploader?.fname || 'Unknown',
+    ));
+    if (upload.uploader?.username) {
+      uploaderValue.append(createTextElement(
+        'span',
+        '',
+        upload.uploader.username,
+      ));
+    }
+    uploader.append(createTextElement('dt', '', 'Uploader'), uploaderValue);
+    details.append(
+      uploader,
+      createUploadDetail('Park', upload.parkName || 'Not recorded'),
+    );
+    if (upload.campgroundName) {
+      details.append(createUploadDetail('Campground', upload.campgroundName));
+    }
+    if (upload.campsiteName) {
+      details.append(createUploadDetail('Campsite', upload.campsiteName));
+    }
+
+    content.append(header, details);
+    row.append(media, content);
     return row;
   }
 
+  function createUserCell(label, modifierClass = '') {
+    const cell = document.createElement('td');
+    cell.className = `admin-user-cell${modifierClass}`;
+    cell.dataset.label = label;
+    return cell;
+  }
+
   function createUserRow(user) {
-    const row = document.createElement('div');
-    row.className = 'user-item';
+    const row = document.createElement('tr');
+    row.className = 'user-item admin-user-row';
 
-    const verification = document.createElement('span');
-    verification.textContent = `[${Boolean(user.email_verified)}]`;
-    verification.className =
-      `admin-email-status${user.email_verified ? '' : ' admin-email-status--unverified'}`;
-
-    const name = document.createElement('strong');
-    name.textContent = user.fname == null ? '' : String(user.fname);
-    row.append(
-      verification,
-      document.createTextNode(' - '),
-      name,
-      document.createTextNode(
-        ` \u2014 ${user.username || ''} ` +
-        `(joined ${new Date(user.date_created).toLocaleDateString()})`,
-      ),
+    const identity = createUserCell('User', ' admin-user-cell--identity');
+    identity.append(
+      createTextElement('strong', '', user.fname || 'Unnamed user'),
+      createTextElement('span', '', user.username || 'Email unavailable'),
     );
 
+    const emailStatus = createUserCell('Email status');
+    emailStatus.append(createTextElement(
+      'span',
+      `admin-email-status${
+        user.email_verified ? '' : ' admin-email-status--unverified'
+      }`,
+      user.email_verified ? 'Verified' : 'Unverified',
+    ));
+
+    const accountStatus = createUserCell('Account status');
+    accountStatus.append(createTextElement(
+      'span',
+      `admin-account-status${
+        user.blocked ? ' admin-account-status--blocked' : ''
+      }`,
+      user.blocked ? 'Blocked' : 'Active',
+    ));
+
+    const joined = createUserCell('Joined');
+    const joinedDate = formatDate(user.date_created, false);
+    const joinedTime = createTextElement('time', '', joinedDate.label);
+    if (joinedDate.dateTime) joinedTime.dateTime = joinedDate.dateTime;
+    joined.append(joinedTime);
+
+    const actionCell = createUserCell('Action', ' admin-user-cell--action');
     const action = user.blocked ? 'unblock' : 'block';
     const actionLabel = user.blocked ? 'Unblock' : 'Block';
     const form = document.createElement('form');
@@ -113,54 +228,124 @@
     csrfField.name = '_csrf';
     csrfField.value = csrf?.getToken() || '';
 
-    const button = document.createElement('button');
+    const button = createTextElement(
+      'button',
+      `${action}-btn`,
+      actionLabel,
+    );
     button.type = 'submit';
-    button.className = `${action}-btn`;
-    button.textContent = actionLabel;
-
     form.append(csrfField, button);
-    row.appendChild(form);
+    actionCell.append(form);
+
+    row.append(identity, emailStatus, accountStatus, joined, actionCell);
     return row;
   }
 
+  function clearStatus(status) {
+    if (!status) return;
+    if (typeof status.replaceChildren === 'function') {
+      status.replaceChildren();
+    } else {
+      status.textContent = '';
+    }
+    status.classList.remove('admin-pagination-status--error');
+  }
+
+  function showFailure(status, message) {
+    if (!status) return;
+    status.textContent = message;
+    status.classList.add('admin-pagination-status--error');
+  }
+
+  function updateVisibleCount(container, counter) {
+    if (!container || !counter) return;
+    counter.textContent = String(container.children.length);
+  }
+
   async function fetchMoreUploads() {
-    uploadPage++;
-    const response = await fetch(`/a/dashboard?uploadPage=${uploadPage}`, {
-      headers: { 'Accept': 'application/json' },
-    });
-    const data = await response.json();
-    const uploads = document.getElementById('uploads');
+    if (!uploadButton || uploadsLoading) return;
 
-    data.uploads.forEach(upload => {
-      uploads?.appendChild(createUploadRow(upload));
-    });
+    uploadsLoading = true;
+    const originalText = uploadButton.textContent;
+    let buttonRemoved = false;
+    uploadButton.disabled = true;
+    uploadButton.textContent = 'Loading\u2026';
+    clearStatus(uploadsStatus);
 
-    if (!data.hasMoreUploads) {
-      document.getElementById('loadMoreUploads')?.remove();
+    try {
+      const nextPage = uploadPage + 1;
+      const response = await fetch(`/a/dashboard?uploadPage=${nextPage}`, {
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!response || response.ok === false) throw new Error('Upload page failed.');
+      const data = await response.json();
+      if (!Array.isArray(data.uploads)) throw new Error('Invalid upload page.');
+
+      data.uploads.forEach(upload => {
+        uploadsContainer?.append(createUploadRow(upload));
+      });
+      uploadPage = nextPage;
+      if (data.uploads.length > 0 && uploadsEmpty) uploadsEmpty.hidden = true;
+      updateVisibleCount(uploadsContainer, uploadsVisibleCount);
+
+      if (!data.hasMoreUploads) {
+        buttonRemoved = true;
+        uploadButton.remove();
+      }
+    } catch {
+      showFailure(uploadsStatus, UPLOAD_FAILURE_MESSAGE);
+    } finally {
+      uploadsLoading = false;
+      if (!buttonRemoved) {
+        uploadButton.disabled = false;
+        uploadButton.textContent = originalText;
+      }
     }
   }
 
   async function fetchMoreUsers() {
-    userPage++;
-    const response = await fetch(`/a/dashboard?userPage=${userPage}`, {
-      headers: { 'Accept': 'application/json' },
-    });
-    const data = await response.json();
-    const users = document.getElementById('users');
+    if (!userButton || usersLoading) return;
 
-    data.users.forEach(user => {
-      users?.appendChild(createUserRow(user));
-    });
+    usersLoading = true;
+    const originalText = userButton.textContent;
+    let buttonRemoved = false;
+    userButton.disabled = true;
+    userButton.textContent = 'Loading\u2026';
+    clearStatus(usersStatus);
 
-    if (!data.hasMoreUsers) {
-      document.getElementById('loadMoreUsers')?.remove();
+    try {
+      const nextPage = userPage + 1;
+      const response = await fetch(`/a/dashboard?userPage=${nextPage}`, {
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!response || response.ok === false) throw new Error('User page failed.');
+      const data = await response.json();
+      if (!Array.isArray(data.users)) throw new Error('Invalid user page.');
+
+      data.users.forEach(user => {
+        usersContainer?.append(createUserRow(user));
+      });
+      userPage = nextPage;
+      if (data.users.length > 0 && usersEmpty) usersEmpty.hidden = true;
+      updateVisibleCount(usersContainer, usersVisibleCount);
+
+      if (!data.hasMoreUsers) {
+        buttonRemoved = true;
+        userButton.remove();
+      }
+    } catch {
+      showFailure(usersStatus, USER_FAILURE_MESSAGE);
+    } finally {
+      usersLoading = false;
+      if (!buttonRemoved) {
+        userButton.disabled = false;
+        userButton.textContent = originalText;
+      }
     }
   }
 
-  document.getElementById('loadMoreUploads')
-    ?.addEventListener('click', fetchMoreUploads);
-  document.getElementById('loadMoreUsers')
-    ?.addEventListener('click', fetchMoreUsers);
+  uploadButton?.addEventListener('click', fetchMoreUploads);
+  userButton?.addEventListener('click', fetchMoreUsers);
   document.addEventListener('submit', event => {
     const form = event.target.closest?.('.user-status-form');
     if (!form) return;

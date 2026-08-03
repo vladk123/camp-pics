@@ -2,74 +2,205 @@
 <link rel="stylesheet" href="/css/adminDashboard.css">
 <%- include('../partials/search') %>
 
-<h1>Admin Dashboard</h1>
-<%- include('./partials/adminNav', { currentPath: '/a/dashboard' }) %>
+<div class="admin-dashboard-page">
+  <%- include('./partials/adminNav', { currentPath: '/a/dashboard' }) %>
 
-<section>
-  <h2>Recent Uploads</h2>
-  <div id="uploads">
-    <% uploads.forEach(u => { %>
-      <div class="upload-item">
-        <div>
-          <strong><%= u.mediaType %></strong>
-          by <%= u.uploader.fname || 'Unknown' %> (<%= u.uploader.username || '' %>)
-          — <%= new Date(u.createdAt).toLocaleString() %>
-        </div>
-        <div>
-          Park: <%= u.parkName || 'N/A' %>
-          <% if (u.campgroundName) { %> | CG: <%= u.campgroundName %><% } %>
-          <% if (u.campsiteName) { %> | Site: <%= u.campsiteName %><% } %>
-        </div>
+  <header class="admin-dashboard-header">
+    <div class="admin-dashboard-header__copy">
+      <p class="admin-dashboard-eyebrow">CampPics operations</p>
+      <h1>Admin dashboard</h1>
+      <p class="admin-dashboard-subtitle">
+        Review recent uploads and manage CampPics user accounts.
+      </p>
+    </div>
+    <div class="admin-dashboard-header__actions" aria-label="Dashboard links">
+      <a class="admin-dashboard-link admin-dashboard-link--primary" href="/a/roadmap">Roadmap</a>
+      <a class="admin-dashboard-link admin-dashboard-link--secondary" href="/">View public site</a>
+    </div>
+  </header>
 
-        <% const youtubeVideoId = extractYouTubeVideoId(u.youtubeId); %>
-        <% if (u.mediaType === 'photo' && u.adminPhotoUrl) { %>
-            <a href="<%= u.adminPhotoUrl %>" target="_blank" rel="noopener noreferrer">
-                <img src="<%= u.adminPhotoUrl %>" class="thumb" alt="photo thumbnail">
-            </a>
-        <% } else if (u.mediaType === 'video' && youtubeVideoId) { %>
-            <a href="https://www.youtube.com/watch?v=<%= youtubeVideoId %>" target="_blank" rel="noopener noreferrer">
-                <img src="https://img.youtube.com/vi/<%= youtubeVideoId %>/hqdefault.jpg" class="thumb" alt="YouTube thumbnail">
-            </a>
-        <% } %>
+  <dl class="admin-summary" aria-label="Dashboard summary">
+    <div class="admin-summary-card admin-summary-card--review">
+      <dt>Total uploads</dt>
+      <dd class="admin-summary-card__value"><%= dashboardStats.totalUploads %></dd>
+      <dd class="admin-summary-card__helper">Tracked upload records</dd>
+    </div>
+    <div class="admin-summary-card admin-summary-card--users">
+      <dt>Total users</dt>
+      <dd class="admin-summary-card__value"><%= dashboardStats.totalUsers %></dd>
+      <dd class="admin-summary-card__helper">Includes administrators</dd>
+    </div>
+    <div class="admin-summary-card admin-summary-card--verified">
+      <dt>Verified users</dt>
+      <dd class="admin-summary-card__value"><%= dashboardStats.verifiedUsers %></dd>
+      <dd class="admin-summary-card__helper">Email verified</dd>
+    </div>
+    <div class="admin-summary-card admin-summary-card--blocked">
+      <dt>Blocked users</dt>
+      <dd class="admin-summary-card__value"><%= dashboardStats.blockedUsers %></dd>
+      <dd class="admin-summary-card__helper">Access restricted</dd>
+    </div>
+  </dl>
 
+  <section class="admin-panel" aria-labelledby="admin-uploads-heading">
+    <header class="admin-panel__header">
+      <div>
+        <h2 id="admin-uploads-heading">Recent uploads</h2>
+        <p>Review the latest tracked photo and video uploads.</p>
       </div>
-    <% }) %>
-  </div>
-  <% if (hasMoreUploads) { %>
-    <button id="loadMoreUploads">Load more uploads</button>
-  <% } %>
-</section>
+      <p class="admin-panel__count">
+        Showing <span id="uploadsVisibleCount"><%= uploads.length %></span> uploads
+      </p>
+    </header>
 
-<hr>
+    <div id="uploads" class="admin-upload-list">
+      <% uploads.forEach(u => { %>
+        <% const uploadedDate = new Date(u.createdAt); %>
+        <% const uploadedDateIsValid = !Number.isNaN(uploadedDate.getTime()); %>
+        <article class="upload-item admin-upload-card">
+          <div class="admin-upload-card__media">
+            <% const youtubeVideoId = extractYouTubeVideoId(u.youtubeId); %>
+            <% if (u.mediaType === 'photo' && u.adminPhotoUrl) { %>
+              <a class="admin-upload-card__media-link" href="<%= u.adminPhotoUrl %>" target="_blank" rel="noopener noreferrer">
+                <img src="<%= u.adminPhotoUrl %>" class="thumb admin-upload-card__thumbnail" alt="Photo upload preview">
+                <span>Open photo</span>
+              </a>
+            <% } else if (u.mediaType === 'video' && youtubeVideoId) { %>
+              <a class="admin-upload-card__media-link" href="https://www.youtube.com/watch?v=<%= youtubeVideoId %>" target="_blank" rel="noopener noreferrer">
+                <img src="https://img.youtube.com/vi/<%= youtubeVideoId %>/hqdefault.jpg" class="thumb admin-upload-card__thumbnail" alt="YouTube video preview">
+                <span>Open video</span>
+              </a>
+            <% } else { %>
+              <div class="admin-upload-card__placeholder">Preview unavailable</div>
+            <% } %>
+          </div>
 
-<section>
-  <h2>Recent Users</h2>
-  <div id="users">
-    <% users.forEach(u => { %>
-      <div class="user-item">
-        [<span class="admin-email-status<% if (!u.email_verified) { %> admin-email-status--unverified<% } %>"><%= u.email_verified %>]</span> -
-        <strong><%= u.fname %></strong> — <%= u.username %> 
-        (joined <%= new Date(u.date_created).toLocaleDateString() %>)
-        
-        <% if (u.blocked) { %>
-          <form action="/a/user/<%= u._id %>/unblock" method="POST" class="inline-form user-status-form" data-action="unblock">
-            <%- include('../partials/csrfField') %>
-            <button type="submit" class="unblock-btn">Unblock</button>
-          </form>
-        <% } else { %>
-          <form action="/a/user/<%= u._id %>/block" method="POST" class="inline-form user-status-form" data-action="block">
-            <%- include('../partials/csrfField') %>
-            <button type="submit" class="block-btn">Block</button>
-          </form>
-        <% } %>
+          <div class="admin-upload-card__content">
+            <header class="admin-upload-card__header">
+              <span class="admin-status-badge admin-status-badge--media">
+                <%= u.mediaType === 'photo' ? 'Photo' : u.mediaType === 'video' ? 'Video' : 'Unknown media' %>
+              </span>
+              <time<% if (uploadedDateIsValid) { %> datetime="<%= uploadedDate.toISOString() %>"<% } %>>
+                <%= uploadedDateIsValid ? uploadedDate.toLocaleString() : 'Upload date unavailable' %>
+              </time>
+            </header>
+            <dl class="admin-upload-card__details">
+              <div>
+                <dt>Uploader</dt>
+                <dd>
+                  <strong><%= u.uploader.fname || 'Unknown' %></strong>
+                  <% if (u.uploader.username) { %><span><%= u.uploader.username %></span><% } %>
+                </dd>
+              </div>
+              <div>
+                <dt>Park</dt>
+                <dd><%= u.parkName || 'Not recorded' %></dd>
+              </div>
+              <% if (u.campgroundName) { %>
+                <div>
+                  <dt>Campground</dt>
+                  <dd><%= u.campgroundName %></dd>
+                </div>
+              <% } %>
+              <% if (u.campsiteName) { %>
+                <div>
+                  <dt>Campsite</dt>
+                  <dd><%= u.campsiteName %></dd>
+                </div>
+              <% } %>
+            </dl>
+          </div>
+        </article>
+      <% }) %>
+    </div>
+
+    <p id="uploadsEmpty" class="admin-empty-state"<% if (uploads.length > 0) { %> hidden<% } %>>
+      No tracked uploads found.
+    </p>
+    <div class="admin-section-actions">
+      <% if (hasMoreUploads) { %>
+        <button id="loadMoreUploads" class="admin-load-more" type="button">Load more uploads</button>
+      <% } %>
+      <p id="uploadsStatus" class="admin-pagination-status" role="status" aria-live="polite" aria-atomic="true"></p>
+    </div>
+  </section>
+
+  <section class="admin-panel" aria-labelledby="admin-users-heading">
+    <header class="admin-panel__header">
+      <div>
+        <h2 id="admin-users-heading">Users</h2>
+        <p>Review verification and account access status.</p>
       </div>
+      <p class="admin-panel__count">
+        Showing <span id="usersVisibleCount"><%= users.length %></span> users
+      </p>
+    </header>
 
-    <% }) %>
-  </div>
-  <% if (hasMoreUsers) { %>
-    <button id="loadMoreUsers">Load more users</button>
-  <% } %>
-</section>
+    <div class="admin-users-table-wrap">
+      <table class="admin-users-table">
+        <thead>
+          <tr>
+            <th scope="col">User</th>
+            <th scope="col">Email status</th>
+            <th scope="col">Account status</th>
+            <th scope="col">Joined</th>
+            <th scope="col">Action</th>
+          </tr>
+        </thead>
+        <tbody id="users">
+          <% users.forEach(u => { %>
+            <% const joinedDate = new Date(u.date_created); %>
+            <% const joinedDateIsValid = !Number.isNaN(joinedDate.getTime()); %>
+            <tr class="user-item admin-user-row">
+              <td class="admin-user-cell admin-user-cell--identity" data-label="User">
+                <strong><%= u.fname || 'Unnamed user' %></strong>
+                <span><%= u.username || 'Email unavailable' %></span>
+              </td>
+              <td class="admin-user-cell" data-label="Email status">
+                <span class="admin-email-status<% if (!u.email_verified) { %> admin-email-status--unverified<% } %>">
+                  <%= u.email_verified ? 'Verified' : 'Unverified' %>
+                </span>
+              </td>
+              <td class="admin-user-cell" data-label="Account status">
+                <span class="admin-account-status<% if (u.blocked) { %> admin-account-status--blocked<% } %>">
+                  <%= u.blocked ? 'Blocked' : 'Active' %>
+                </span>
+              </td>
+              <td class="admin-user-cell" data-label="Joined">
+                <time<% if (joinedDateIsValid) { %> datetime="<%= joinedDate.toISOString() %>"<% } %>>
+                  <%= joinedDateIsValid ? joinedDate.toLocaleDateString() : 'Date unavailable' %>
+                </time>
+              </td>
+              <td class="admin-user-cell admin-user-cell--action" data-label="Action">
+                <% if (u.blocked) { %>
+                  <form action="/a/user/<%= u._id %>/unblock" method="POST" class="inline-form user-status-form" data-action="unblock">
+                    <%- include('../partials/csrfField') %>
+                    <button type="submit" class="unblock-btn">Unblock</button>
+                  </form>
+                <% } else { %>
+                  <form action="/a/user/<%= u._id %>/block" method="POST" class="inline-form user-status-form" data-action="block">
+                    <%- include('../partials/csrfField') %>
+                    <button type="submit" class="block-btn">Block</button>
+                  </form>
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+
+    <p id="usersEmpty" class="admin-empty-state"<% if (users.length > 0) { %> hidden<% } %>>
+      No users found.
+    </p>
+    <div class="admin-section-actions">
+      <% if (hasMoreUsers) { %>
+        <button id="loadMoreUsers" class="admin-load-more" type="button">Load more users</button>
+      <% } %>
+      <p id="usersStatus" class="admin-pagination-status" role="status" aria-live="polite" aria-atomic="true"></p>
+    </div>
+  </section>
+</div>
 
 <div
   id="admin-dashboard-state"

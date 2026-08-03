@@ -387,6 +387,12 @@ describe('administrator stylesheet extraction', () => {
   test('dashboard rendering preserves status and Block/Unblock contracts', async () => {
     const source = await read('views/admin/dashboard.ejs');
     const html = render(source, {
+      dashboardStats: {
+        totalUploads: 0,
+        totalUsers: 2,
+        verifiedUsers: 1,
+        blockedUsers: 1,
+      },
       extractYouTubeVideoId: () => null,
       hasMoreUploads: false,
       hasMoreUsers: false,
@@ -427,17 +433,14 @@ describe('administrator stylesheet extraction', () => {
 
     const css = await read('public/css/adminDashboard.css');
     for (const declaration of [
-      'margin-bottom: 15px',
-      'border-bottom: 1px solid #ccc',
-      'max-width: 200px',
-      'max-height: 200px',
-      'cursor: pointer',
+      'grid-template-columns: repeat(4, minmax(0, 1fr))',
+      'grid-template-columns: repeat(2, minmax(0, 1fr))',
+      'grid-template-columns: minmax(0, 1fr)',
+      'max-width: 240px',
+      'overflow-wrap: anywhere',
       'display: inline',
-      'background: #d9534f',
-      'background: #c9302c',
-      'background: #5cb85c',
-      'background: #449d44',
-      'background-color: rgb(255, 112, 112)',
+      'content: attr(data-label)',
+      ':focus-visible',
     ]) {
       assert.equal(css.includes(declaration), true, declaration);
     }

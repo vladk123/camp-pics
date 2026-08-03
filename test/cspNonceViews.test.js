@@ -241,6 +241,12 @@ describe('representative nonce-bearing template behavior', () => {
     });
     const dashboard = await renderView('admin/dashboard.ejs', {
       ...common,
+      dashboardStats: {
+        totalUploads: 1,
+        totalUsers: 2,
+        verifiedUsers: 1,
+        blockedUsers: 0,
+      },
       extractYouTubeVideoId: () => null,
       hasMoreUploads: true,
       hasMoreUsers: true,

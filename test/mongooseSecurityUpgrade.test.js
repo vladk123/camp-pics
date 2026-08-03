@@ -316,7 +316,9 @@ describe('Mongoose 8.24.2 security upgrade', () => {
     const allowedOperationalChanges = new Set([
       'config/adminRoadmap.js',
       'controllers/admin.js',
+      'public/css/adminDashboard.css',
       'public/css/adminRoadmap.css',
+      'public/js/adminDashboard.js',
       'public/js/adminRoadmap.js',
       'routes/admin.js',
       'scripts/README-media-cleanup.md',
