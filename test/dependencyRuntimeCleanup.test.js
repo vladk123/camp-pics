@@ -26,7 +26,7 @@ const expectedDependencies = {
   'express-session': '^1.18.2',
   'express-slow-down': '^3.0.0',
   'form-data': '^4.0.6',
-  helmet: '^8.1.0',
+  helmet: '^8.3.0',
   'mailgun.js': '^12.1.1',
   'method-override': '^3.0.0',
   mongoose: '^8.24.2',
@@ -75,6 +75,31 @@ describe('dependency and runtime cleanup guards', () => {
     assert.deepEqual(packageJson.dependencies, expectedDependencies);
     assert.deepEqual(lockRoot.dependencies, expectedDependencies);
     assert.deepEqual(lockRoot.dependencies, packageJson.dependencies);
+    assert.equal(packageJson.dependencies.helmet, '^8.3.0');
+    assert.equal(lockRoot.dependencies.helmet, '^8.3.0');
+    assert.equal(
+      packageLock.packages['node_modules/helmet'].version,
+      '8.3.0',
+    );
+    assert.equal(
+      packageLock.packages['node_modules/helmet'].resolved,
+      'https://registry.npmjs.org/helmet/-/helmet-8.3.0.tgz',
+    );
+    assert.equal(
+      packageLock.packages['node_modules/helmet'].integrity,
+      'sha512-Qgpiaws3Sm30Av8Eah6sjMCZZwjlBu+E68rhpCWBshY1lb09HtLwj5GviX0OyQIn+ulUS0iX0AxN5n3tLZzz1w==',
+    );
+    assert.equal(
+      Object.hasOwn(
+        packageLock.packages['node_modules/helmet'],
+        'dependencies',
+      ),
+      false,
+    );
+    assert.deepEqual(
+      packageLock.packages['node_modules/helmet'].funding,
+      { url: 'https://github.com/sponsors/EvanHahn' },
+    );
     assert.deepEqual(packageJson.engines, { node: '24.x', npm: '11.x' });
     assert.deepEqual(lockRoot.engines, packageJson.engines);
     assert.equal(packageJson.dependencies.multer, '^2.2.0');

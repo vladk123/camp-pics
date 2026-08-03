@@ -16,6 +16,21 @@ const APPROVED_SCRIPT_SOURCES = [
   'https://www.google-analytics.com',
 ];
 
+const EXPECTED_NON_CSP_HEADERS = {
+  'cross-origin-opener-policy': 'same-origin',
+  'cross-origin-resource-policy': 'same-origin',
+  'origin-agent-cluster': '?1',
+  'referrer-policy': 'strict-origin-when-cross-origin',
+  'strict-transport-security':
+    'max-age=31536000; includeSubDomains; preload',
+  'x-content-type-options': 'nosniff',
+  'x-dns-prefetch-control': 'off',
+  'x-download-options': 'noopen',
+  'x-frame-options': 'DENY',
+  'x-permitted-cross-domain-policies': 'none',
+  'x-xss-protection': '0',
+};
+
 function invokeMiddleware(middleware, req = {}, locals = {}) {
   const res = { locals };
   const nextArguments = [];
@@ -25,11 +40,85 @@ function invokeMiddleware(middleware, req = {}, locals = {}) {
   return { nextArguments, req, res };
 }
 
-function getDirective(header, name) {
-  return header
-    .split(';')
-    .map(value => value.trim())
-    .find(value => value === name || value.startsWith(`${name} `));
+function parseCspHeader(header) {
+  const directives = new Map();
+
+  for (const rawDirective of header.split(';')) {
+    const directive = rawDirective.trim();
+    if (!directive) throw new Error('CSP contains an empty directive name.');
+
+    const [rawName, ...values] = directive.split(/\s+/u);
+    const name = rawName.toLowerCase();
+    if (!name) throw new Error('CSP contains an empty directive name.');
+    if (directives.has(name)) {
+      throw new Error(`CSP contains duplicate directive ${name}.`);
+    }
+
+    directives.set(name, values);
+  }
+
+  return directives;
+}
+
+function expectedCspDirectives(nonce) {
+  return new Map([
+    ['default-src', ["'self'"]],
+    ['base-uri', ["'self'"]],
+    ['font-src', ["'self'", 'https://cdnjs.cloudflare.com']],
+    ['form-action', ["'self'"]],
+    ['frame-ancestors', ["'self'"]],
+    ['img-src', [
+      "'self'",
+      'data:',
+      'blob:',
+      'https://res.cloudinary.com/example/',
+      'https://img.youtube.com',
+      'https://www.googletagmanager.com',
+    ]],
+    ['object-src', []],
+    ['script-src', [
+      "'self'",
+      `'nonce-${nonce}'`,
+      ...APPROVED_SCRIPT_SOURCES,
+    ]],
+    ['script-src-attr', ["'none'"]],
+    ['style-src', [
+      "'self'",
+      "'unsafe-inline'",
+      'https://cdnjs.cloudflare.com',
+      'https://fonts.googleapis.com',
+      'https://www.googletagmanager.com',
+      'https://www.google-analytics.com',
+    ]],
+    ['upgrade-insecure-requests', []],
+    ['connect-src', [
+      "'self'",
+      'https://www.googletagmanager.com',
+      'https://www.google-analytics.com',
+    ]],
+    ['worker-src', ["'self'"]],
+    ['frame-src', ["'self'", 'https://www.youtube.com']],
+  ]);
+}
+
+function assertExactCspContract(header, nonce) {
+  const actual = parseCspHeader(header);
+  const expected = expectedCspDirectives(nonce);
+
+  assert.deepEqual(
+    [...actual.keys()].sort(),
+    [...expected.keys()].sort(),
+    'CSP directive names should match without depending on top-level order',
+  );
+  for (const [name, values] of expected) {
+    assert.deepEqual(
+      actual.get(name),
+      values,
+      `${name} should preserve its exact value-token order`,
+    );
+  }
+
+  return actual;
 }
 
 async function withServer(app, callback) {
@@ -132,8 +221,27 @@ describe('per-response CSP nonce middleware', () => {
 });
 
 describe('Helmet CSP nonce integration', () => {
+  test('the semantic CSP parser preserves values and rejects invalid names or duplicates', () => {
+    assert.deepEqual(
+      [...parseCspHeader("SCRIPT-SRC 'self' https://example.test; object-src")],
+      [
+        ['script-src', ["'self'", 'https://example.test']],
+        ['object-src', []],
+      ],
+    );
+    assert.throws(
+      () => parseCspHeader("default-src 'self'; ;script-src 'self'"),
+      /empty directive name/u,
+    );
+    assert.throws(
+      () => parseCspHeader("default-src 'self';DEFAULT-SRC https:"),
+      /duplicate directive default-src/u,
+    );
+  });
+
   test('each response header authorizes only its own nonce and keeps the Phase 1 policy', async () => {
     const app = express();
+    app.disable('x-powered-by');
     app.use(createCspNonceMiddleware());
     app.use(helmet({
       crossOriginEmbedderPolicy: false,
@@ -193,24 +301,30 @@ describe('Helmet CSP nonce integration', () => {
       assert.ok(secondHeader);
       assert.notEqual(firstBody.nonce, secondBody.nonce);
 
-      for (const [header, nonce] of [
-        [firstHeader, firstBody.nonce],
-        [secondHeader, secondBody.nonce],
+      for (const [response, header, nonce] of [
+        [firstResponse, firstHeader, firstBody.nonce],
+        [secondResponse, secondHeader, secondBody.nonce],
       ]) {
-        const scriptSrc = getDirective(header, 'script-src');
-        const styleSrc = getDirective(header, 'style-src');
+        const directives = assertExactCspContract(header, nonce);
+        const scriptSrc = directives.get('script-src');
+        const styleSrc = directives.get('style-src');
 
-        assert.ok(scriptSrc.split(/\s+/u).includes("'self'"));
-        assert.ok(scriptSrc.split(/\s+/u).includes(`'nonce-${nonce}'`));
-        for (const source of APPROVED_SCRIPT_SOURCES) {
-          assert.ok(scriptSrc.split(/\s+/u).includes(source));
-        }
         assert.equal(scriptSrc.includes("'unsafe-inline'"), false);
         assert.equal(scriptSrc.includes("'unsafe-eval'"), false);
-        assert.ok(styleSrc.split(/\s+/u).includes("'unsafe-inline'"));
-        assert.equal(getDirective(header, 'script-src-attr'), "script-src-attr 'none'");
+        assert.ok(styleSrc.includes("'unsafe-inline'"));
+        for (const [name, expectedValue] of Object.entries(
+          EXPECTED_NON_CSP_HEADERS,
+        )) {
+          assert.equal(response.headers.get(name), expectedValue, name);
+        }
+        assert.equal(response.headers.get('cross-origin-embedder-policy'), null);
+        assert.equal(response.headers.get('x-powered-by'), null);
       }
 
+      assert.equal(
+        firstHeader.includes(`'nonce-${secondBody.nonce}'`),
+        false,
+      );
       assert.equal(
         secondHeader.includes(`'nonce-${firstBody.nonce}'`),
         false,
