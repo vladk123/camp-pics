@@ -485,9 +485,12 @@ describe('CSP, vendor, and scope guards', () => {
       'public/js/swiper-bundle.min.js',
     ], { cwd: root, encoding: 'utf8' });
     const allowedRestrictedFiles = new Set([
+      'config/adminRoadmap.js',
+      'controllers/admin.js',
       'controllers/media.js',
       'controllers/users.js',
       'middleware.js',
+      'routes/admin.js',
       'routes/users.js',
       'package.json',
       'package-lock.json',

@@ -37,7 +37,7 @@
     <% } %>
 
     <% if (currentUser?.isAdmin){ %>
-      <a href="/a/dashboard">.</a>
+      <a class="<% if (data?.currentPath?.startsWith('/a/')) { %>highlighted<% } %>" href="/a/dashboard">Admin</a>
     <% } %>
     <button
       id="themeToggle"

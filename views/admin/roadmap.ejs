@@ -1,0 +1,164 @@
+<% layout('/layouts/boilerplate') %>
+<link rel="stylesheet" href="/css/adminRoadmap.css">
+
+<div class="admin-roadmap-page">
+  <header class="admin-roadmap-header">
+    <div>
+      <p class="admin-roadmap-eyebrow">Administrator planning</p>
+      <h1>CampPics roadmap</h1>
+      <p>
+        Updated <time datetime="<%= roadmap.updatedOn %>"><%= roadmap.updatedOn %></time>.
+        The source-controlled configuration is authoritative.
+      </p>
+    </div>
+    <button id="roadmap-copy-button" class="roadmap-copy-button" type="button">
+      Copy roadmap
+    </button>
+  </header>
+
+  <p id="roadmap-copy-status" class="roadmap-copy-status" role="status" aria-live="polite"></p>
+  <pre id="roadmap-copy-source" hidden><%= copyText %></pre>
+
+  <%- include('./partials/adminNav', { currentPath }) %>
+
+  <dl class="roadmap-summary" aria-label="Roadmap summary">
+    <div class="roadmap-summary__item">
+      <dt>Active</dt>
+      <dd><%= summaryCounts.active %></dd>
+    </div>
+    <div class="roadmap-summary__item">
+      <dt>Planned</dt>
+      <dd><%= summaryCounts.planned %></dd>
+    </div>
+    <div class="roadmap-summary__item">
+      <dt>In progress</dt>
+      <dd><%= summaryCounts.inProgress %></dd>
+    </div>
+    <div class="roadmap-summary__item">
+      <dt>Blocked</dt>
+      <dd><%= summaryCounts.blocked %></dd>
+    </div>
+    <div class="roadmap-summary__item">
+      <dt>Completed</dt>
+      <dd><%= summaryCounts.completed %></dd>
+    </div>
+  </dl>
+
+  <section aria-labelledby="active-roadmap-heading">
+    <h2 id="active-roadmap-heading">Active work</h2>
+    <% activePhases.forEach(phase => { %>
+      <section class="roadmap-phase" aria-labelledby="phase-<%= phase.id %>">
+        <header class="roadmap-phase__header">
+          <h3 id="phase-<%= phase.id %>"><%= phase.title %></h3>
+          <p><%= phase.description %></p>
+        </header>
+        <div class="roadmap-items">
+          <% phase.items.forEach(item => { %>
+            <article class="roadmap-item">
+              <div class="roadmap-item__heading">
+                <h4>
+                  <button
+                    class="roadmap-item__title"
+                    type="button"
+                    data-roadmap-item-id="<%= item.id %>"
+                    aria-haspopup="dialog"
+                  ><%= item.title %></button>
+                </h4>
+                <span class="roadmap-status roadmap-status--<%= item.status.replaceAll('_', '-') %>">
+                  <%= item.status.replaceAll('_', ' ') %>
+                </span>
+              </div>
+              <p class="roadmap-item__id"><code><%= item.id %></code></p>
+              <p><%= item.purpose %></p>
+            </article>
+          <% }) %>
+        </div>
+      </section>
+    <% }) %>
+  </section>
+
+  <section class="roadmap-completed" aria-labelledby="completed-roadmap-heading">
+    <h2 id="completed-roadmap-heading">Completed work</h2>
+    <div class="roadmap-items">
+      <% completedItems.forEach(item => { %>
+        <article class="roadmap-item roadmap-item--completed">
+          <div class="roadmap-item__heading">
+            <h3>
+              <button
+                class="roadmap-item__title roadmap-item__title--completed"
+                type="button"
+                data-roadmap-item-id="<%= item.id %>"
+                aria-haspopup="dialog"
+              ><%= item.title %></button>
+            </h3>
+            <span class="roadmap-status roadmap-status--completed">completed</span>
+          </div>
+          <p class="roadmap-item__id"><code><%= item.id %></code></p>
+          <p class="roadmap-item__phase">Original phase: <%= item.phaseTitle %></p>
+        </article>
+      <% }) %>
+    </div>
+  </section>
+
+  <div id="roadmap-detail-sources" hidden>
+    <% roadmap.phases.forEach(phase => { %>
+      <% phase.items.forEach(item => { %>
+        <article data-roadmap-detail-id="<%= item.id %>">
+          <h2><%= item.title %></h2>
+          <p>
+            <span class="roadmap-status roadmap-status--<%= item.status.replaceAll('_', '-') %>">
+              <%= item.status.replaceAll('_', ' ') %>
+            </span>
+          </p>
+          <dl class="roadmap-detail-meta">
+            <div>
+              <dt>Stable ID</dt>
+              <dd><code><%= item.id %></code></dd>
+            </div>
+            <div>
+              <dt>Phase</dt>
+              <dd><%= phase.title %></dd>
+            </div>
+            <% if (item.completedOn) { %>
+              <div>
+                <dt>Completed</dt>
+                <dd><time datetime="<%= item.completedOn %>"><%= item.completedOn %></time></dd>
+              </div>
+            <% } %>
+          </dl>
+          <section>
+            <h3>Purpose</h3>
+            <p><%= item.purpose %></p>
+          </section>
+          <% for (const [heading, values] of [
+            ['Scope', item.scope],
+            ['Not included', item.notIncluded],
+            ['Dependencies', item.dependencies],
+            ['Done when', item.doneWhen],
+            ['Notes', item.notes],
+          ]) { %>
+            <section>
+              <h3><%= heading %></h3>
+              <% if (values.length > 0) { %>
+                <ul>
+                  <% values.forEach(value => { %>
+                    <li><%= value %></li>
+                  <% }) %>
+                </ul>
+              <% } else { %>
+                <p>None.</p>
+              <% } %>
+            </section>
+          <% } %>
+        </article>
+      <% }) %>
+    <% }) %>
+  </div>
+
+  <dialog id="roadmap-detail-dialog" class="roadmap-dialog" aria-label="Roadmap item details">
+    <div id="roadmap-dialog-content"></div>
+    <button id="roadmap-dialog-close" class="roadmap-dialog__close" type="button">Close</button>
+  </dialog>
+</div>
+
+<script src="/js/adminRoadmap.js"></script>

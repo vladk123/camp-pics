@@ -6,6 +6,25 @@ This repository contains the CampPics website.
 
 Do not use assumptions, architecture, terminology, or implementation details from any other repository or Codex conversation.
 
+## Authoritative project roadmap
+
+`config/adminRoadmap.js` is the authoritative CampPics roadmap. `/a/roadmap`
+is its read-only administrator view.
+
+Every future Codex pass must read the roadmap before proposing or editing
+work. Stable item IDs must never be renamed or reused. When a pass changes an
+existing item's status, scope, dependency, or completion state, update the
+roadmap in the same patch. Completed items remain in configuration.
+
+Do not add tasks silently. A new task may be added only when:
+
+* the user requests it; or
+* a concrete blocker or defect is discovered and clearly reported.
+
+Newly discovered work must be labeled as such in notes. Do not replace the
+roadmap with MongoDB data or browser editing. Run
+`npm run admin:roadmap:smoke` after roadmap changes.
+
 ## Existing production data
 
 This project already has users, parks, embedded campsite media, Upload records, and user upload-history records.

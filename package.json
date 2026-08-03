@@ -14,6 +14,7 @@
     "email:redact-legacy-content": "node scripts/reconcileEmailLogs.js --apply",
     "auth:audit-artifacts": "node scripts/reconcileAuthArtifacts.js",
     "auth:cleanup-expired-artifacts": "node scripts/reconcileAuthArtifacts.js --apply",
+    "admin:roadmap:smoke": "node scripts/smokeAdminRoadmap.js",
     "start": "node app.js"
   },
   "repository": {

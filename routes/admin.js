@@ -9,6 +9,9 @@ import { adminUserStatusLimiter } from '../utils/routeAbuseLimits.js';
 router.route('/dashboard')
     .get(isAdmin, catchAsyncErrors(admin.dashboard));
 
+router.route('/roadmap')
+  .get(isAdmin, catchAsyncErrors(admin.roadmap));
+
 router.route('/user/:id/block')
   .post(isAdmin, adminUserStatusLimiter, catchAsyncErrors(admin.blockUser));
 

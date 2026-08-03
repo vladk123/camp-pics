@@ -1,0 +1,12 @@
+<nav class="admin-section-nav" aria-label="Administrator pages">
+  <a
+    class="admin-section-nav__link<% if (currentPath === '/a/dashboard') { %> admin-section-nav__link--current<% } %>"
+    href="/a/dashboard"
+    <% if (currentPath === '/a/dashboard') { %>aria-current="page"<% } %>
+  >Dashboard</a>
+  <a
+    class="admin-section-nav__link<% if (currentPath === '/a/roadmap') { %> admin-section-nav__link--current<% } %>"
+    href="/a/roadmap"
+    <% if (currentPath === '/a/roadmap') { %>aria-current="page"<% } %>
+  >Roadmap</a>
+</nav>

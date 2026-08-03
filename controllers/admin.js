@@ -6,6 +6,13 @@ import {
   parseStrictMongoObjectId,
   strictMongoObjectIdsEqual,
 } from '../utils/mongoObjectId.js';
+import {
+  adminRoadmap,
+  formatAdminRoadmapPlainText,
+  getActiveRoadmapPhases,
+  getCompletedRoadmapItems,
+  getRoadmapSummary,
+} from '../config/adminRoadmap.js';
 
 // import { getIP } from '../utils/getIP.js'
 import { redirectedFlash } from '../utils/redirectedFlash.js';
@@ -166,7 +173,7 @@ export function createAdminDashboardHandler({
         hasMoreUploads,
         hasMoreUsers,
         extractYouTubeVideoId,
-        data:{} // data obj to avoid crashes
+        data: { currentPath: '/a/dashboard' },
       });
     } catch (err) {
       await log(req, res, 'error', {
@@ -179,6 +186,22 @@ export function createAdminDashboardHandler({
 }
 
 export const dashboard = createAdminDashboardHandler();
+
+export async function roadmap(req, res) {
+  const currentPath = '/a/roadmap';
+  return res.render('admin/roadmap', {
+    meta: {
+      title: 'Admin Roadmap',
+    },
+    currentPath,
+    roadmap: adminRoadmap,
+    activePhases: getActiveRoadmapPhases(),
+    completedItems: getCompletedRoadmapItems(),
+    summaryCounts: getRoadmapSummary(),
+    copyText: formatAdminRoadmapPlainText(),
+    data: { currentPath },
+  });
+}
 
 export function createUserBlockHandler({
   blocked,

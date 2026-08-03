@@ -2994,6 +2994,7 @@ describe('dependency, dead-helper, global-protection, and documentation guards',
     );
     const allowedExternalizationFiles = new Set([
       'public/js/adminDashboard.js',
+      'public/js/adminRoadmap.js',
       'public/js/allParks.js',
       'public/js/flash-messages.js',
       'public/js/forgotPassword.js',
@@ -3016,6 +3017,8 @@ describe('dependency, dead-helper, global-protection, and documentation guards',
       .filter(Boolean)
       .filter(line => (
         !new Set([
+          'config/adminRoadmap.js',
+          'controllers/admin.js',
           'controllers/media.js',
           'controllers/users.js',
           'middleware.js',
