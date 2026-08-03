@@ -220,6 +220,7 @@ describe('authoritative administrator roadmap configuration', () => {
       'Uploads and users now have clearer sections with accessible status badges and controls.',
       'Loading, empty and error states are included for the existing pagination controls.',
       'Existing administrator APIs and Block/Unblock behavior remain unchanged.',
+      'Recent-upload Park and Campground links now open the corresponding public location in a new tab.',
     ]);
   });
 
@@ -799,25 +800,42 @@ describe('administrator roadmap smoke and source guards', () => {
     assert.doesNotMatch(configSource, /mongoose|Schema|\.index\s*\(/u);
   });
 
-  test('administrator pagination, JSON contracts and Block/Unblock implementation remain unchanged', async () => {
+  test('administrator pagination, JSON envelope and Block/Unblock implementation remain unchanged', async () => {
     const current = await source('controllers/admin.js');
     const baseline = headSource('controllers/admin.js');
-    const dashboardData = value => value.slice(
+    const paginationSetup = value => value.slice(
       value.indexOf('      // Pagination parameters'),
-      value.indexOf('      // Regular render (first load)'),
+      value.indexOf('      // Get most recent uploads (10 per page)'),
     );
+    const queryThroughLean = (value, startMarker) => {
+      const start = value.indexOf(startMarker);
+      const end = value.indexOf('.lean();', start) + '.lean();'.length;
+      return value.slice(start, end);
+    };
     const blockImplementation = value => value.slice(
       value.indexOf('export function createUserBlockHandler'),
     );
 
     const normalizeLines = value => value.replaceAll('\r\n', '\n');
     assert.equal(
-      normalizeLines(dashboardData(current)),
-      normalizeLines(dashboardData(baseline)),
+      normalizeLines(paginationSetup(current)),
+      normalizeLines(paginationSetup(baseline)),
+    );
+    assert.equal(
+      normalizeLines(queryThroughLean(current, 'const uploadRecords =')),
+      normalizeLines(queryThroughLean(baseline, 'const uploadRecords =')),
+    );
+    assert.equal(
+      normalizeLines(queryThroughLean(current, 'const userRecords =')),
+      normalizeLines(queryThroughLean(baseline, 'const userRecords =')),
     );
     assert.equal(
       normalizeLines(blockImplementation(current)),
       normalizeLines(blockImplementation(baseline)),
+    );
+    assert.match(
+      current,
+      /return res\.json\(\{\s*uploads,\s*users,\s*hasMoreUploads,\s*hasMoreUsers,\s*\}\);/u,
     );
     assert.equal(gitStatus('models', 'middleware.js', 'utils/routeAbuseLimits.js').trim(), '');
 

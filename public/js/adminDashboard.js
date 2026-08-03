@@ -5,6 +5,10 @@
     'Unable to load more uploads. Please try again.';
   const USER_FAILURE_MESSAGE =
     'Unable to load more users. Please try again.';
+  const DASHBOARD_PARK_URL_PATTERN =
+    /^\/camp\/park\/[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+  const DASHBOARD_CAMPGROUND_URL_PATTERN =
+    /^\/camp\/park\/[a-z0-9]+(?:-[a-z0-9]+)*#[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 
   const parsePositivePage = value => {
     if (typeof value !== 'string' || !/^[1-9]\d*$/.test(value)) return 1;
@@ -99,11 +103,39 @@
     return link;
   }
 
-  function createUploadDetail(label, value) {
+  function createDashboardLocationValue(value, url, pattern) {
+    const valueElement = document.createElement('dd');
+    const visibleName = value == null ? '' : String(value);
+    if (
+      typeof url !== 'string' ||
+      !pattern?.test(url)
+    ) {
+      valueElement.textContent = visibleName;
+      return valueElement;
+    }
+
+    const link = createTextElement(
+      'a',
+      'admin-upload-card__location-link',
+      visibleName,
+    );
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    valueElement.append(link);
+    return valueElement;
+  }
+
+  function createUploadDetail(
+    label,
+    value,
+    locationUrl = null,
+    locationPattern = null,
+  ) {
     const group = document.createElement('div');
     group.append(
       createTextElement('dt', '', label),
-      createTextElement('dd', '', value),
+      createDashboardLocationValue(value, locationUrl, locationPattern),
     );
     return group;
   }
@@ -159,10 +191,20 @@
     uploader.append(createTextElement('dt', '', 'Uploader'), uploaderValue);
     details.append(
       uploader,
-      createUploadDetail('Park', upload.parkName || 'Not recorded'),
+      createUploadDetail(
+        'Park',
+        upload.parkName || 'Not recorded',
+        upload.parkUrl,
+        DASHBOARD_PARK_URL_PATTERN,
+      ),
     );
     if (upload.campgroundName) {
-      details.append(createUploadDetail('Campground', upload.campgroundName));
+      details.append(createUploadDetail(
+        'Campground',
+        upload.campgroundName,
+        upload.campgroundUrl,
+        DASHBOARD_CAMPGROUND_URL_PATTERN,
+      ));
     }
     if (upload.campsiteName) {
       details.append(createUploadDetail('Campsite', upload.campsiteName));

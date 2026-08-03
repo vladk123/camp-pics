@@ -66,60 +66,65 @@
   </div>
   
 
-  <div class="flex-column">
-    <h2>Delete</h2>
-    <p>Please note: Deleting the your account will permanently delete all your uploaded media as well. This process is not reversible.</p>
-    <!-- <form id="delete-account-form" action="/user/delete-account" method="post">
-        <button class="btn-primary">Delete Account</button>
-    </form> -->
+  <% if (currentUser?.isAdmin) { %>
+    <div class="flex-column">
+      <h2>Account deletion</h2>
+      <p>Administrator accounts cannot be deleted from this page.</p>
+    </div>
+  <% } else { %>
+    <div class="flex-column">
+      <h2>Delete</h2>
+      <p>Deleting your account will permanently delete all of your uploaded media. This action cannot be undone.</p>
+      <!-- <form id="delete-account-form" action="/user/delete-account" method="post">
+          <button class="btn-primary">Delete Account</button>
+      </form> -->
 
-    <!-- Delete Account button -->
-    <% if (!currentUser?.isAdmin){ %>
+      <!-- Delete Account button -->
       <button id="delete-account-btn" class="btn btn-primary danger margin-auto">Delete Account</button>
-    <% } %>
 
-    <!-- Delete Account modals insert point -->
-    <div id="delete-account-modal-backdrop-insert"></div>
+      <!-- Delete Account modals insert point -->
+      <div id="delete-account-modal-backdrop-insert"></div>
 
-    <!-- First confirm modal -->
-    <div id="delete-account-modal" class="modal-parent hidden" data-modal-id="deleteAccount1">
-      <div class="modal-content delete-account-modal">
-        <span class="delete-account-modal-close">&times;</span>
-        <h2>Delete Account</h2>
-        <p>Are you sure you want to delete your account?</p>
-        <div class="modal-actions">
-          <button id="confirm-step1" class="btn btn-secondary danger">Yes, continue</button>
-          <button class="btn btn-secondary delete-account-modal-close">Cancel</button>
+      <!-- First confirm modal -->
+      <div id="delete-account-modal" class="modal-parent hidden" data-modal-id="deleteAccount1">
+        <div class="modal-content delete-account-modal">
+          <span class="delete-account-modal-close">&times;</span>
+          <h2>Delete Account</h2>
+          <p>Are you sure you want to delete your account?</p>
+          <div class="modal-actions">
+            <button id="confirm-step1" class="btn btn-secondary danger">Yes, continue</button>
+            <button class="btn btn-secondary delete-account-modal-close">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Second confirm modal -->
+      <div id="delete-account-modal-2" class="modal-parent hidden" data-modal-id="deleteAccount2">
+        <div class="modal-content delete-account-modal">
+          <span class="delete-account-modal-close">&times;</span>
+          <h2>Final Confirmation</h2>
+          <p>All your <strong>photos and videos</strong> will be permanently deleted.</p>
+          <div class="modal-actions">
+            <form action="/user/delete-account" method="post">
+              <%- include('../partials/csrfField') %>
+              <div class="form-group">
+                <label for="delete-account-current-password">Current password</label>
+                <input
+                  id="delete-account-current-password"
+                  type="password"
+                  name="current_password"
+                  autocomplete="current-password"
+                  required
+                >
+              </div>
+              <button type="submit" class="btn btn-secondary danger">Yes, delete everything</button>
+            </form>
+            <button class="btn btn-secondary delete-account-modal-close">Cancel</button>
+          </div>
         </div>
       </div>
     </div>
-
-    <!-- Second confirm modal -->
-    <div id="delete-account-modal-2" class="modal-parent hidden" data-modal-id="deleteAccount2">
-      <div class="modal-content delete-account-modal">
-        <span class="delete-account-modal-close">&times;</span>
-        <h2>Final Confirmation</h2>
-        <p>All your <strong>photos and videos</strong> will be permanently deleted.</p>
-        <div class="modal-actions">
-          <form action="/user/delete-account" method="post">
-            <%- include('../partials/csrfField') %>
-            <div class="form-group">
-              <label for="delete-account-current-password">Current password</label>
-              <input
-                id="delete-account-current-password"
-                type="password"
-                name="current_password"
-                autocomplete="current-password"
-                required
-              >
-            </div>
-            <button type="submit" class="btn btn-secondary danger">Yes, delete everything</button>
-          </form>
-          <button class="btn btn-secondary delete-account-modal-close">Cancel</button>
-        </div>
-      </div>
-    </div>
-  </div>
+  <% } %>
 
 </div>
 

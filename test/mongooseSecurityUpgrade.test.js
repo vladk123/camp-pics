@@ -328,6 +328,7 @@ describe('Mongoose 8.24.2 security upgrade', () => {
       'views/admin/partials/adminNav.ejs',
       'views/admin/roadmap.ejs',
       'views/partials/navbar.ejs',
+      'views/user/account.ejs',
     ]);
     const unexpectedChanges = changed.filter(file =>
       !allowedOperationalChanges.has(file)

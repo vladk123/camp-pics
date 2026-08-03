@@ -27,6 +27,8 @@ const ADMIN_UPLOAD_KEYS = [
   'parkName',
   'campgroundName',
   'campsiteName',
+  'parkUrl',
+  'campgroundUrl',
   'youtubeId',
   'adminPhotoUrl',
   'uploader',
@@ -173,6 +175,11 @@ describe('administrator dashboard serialization', () => {
     );
     assert.equal('_id' in serialized, false);
     assert.equal('_id' in serialized.uploader, false);
+    assert.equal(serialized.parkUrl, null);
+    assert.equal(serialized.campgroundUrl, null);
+    for (const rawId of ['parkId', 'campgroundId', 'campsiteId']) {
+      assert.equal(rawId in serialized, false);
+    }
   });
 
   test('initial rendering and JSON pagination share serializers and restrictive queries', async () => {

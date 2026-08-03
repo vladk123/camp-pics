@@ -94,12 +94,24 @@
               </div>
               <div>
                 <dt>Park</dt>
-                <dd><%= u.parkName || 'Not recorded' %></dd>
+                <dd>
+                  <% if (u.parkUrl) { %>
+                    <a class="admin-upload-card__location-link" href="<%= u.parkUrl %>" target="_blank" rel="noopener noreferrer"><%= u.parkName || 'Not recorded' %></a>
+                  <% } else { %>
+                    <%= u.parkName || 'Not recorded' %>
+                  <% } %>
+                </dd>
               </div>
               <% if (u.campgroundName) { %>
                 <div>
                   <dt>Campground</dt>
-                  <dd><%= u.campgroundName %></dd>
+                  <dd>
+                    <% if (u.campgroundUrl) { %>
+                      <a class="admin-upload-card__location-link" href="<%= u.campgroundUrl %>" target="_blank" rel="noopener noreferrer"><%= u.campgroundName %></a>
+                    <% } else { %>
+                      <%= u.campgroundName %>
+                    <% } %>
+                  </dd>
                 </div>
               <% } %>
               <% if (u.campsiteName) { %>

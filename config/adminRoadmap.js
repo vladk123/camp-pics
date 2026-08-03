@@ -324,6 +324,7 @@ const roadmapDefinition = {
             'Uploads and users now have clearer sections with accessible status badges and controls.',
             'Loading, empty and error states are included for the existing pagination controls.',
             'Existing administrator APIs and Block/Unblock behavior remain unchanged.',
+            'Recent-upload Park and Campground links now open the corresponding public location in a new tab.',
           ],
           completedOn: '2026-08-03',
         },
