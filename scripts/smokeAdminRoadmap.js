@@ -128,7 +128,7 @@ function validateRoadmap() {
 
   for (const id of REQUIRED_ITEM_IDS) assert(itemsById.has(id));
   assert(
-    itemsById.get('schedule-media-cleanup-worker').status === 'in_progress',
+    itemsById.get('schedule-media-cleanup-worker').status === 'blocked',
   );
   assert(itemsById.get('source-controlled-admin-roadmap').status === 'completed');
 

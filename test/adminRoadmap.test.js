@@ -163,8 +163,9 @@ describe('authoritative administrator roadmap configuration', () => {
       activePhases.map(phase => phase.id),
       REQUIRED_PHASE_IDS.slice(0, 3),
     );
-    assert.equal(activeIds.length, 13);
+    assert.equal(activeIds.length, 12);
     assert.deepEqual(completedIds, [
+      'restore-production-shaped-staging-database',
       'source-controlled-admin-roadmap',
       'redesign-admin-dashboard',
       'auth-session-hardening',
@@ -183,29 +184,70 @@ describe('authoritative administrator roadmap configuration', () => {
     assert.equal(activeIds.some(id => completedIds.includes(id)), false);
     assert.deepEqual(getRoadmapSummary(), {
       total: 22,
-      active: 13,
+      active: 12,
       planned: 5,
-      inProgress: 1,
+      inProgress: 0,
       blocked: 7,
-      completed: 9,
+      completed: 10,
     });
   });
 
-  test('tracks scheduled cleanup code as in progress pending staging enablement', () => {
+  test('tracks scheduled cleanup as deferred pending explicit future approval', () => {
     const item = allItems().find(
       candidate => candidate.id === 'schedule-media-cleanup-worker',
     );
 
-    assert.equal(item.status, 'in_progress');
+    assert.equal(item.status, 'blocked');
     assert.equal(item.completedOn, null);
     assert.deepEqual(item.notes, [
       'Heroku Scheduler was selected for the current simple recurring workload.',
       'The intended command is `npm run media:scheduled-cleanup`.',
       'The intended frequency is every 10 minutes.',
-      'Code and documentation are complete after this pass.',
-      'Staging retry validation and manual Heroku Scheduler configuration remain required before marking the item completed.',
-      'Production scheduling is not approved merely because the command exists.',
+      'The scheduled command and documentation are complete.',
+      'Heroku Scheduler is intentionally not enabled.',
+      'Enabling Heroku Scheduler requires explicit future user approval.',
+      'This deferred activation is not a blocker for current product work or deployment.',
     ]);
+  });
+
+  test('records the completed direct staging copy without claiming a backup', () => {
+    const item = allItems().find(
+      candidate => candidate.id === 'restore-production-shaped-staging-database',
+    );
+    const itemText = JSON.stringify(item);
+
+    assert.equal(item.status, 'completed');
+    assert.equal(item.completedOn, '2026-08-03');
+    assert.match(item.purpose, /direct, read-only copy from production/u);
+    assert.match(itemText, /existing MongoDB Node driver/u);
+    assert.match(itemText, /No local backup archive or disaster-recovery backup was created or verified/u);
+    assert.match(itemText, /Production was read-only and remained unchanged/u);
+    assert.match(itemText, /maintenance mode with `web=0`/u);
+    assert.match(itemText, /Cloudinary and Mailgun credentials remained absent/u);
+    assert.match(itemText, /production-derived data and must remain private and controlled/u);
+    assert.doesNotMatch(itemText, /verified production-shaped backup|Restore it/u);
+  });
+
+  test('records deferred operational validation as non-blocking for the release', () => {
+    const deferredIds = [
+      'run-maintenance-dry-audits',
+      'test-maintenance-apply-idempotence',
+      'verify-mongodb-transaction-support',
+      'validate-isolated-provider-flows',
+      'deployment-smoke-proxy-sessions-rate-limits',
+      'browser-csp-vendor-verification',
+    ];
+
+    for (const id of deferredIds) {
+      const item = allItems().find(candidate => candidate.id === id);
+      assert.equal(item.status === 'completed', false);
+      assert.equal(
+        item.notes.includes(
+          'Deferred operational validation; it is not a blocker for the current dashboard/product release.',
+        ),
+        true,
+      );
+    }
   });
 
   test('records the completed first administrator dashboard pass', () => {
@@ -232,11 +274,12 @@ describe('authoritative administrator roadmap configuration', () => {
     assert.match(first, /^CampPics administrator roadmap\nVersion: 1\nUpdated: 2026-08-03\n/u);
     assert.match(first, /\nActive work\n/u);
     assert.match(first, /Operations and launch readiness/u);
-    assert.match(first, /Schedule the media cleanup worker \[in_progress\] \(schedule-media-cleanup-worker\)/u);
+    assert.match(first, /Schedule the media cleanup worker \[blocked\] \(schedule-media-cleanup-worker\)/u);
     assert.match(first, /  Purpose:/u);
     assert.match(first, /  Dependencies:\n    -/u);
     assert.match(first, /  Done when:\n    -/u);
     assert.match(first, /\nCompleted work\n/u);
+    assert.match(first, /Create a production-shaped staging database \[completed\]/u);
     assert.match(first, /Source-controlled administrator roadmap \[completed\]/u);
     assert.equal(first.endsWith('\n'), true);
     assert.doesNotMatch(first, /<[^>]+>/u);
