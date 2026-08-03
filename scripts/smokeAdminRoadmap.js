@@ -132,6 +132,10 @@ function validateRoadmap() {
     itemsById.get('schedule-media-cleanup-worker').status === 'blocked',
   );
   assert(itemsById.get('source-controlled-admin-roadmap').status === 'completed');
+  const announcement = itemsById.get('upload-incentive-banner');
+  assert(announcement.status === 'completed');
+  assert(announcement.title === 'Site-wide announcements and campaigns');
+  assert(announcement.completedOn === '2026-08-03');
 
   const activeIds = new Set(
     getActiveRoadmapPhases().flatMap(phase => phase.items.map(item => item.id)),

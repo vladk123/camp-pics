@@ -1,5 +1,6 @@
 <!-- Define data to pass through to other ejs partials -->
 <% data = typeof data !== 'undefined' ? data : {}; %>
+<% const activeSiteAnnouncement = typeof siteAnnouncement !== 'undefined' ? siteAnnouncement : null; %>
 
 <!DOCTYPE html>
 <html lang="eng" data-theme="light">
@@ -45,6 +46,9 @@
 		<!--<link rel="icon" type="image/x-icon" href="/images/favicon.ico">   -->
 		<link href="/css/login.css" rel="stylesheet" />
 		<link href="/css/general.css" rel="stylesheet" />
+		<% if (activeSiteAnnouncement) { %>
+			<link href="/css/siteAnnouncement.css" rel="stylesheet" />
+		<% } %>
 		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
 		<!-- <link rel="icon" type="image/x-icon" href="/favicon.ico"> -->
@@ -84,6 +88,9 @@
 		<div id="main-page-content">
 			<div id="layout-wrapper">
 				<%- include('../partials/navbar') %> <!-- including the navbar -->
+				<% if (activeSiteAnnouncement) { %>
+					<%- include('../partials/siteAnnouncement', { siteAnnouncement: activeSiteAnnouncement }) %>
+				<% } %>
 
 				 <!-- Any flash messages to user -->
 
@@ -115,5 +122,8 @@
 		<script type="text/javascript" src="/js/flash-messages.js"></script>
 		<script type="text/javascript" src="/js/general.js"></script>
 		<script type="text/javascript" src="/js/login.js"></script>
+		<% if (activeSiteAnnouncement) { %>
+			<script type="text/javascript" src="/js/siteAnnouncement.js"></script>
+		<% } %>
 	</body>
 </html>

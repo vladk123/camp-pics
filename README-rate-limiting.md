@@ -44,16 +44,20 @@ The account-deletion limiter runs before current-password verification, the
 database transaction, media inventory and cleanup planning, cleanup-job
 creation, session destruction, and immediate cleanup processing.
 
-Administrator user-status mutations use this additional policy:
+Administrator mutations use this existing shared policy:
 
 | Operation | Routes | Window | Maximum attempts |
 | --- | --- | ---: | ---: |
 | Administrator user-status mutation | `POST /a/user/:id/block` and `POST /a/user/:id/unblock` | 15 minutes | 30 |
+| Site-announcement save | `POST /a/announcements` | 15 minutes | 30 |
 
 The administrator user-status limiter is keyed only by the authenticated
 administrator User ID. Block and Unblock share one counter. `isAdmin` executes
 before the limiter, so unauthenticated users and authenticated
 non-administrators are rejected without consuming its capacity. The limiter
+runs on site-announcement saves as well, so all three administrator mutations
+share the same bounded allowance. For announcement saves it runs before form
+validation and singleton database work. The limiter
 runs before target-ID validation, self-target comparison, database work,
 redirect or flash creation, and operational failure logging. Every Block and
 Unblock attempt that reaches it counts, including malformed targets,

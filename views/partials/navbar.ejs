@@ -1,3 +1,6 @@
+<% const navAnnouncement = typeof activeSiteAnnouncement !== 'undefined'
+  ? activeSiteAnnouncement
+  : (typeof siteAnnouncement !== 'undefined' ? siteAnnouncement : null); %>
 <nav id="navbar" <% if(data?.isHomepage) { %>class="home"<% } %>>
   <% if (!data?.isHomepage) { %>
     <div class="nav-tear">
@@ -22,6 +25,15 @@
     <a class="<% if (data?.currentPath?.includes('/all-parks')) { %>highlighted<% } %>" href="/camp/all-parks">Parks</a>
     <a class="<% if (data?.currentPath?.includes('/faq')) { %>highlighted<% } %>" href="/other/faq">FAQ</a>
     <a class="<% if (data?.currentPath?.includes('/contact')) { %>highlighted<% } %>" href="/other/contact">Contact</a>
+
+    <% if (navAnnouncement?.showNavLink) { %>
+      <a
+        id="site-announcement-trigger"
+        class="site-announcement-nav-link"
+        href="#site-announcement-dialog"
+        aria-haspopup="dialog"
+      ><%= navAnnouncement.navLinkText %></a>
+    <% } %>
 
     <% if (currentUser){ %>
       <a class="<% if (data?.currentPath?.includes('/user/account')) { %>highlighted<% } %>" id="nav-my-account-btn" href="/user/account">Account</a>

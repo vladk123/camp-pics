@@ -1,0 +1,17 @@
+<dialog
+  id="site-announcement-dialog"
+  class="site-announcement-dialog"
+  aria-labelledby="site-announcement-title"
+  data-announcement-key="<%= siteAnnouncement.key %>"
+  data-announcement-revision="<%= siteAnnouncement.revision %>"
+  data-announcement-auto-open="<%= siteAnnouncement.autoOpen ? 'true' : 'false' %>"
+>
+  <div class="site-announcement-dialog__content">
+    <h2 id="site-announcement-title"><%= siteAnnouncement.title %></h2>
+    <p class="site-announcement-dialog__message"><%= siteAnnouncement.message %></p>
+    <% if (siteAnnouncement.ctaLabel && siteAnnouncement.ctaUrl) { %>
+      <a id="site-announcement-cta" class="site-announcement-dialog__cta" href="<%= siteAnnouncement.ctaUrl %>"><%= siteAnnouncement.ctaLabel %></a>
+    <% } %>
+    <button id="site-announcement-close" class="site-announcement-dialog__close" type="button">Close</button>
+  </div>
+</dialog>

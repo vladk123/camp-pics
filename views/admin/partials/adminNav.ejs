@@ -5,6 +5,11 @@
     <% if (currentPath === '/a/dashboard') { %>aria-current="page"<% } %>
   >Dashboard</a>
   <a
+    class="admin-section-nav__link<% if (currentPath === '/a/announcements') { %> admin-section-nav__link--current<% } %>"
+    href="/a/announcements"
+    <% if (currentPath === '/a/announcements') { %>aria-current="page"<% } %>
+  >Announcements</a>
+  <a
     class="admin-section-nav__link<% if (currentPath === '/a/roadmap') { %> admin-section-nav__link--current<% } %>"
     href="/a/roadmap"
     <% if (currentPath === '/a/roadmap') { %>aria-current="page"<% } %>

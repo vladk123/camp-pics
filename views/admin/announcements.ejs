@@ -1,0 +1,141 @@
+<% layout('/layouts/boilerplate') %>
+<link rel="stylesheet" href="/css/adminAnnouncements.css">
+
+<div class="admin-announcement-page">
+  <%- include('./partials/adminNav', { currentPath }) %>
+
+  <header class="admin-announcement-header">
+    <div>
+      <p class="admin-announcement-eyebrow">CampPics communications</p>
+      <h1>Site-wide announcement</h1>
+      <p>Publish one plain-text announcement or campaign across CampPics.</p>
+    </div>
+    <span class="admin-announcement-status admin-announcement-status--<%= announcementStatus.toLowerCase() %>">
+      <%= announcementStatus %>
+    </span>
+  </header>
+
+  <p class="admin-announcement-warning">
+    Enabling this announcement publishes it across CampPics when its schedule is active.
+  </p>
+
+  <div class="admin-announcement-grid">
+    <form
+      id="admin-announcement-form"
+      class="admin-announcement-form"
+      action="/a/announcements"
+      method="POST"
+      novalidate
+    >
+      <%- include('../partials/csrfField') %>
+
+      <label class="admin-announcement-check">
+        <input id="announcement-enabled" type="checkbox" name="enabled" value="true"<% if (announcement.enabled) { %> checked<% } %>>
+        <span>Enabled</span>
+      </label>
+
+      <div class="admin-announcement-field">
+        <label for="announcement-title">Title</label>
+        <input
+          id="announcement-title"
+          name="title"
+          type="text"
+          maxlength="80"
+          value="<%= announcement.title %>"
+        >
+      </div>
+
+      <div class="admin-announcement-field">
+        <label for="announcement-message">Message</label>
+        <textarea
+          id="announcement-message"
+          name="message"
+          maxlength="1200"
+          rows="8"
+        ><%= announcement.message %></textarea>
+        <p class="admin-announcement-help">Plain text only. Line breaks are preserved.</p>
+      </div>
+
+      <fieldset class="admin-announcement-options">
+        <legend>Visibility</legend>
+        <label class="admin-announcement-check">
+          <input id="announcement-auto-open" type="checkbox" name="autoOpen" value="true"<% if (announcement.autoOpen) { %> checked<% } %>>
+          <span>Open the announcement automatically</span>
+        </label>
+        <label class="admin-announcement-check">
+          <input id="announcement-show-nav" type="checkbox" name="showNavLink" value="true"<% if (announcement.showNavLink) { %> checked<% } %>>
+          <span>Show a navbar link</span>
+        </label>
+      </fieldset>
+
+      <div id="announcement-nav-text-field" class="admin-announcement-field">
+        <label for="announcement-nav-text">Navbar-link text</label>
+        <input
+          id="announcement-nav-text"
+          name="navLinkText"
+          type="text"
+          maxlength="30"
+          value="<%= announcement.navLinkText %>"
+        >
+      </div>
+
+      <div class="admin-announcement-field">
+        <label for="announcement-cta-label">Optional call-to-action label</label>
+        <input
+          id="announcement-cta-label"
+          name="ctaLabel"
+          type="text"
+          maxlength="40"
+          value="<%= announcement.ctaLabel %>"
+        >
+      </div>
+
+      <div class="admin-announcement-field">
+        <label for="announcement-cta-url">Optional internal URL</label>
+        <input
+          id="announcement-cta-url"
+          name="ctaUrl"
+          type="text"
+          inputmode="url"
+          maxlength="300"
+          placeholder="/camp/all-parks"
+          value="<%= announcement.ctaUrl %>"
+        >
+        <p class="admin-announcement-help">Use a CampPics path beginning with one slash.</p>
+      </div>
+
+      <div class="admin-announcement-date-grid">
+        <div class="admin-announcement-field">
+          <label for="announcement-starts-on">Optional start date</label>
+          <input id="announcement-starts-on" name="startsOn" type="date" value="<%= announcement.startsOn %>">
+        </div>
+        <div class="admin-announcement-field">
+          <label for="announcement-ends-on">Optional end date</label>
+          <input id="announcement-ends-on" name="endsOn" type="date" value="<%= announcement.endsOn %>">
+        </div>
+      </div>
+
+      <label class="admin-announcement-check admin-announcement-check--republish">
+        <input id="announcement-show-again" type="checkbox" name="showAgain" value="true">
+        <span>Show again to dismissed visitors</span>
+      </label>
+
+      <button class="admin-announcement-save" type="submit">Save announcement</button>
+    </form>
+
+    <section class="admin-announcement-preview" aria-labelledby="announcement-preview-heading">
+      <p class="admin-announcement-preview__eyebrow">Live preview</p>
+      <div id="announcement-nav-preview" class="admin-announcement-preview__nav">
+        Navbar: <span id="announcement-nav-preview-text"></span>
+      </div>
+      <div class="admin-announcement-preview__modal">
+        <h2 id="announcement-preview-heading"></h2>
+        <p id="announcement-message-preview" class="admin-announcement-preview__message"></p>
+        <a id="announcement-cta-preview" class="admin-announcement-preview__cta" href="#"></a>
+        <button class="admin-announcement-preview__close" type="button" disabled>Close</button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script src="/js/adminAnnouncements.js"></script>

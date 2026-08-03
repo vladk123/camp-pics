@@ -53,7 +53,7 @@ test('every active unsafe or JavaScript-upload form includes exactly one shared 
     }
   }
 
-  assert.equal(protectedFormCount, 17);
+  assert.equal(protectedFormCount, 18);
 
   const adminUserDetail = stripHtmlComments(
     await readSource('views/admin/userDetail.ejs'),

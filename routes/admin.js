@@ -1,6 +1,7 @@
 import express from "express";
 const router = express.Router();
 import * as admin from '../controllers/admin.js';
+import * as siteAnnouncements from '../controllers/siteAnnouncements.js';
 // const {noDoubleSubmission, isLoggedIn, isLoggedOut, usernameToLowerCaseAndTrim} = from '../middleware';
 import { isAdmin, usernameToLowerCaseAndTrim, catchAsyncErrors } from '../middleware.js'; //
 import passport from 'passport';
@@ -11,6 +12,14 @@ router.route('/dashboard')
 
 router.route('/roadmap')
   .get(isAdmin, catchAsyncErrors(admin.roadmap));
+
+router.route('/announcements')
+  .get(isAdmin, catchAsyncErrors(siteAnnouncements.announcements))
+  .post(
+    isAdmin,
+    adminUserStatusLimiter,
+    catchAsyncErrors(siteAnnouncements.saveAnnouncement),
+  );
 
 router.route('/users/:userId')
   .get(isAdmin, catchAsyncErrors(admin.userDetail));

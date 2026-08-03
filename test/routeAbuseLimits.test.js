@@ -2090,7 +2090,7 @@ describe('POST/DELETE-only route wiring and middleware order', () => {
     }
   });
 
-  test('administrator status limiter appears only on the two intended production POST routes', () => {
+  test('administrator limiter appears only on the three intended production POST routes', () => {
     const unrelatedRouters = [userRouter, otherRouter, campRouter];
     for (const router of unrelatedRouters) {
       for (const layer of router.stack) {
@@ -2116,6 +2116,7 @@ describe('POST/DELETE-only route wiring and middleware order', () => {
     }
 
     assert.deepEqual(actualWiring, [
+      ['/announcements', 'post'],
       ['/user/:id/block', 'post'],
       ['/user/:id/unblock', 'post'],
     ]);
@@ -2993,6 +2994,7 @@ describe('dependency, dead-helper, global-protection, and documentation guards',
       { cwd: root, encoding: 'utf8' },
     );
     const allowedExternalizationFiles = new Set([
+      'public/js/adminAnnouncements.js',
       'public/js/adminDashboard.js',
       'public/js/adminRoadmap.js',
       'public/js/adminUserStatus.js',
@@ -3003,6 +3005,7 @@ describe('dependency, dead-helper, global-protection, and documentation guards',
       'public/js/login.js',
       'public/js/mediaRendering.js',
       'public/js/showPark.js',
+      'public/js/siteAnnouncement.js',
       'public/js/theme.js',
     ]);
     const unexpectedBrowserChanges = browserStatus
@@ -3021,8 +3024,10 @@ describe('dependency, dead-helper, global-protection, and documentation guards',
           'config/adminRoadmap.js',
           'controllers/admin.js',
           'controllers/media.js',
+          'controllers/siteAnnouncements.js',
           'controllers/users.js',
           'middleware.js',
+          'models/siteAnnouncement.js',
           'package.json',
           'package-lock.json',
         ]).has(line.slice(3).replaceAll('\\', '/'))

@@ -241,6 +241,7 @@ describe('administrator dashboard summary controller', () => {
     assert.deepEqual(routePaths, [
       '/dashboard',
       '/roadmap',
+      '/announcements',
       '/users/:userId',
       '/user/:id/block',
       '/user/:id/unblock',

@@ -42,6 +42,7 @@ import {
 	cspNonceSource,
 } from './utils/cspNonce.js';
 import { consumeGa4Event } from './utils/ga4EventBootstrap.js';
+import { loadSiteAnnouncement } from './utils/siteAnnouncementMiddleware.js';
 
 import userRoutes from './routes/users.js';
 import campRoutes from './routes/camp.js';
@@ -302,6 +303,7 @@ app.use(csrfSynchronisedProtection);
 app.use(exposeCsrfToken);
 
 //WEBSITE-WIDE MESSAGES FROM MONGO DB
+app.use(loadSiteAnnouncement);
 
 //USE ROUTE FILES 
 app.use('/user', userRoutes);

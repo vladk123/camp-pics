@@ -162,14 +162,15 @@ describe('authoritative administrator roadmap configuration', () => {
 
     assert.deepEqual(
       activePhases.map(phase => phase.id),
-      REQUIRED_PHASE_IDS.slice(0, 3),
+      [REQUIRED_PHASE_IDS[0], REQUIRED_PHASE_IDS[2]],
     );
-    assert.equal(activeIds.length, 12);
+    assert.equal(activeIds.length, 11);
     assert.deepEqual(completedIds, [
       'restore-production-shaped-staging-database',
       'source-controlled-admin-roadmap',
       'redesign-admin-dashboard',
       'admin-user-detail',
+      'upload-incentive-banner',
       'auth-session-hardening',
       'csrf-csp-safe-rendering',
       'bounded-media-upload-hardening',
@@ -186,11 +187,11 @@ describe('authoritative administrator roadmap configuration', () => {
     assert.equal(activeIds.some(id => completedIds.includes(id)), false);
     assert.deepEqual(getRoadmapSummary(), {
       total: 23,
-      active: 12,
-      planned: 5,
+      active: 11,
+      planned: 4,
       inProgress: 0,
       blocked: 7,
-      completed: 11,
+      completed: 12,
     });
   });
 
@@ -283,8 +284,8 @@ describe('authoritative administrator roadmap configuration', () => {
       userDetail.notIncluded.includes('Session or token inspection.'),
       true,
     );
-    assert.equal(announcements.status, 'planned');
-    assert.equal(announcements.completedOn, null);
+    assert.equal(announcements.status, 'completed');
+    assert.equal(announcements.completedOn, '2026-08-03');
     assert.equal(announcements.title, 'Site-wide announcements and campaigns');
     for (const requirement of [
       'One active announcement at a time.',
@@ -307,6 +308,16 @@ describe('authoritative administrator roadmap configuration', () => {
     ]) {
       assert.equal(announcements.notIncluded.includes(excluded), true, excluded);
     }
+    assert.deepEqual(announcements.notes, [
+      'The completed first version includes one editable site-wide announcement.',
+      'Administrators can enable or disable the announcement.',
+      'The announcement supports an optional auto-open modal.',
+      'Dismissal is revision-based and stored only in the visitor browser.',
+      'The optional navbar link has administrator-selected text.',
+      'Optional date scheduling and an optional validated internal CTA are supported.',
+      'Monthly upload promotion and winner-announcement use cases are supported.',
+      'Announcement content is plain text and rendered safely against XSS.',
+    ]);
   });
 
   test('produces deterministic plain text with active and completed work', () => {
@@ -875,7 +886,15 @@ describe('administrator roadmap smoke and source guards', () => {
     const headLock = JSON.parse(headSource('package-lock.json'));
 
     assert.doesNotMatch(app, /adminRoadmap|smokeAdminRoadmap/u);
-    assert.equal(gitStatus('models').trim(), '');
+    assert.equal(gitStatus(
+      'models/email.js',
+      'models/mediaCleanupJob.js',
+      'models/park.js',
+      'models/parkSearch.js',
+      'models/token.js',
+      'models/upload.js',
+      'models/user.js',
+    ).trim(), '');
     assert.equal(gitStatus('package-lock.json').trim(), '');
     assert.deepEqual(packageJson.dependencies, headPackage.dependencies);
     assert.deepEqual(packageLock.packages, headLock.packages);
@@ -923,7 +942,17 @@ describe('administrator roadmap smoke and source guards', () => {
       current,
       /return res\.json\(\{\s*uploads,\s*users,\s*hasMoreUploads,\s*hasMoreUsers,\s*\}\);/u,
     );
-    assert.equal(gitStatus('models', 'middleware.js', 'utils/routeAbuseLimits.js').trim(), '');
+    assert.equal(gitStatus(
+      'models/email.js',
+      'models/mediaCleanupJob.js',
+      'models/park.js',
+      'models/parkSearch.js',
+      'models/token.js',
+      'models/upload.js',
+      'models/user.js',
+      'middleware.js',
+      'utils/routeAbuseLimits.js',
+    ).trim(), '');
 
     const blockRoute = routeFor('/user/:id/block');
     const unblockRoute = routeFor('/user/:id/unblock');
@@ -948,7 +977,6 @@ describe('administrator roadmap smoke and source guards', () => {
       'config/cloudinary.js',
       'config/runtimeConfig.js',
       'config/runtimeStartup.js',
-      'app.js',
     ).trim(), '');
   });
 });

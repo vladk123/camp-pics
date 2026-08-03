@@ -45,7 +45,7 @@ describe('administrator Block/Unblock route guards', () => {
     assert.equal(blockRoute.stack[1].handle, unblockRoute.stack[1].handle);
   });
 
-  test('dashboard and all other administrator handlers have no status limiter', () => {
+  test('the shared administrator limiter adds only the announcement save route', () => {
     const limiterRoutes = [];
     for (const layer of adminRouter.stack) {
       if (!layer.route) continue;
@@ -57,6 +57,7 @@ describe('administrator Block/Unblock route guards', () => {
     }
 
     assert.deepEqual(limiterRoutes, [
+      ['/announcements', 'post'],
       ['/user/:id/block', 'post'],
       ['/user/:id/unblock', 'post'],
     ]);

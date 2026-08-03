@@ -393,7 +393,7 @@ const roadmapDefinition = {
         {
           id: 'upload-incentive-banner',
           title: 'Site-wide announcements and campaigns',
-          status: 'planned',
+          status: 'completed',
           purpose: 'Provide one safe administrator-managed site-wide announcement or campaign at a time.',
           scope: [
             'One active announcement at a time.',
@@ -422,9 +422,16 @@ const roadmapDefinition = {
             'Revision dismissal works without account-level tracking.',
           ],
           notes: [
-            'This wording broadens the planned upload incentive into a reusable announcement system; implementation is not part of the administrator user-detail pass.',
+            'The completed first version includes one editable site-wide announcement.',
+            'Administrators can enable or disable the announcement.',
+            'The announcement supports an optional auto-open modal.',
+            'Dismissal is revision-based and stored only in the visitor browser.',
+            'The optional navbar link has administrator-selected text.',
+            'Optional date scheduling and an optional validated internal CTA are supported.',
+            'Monthly upload promotion and winner-announcement use cases are supported.',
+            'Announcement content is plain text and rendered safely against XSS.',
           ],
-          completedOn: null,
+          completedOn: '2026-08-03',
         },
       ],
     },
