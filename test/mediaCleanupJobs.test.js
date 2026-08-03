@@ -55,6 +55,7 @@ function makeModel(
   {
     failDeleteOnce = false,
     failUpdateOnce = false,
+    beforeFindReturn = null,
   } = {},
 ) {
   const state = {
@@ -63,6 +64,8 @@ function makeModel(
     failUpdateOnce,
   };
   const calls = {
+    claimAttempts: 0,
+    claimedLeaseTokens: [],
     claims: 0,
     updates: [],
     deletes: [],
@@ -70,9 +73,11 @@ function makeModel(
 
   const model = {
     async findOneAndUpdate(filter, update) {
+      calls.claimAttempts += 1;
       const job = state.jobs.find(item => isEligible(item, filter));
       if (!job) return null;
       calls.claims += 1;
+      calls.claimedLeaseTokens.push(update.$set.leaseToken);
       Object.assign(job, clone(update.$set));
       job.attemptCount += update.$inc.attemptCount;
       return clone(job);
@@ -110,10 +115,12 @@ function makeModel(
       return { deletedCount: 1 };
     },
     async find(filter, projection, options) {
-      return state.jobs
+      const visibleJobs = state.jobs
         .filter(job => isEligible(job, filter))
         .slice(0, options.limit)
         .map(job => ({ _id: job._id }));
+      if (beforeFindReturn) await beforeFindReturn(clone(visibleJobs));
+      return visibleJobs;
     },
   };
   return { calls, model, state };
@@ -188,6 +195,70 @@ test('cleanup-job schema is focused, validates public IDs, and adds no index', a
 });
 
 describe('media cleanup claiming and provider handling', () => {
+  test('overlapping batches discover one job but only one lease performs provider work', async () => {
+    const job = pendingJob();
+    const bothBatchesDiscovered = deferred();
+    const discoveries = [];
+    const { calls, model, state } = makeModel([job], {
+      async beforeFindReturn(visibleJobs) {
+        discoveries.push(visibleJobs.map(item => item._id.toString()));
+        if (discoveries.length === 2) bothBatchesDiscovered.resolve();
+        await bothBatchesDiscovered.promise;
+      },
+    });
+    const providerCalls = [];
+    const processorDependencies = {
+      CleanupJobModel: model,
+      cloudinaryClient: {
+        uploader: {
+          async destroy(publicId) {
+            providerCalls.push(publicId);
+            return { result: 'ok' };
+          },
+        },
+      },
+      clock: () => new Date('2026-07-30T12:00:00.000Z'),
+      leaseMs: 60_000,
+    };
+    const firstProcessor = createMediaCleanupJobProcessor({
+      ...processorDependencies,
+      leaseTokenGenerator: () => 'first-batch-lease',
+    });
+    const secondProcessor = createMediaCleanupJobProcessor({
+      ...processorDependencies,
+      leaseTokenGenerator: () => 'second-batch-lease',
+    });
+
+    const summaries = await Promise.all([
+      firstProcessor.processPendingJobs({ limit: 50 }),
+      secondProcessor.processPendingJobs({ limit: 50 }),
+    ]);
+    const completedRun = summaries.find(summary => summary.completed === 1);
+    const overlappingRun = summaries.find(summary => summary.completed === 0);
+
+    assert.deepEqual(discoveries, [
+      [job._id.toString()],
+      [job._id.toString()],
+    ]);
+    assert.equal(calls.claimAttempts, 2);
+    assert.equal(calls.claims, 1);
+    assert.deepEqual(providerCalls, ['camp-parks/photo']);
+    assert.ok(completedRun);
+    assert.ok(overlappingRun);
+    assert.equal(overlappingRun.scanned, 1);
+    assert.equal(overlappingRun.claimed, 0);
+    assert.equal(
+      overlappingRun.stillPending + overlappingRun.skipped,
+      1,
+    );
+    assert.equal(calls.deletes.length, 1);
+    assert.equal(
+      calls.deletes[0].leaseToken,
+      calls.claimedLeaseTokens[0],
+    );
+    assert.equal(state.jobs.length, 0);
+  });
+
   test('two workers cannot claim the same active lease', async () => {
     const job = pendingJob();
     const { model, state } = makeModel([job]);
@@ -256,7 +327,7 @@ describe('media cleanup claiming and provider handling', () => {
 
   test('a stale worker cannot finalize after another worker reclaims', async () => {
     const job = pendingJob();
-    const { model } = makeModel([job]);
+    const { calls, model, state } = makeModel([job]);
     const firstProvider = deferred();
     let providerCall = 0;
     let now = new Date('2026-07-30T12:00:00.000Z');
@@ -289,11 +360,16 @@ describe('media cleanup claiming and provider handling', () => {
 
     assert.equal(currentWorker.completed, true);
     assert.equal(staleResult.staleLease, true);
+    assert.deepEqual(
+      calls.deletes.map(call => call.leaseToken),
+      ['lease-2', 'lease-1'],
+    );
+    assert.equal(state.jobs.length, 0);
   });
 
   test('a stale worker cannot release another worker’s active lease', async () => {
     const job = pendingJob();
-    const { model, state } = makeModel([job]);
+    const { calls, model, state } = makeModel([job]);
     const firstProvider = deferred();
     const secondProvider = deferred();
     let providerCall = 0;
@@ -327,10 +403,13 @@ describe('media cleanup claiming and provider handling', () => {
     const staleResult = await staleWorker;
 
     assert.equal(staleResult.staleLease, true);
+    assert.equal(calls.updates[0].filter.leaseToken, 'lease-1');
     assert.equal(state.jobs[0].status, 'processing');
     assert.equal(state.jobs[0].leaseToken, 'lease-2');
     secondProvider.resolve({ result: 'ok' });
     assert.equal((await currentWorker).completed, true);
+    assert.equal(calls.deletes[0].leaseToken, 'lease-2');
+    assert.equal(state.jobs.length, 0);
   });
 
   for (const providerResult of ['ok', 'not found']) {

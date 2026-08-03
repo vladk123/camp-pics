@@ -292,7 +292,7 @@ describe('Mongoose 8.24.2 security upgrade', () => {
     assert.deepEqual(violations, []);
   });
 
-  test('production models and database behavior outside the admin roadmap remain unchanged', () => {
+  test('production models and database behavior outside approved operational files remain unchanged', () => {
     const protectedPaths = [
       'app.js',
       'config',
@@ -313,12 +313,14 @@ describe('Mongoose 8.24.2 security upgrade', () => {
       .split(/\r?\n/u)
       .filter(Boolean)
       .map(line => line.slice(3).replaceAll('\\', '/'));
-    const allowedRoadmapChanges = new Set([
+    const allowedOperationalChanges = new Set([
       'config/adminRoadmap.js',
       'controllers/admin.js',
       'public/css/adminRoadmap.css',
       'public/js/adminRoadmap.js',
       'routes/admin.js',
+      'scripts/README-media-cleanup.md',
+      'scripts/runScheduledMediaCleanup.js',
       'scripts/smokeAdminRoadmap.js',
       'views/admin/dashboard.ejs',
       'views/admin/partials/adminNav.ejs',
@@ -326,7 +328,7 @@ describe('Mongoose 8.24.2 security upgrade', () => {
       'views/partials/navbar.ejs',
     ]);
     const unexpectedChanges = changed.filter(file =>
-      !allowedRoadmapChanges.has(file)
+      !allowedOperationalChanges.has(file)
     );
 
     assert.deepEqual(unexpectedChanges, []);

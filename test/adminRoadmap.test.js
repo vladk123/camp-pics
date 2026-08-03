@@ -183,11 +183,28 @@ describe('authoritative administrator roadmap configuration', () => {
     assert.deepEqual(getRoadmapSummary(), {
       total: 22,
       active: 14,
-      planned: 7,
-      inProgress: 0,
+      planned: 6,
+      inProgress: 1,
       blocked: 7,
       completed: 8,
     });
+  });
+
+  test('tracks scheduled cleanup code as in progress pending staging enablement', () => {
+    const item = allItems().find(
+      candidate => candidate.id === 'schedule-media-cleanup-worker',
+    );
+
+    assert.equal(item.status, 'in_progress');
+    assert.equal(item.completedOn, null);
+    assert.deepEqual(item.notes, [
+      'Heroku Scheduler was selected for the current simple recurring workload.',
+      'The intended command is `npm run media:scheduled-cleanup`.',
+      'The intended frequency is every 10 minutes.',
+      'Code and documentation are complete after this pass.',
+      'Staging retry validation and manual Heroku Scheduler configuration remain required before marking the item completed.',
+      'Production scheduling is not approved merely because the command exists.',
+    ]);
   });
 
   test('produces deterministic plain text with active and completed work', () => {
@@ -198,7 +215,7 @@ describe('authoritative administrator roadmap configuration', () => {
     assert.match(first, /^CampPics administrator roadmap\nVersion: 1\nUpdated: 2026-08-02\n/u);
     assert.match(first, /\nActive work\n/u);
     assert.match(first, /Operations and launch readiness/u);
-    assert.match(first, /Schedule the media cleanup worker \[planned\] \(schedule-media-cleanup-worker\)/u);
+    assert.match(first, /Schedule the media cleanup worker \[in_progress\] \(schedule-media-cleanup-worker\)/u);
     assert.match(first, /  Purpose:/u);
     assert.match(first, /  Dependencies:\n    -/u);
     assert.match(first, /  Done when:\n    -/u);
@@ -797,13 +814,12 @@ describe('administrator roadmap smoke and source guards', () => {
     }
   });
 
-  test('maintenance tools and operational provider behavior are outside the patch', () => {
+  test('cleanup processor and operational provider behavior remain outside the patch', () => {
     assert.equal(gitStatus(
       'scripts/processMediaCleanupJobs.js',
       'scripts/reconcileMediaIdentifiers.js',
       'scripts/reconcileEmailLogs.js',
       'scripts/reconcileAuthArtifacts.js',
-      'scripts/README-media-cleanup.md',
       'scripts/README-media-identifiers.md',
       'scripts/README-email-logs.md',
       'scripts/README-auth-artifacts.md',

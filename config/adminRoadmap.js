@@ -30,7 +30,7 @@ const roadmapDefinition = {
         {
           id: 'schedule-media-cleanup-worker',
           title: 'Schedule the media cleanup worker',
-          status: 'planned',
+          status: 'in_progress',
           purpose: 'Reliably process durable MediaCleanupJob records created when post-commit Cloudinary cleanup cannot finish immediately.',
           scope: [
             'Choose the appropriate Heroku scheduling mechanism.',
@@ -56,7 +56,12 @@ const roadmapDefinition = {
             'Production enablement has a clear rollback/disable procedure.',
           ],
           notes: [
-            'This is the next implementation task after the roadmap pass.',
+            'Heroku Scheduler was selected for the current simple recurring workload.',
+            'The intended command is `npm run media:scheduled-cleanup`.',
+            'The intended frequency is every 10 minutes.',
+            'Code and documentation are complete after this pass.',
+            'Staging retry validation and manual Heroku Scheduler configuration remain required before marking the item completed.',
+            'Production scheduling is not approved merely because the command exists.',
           ],
           completedOn: null,
         },
