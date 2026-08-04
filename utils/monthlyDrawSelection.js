@@ -13,11 +13,9 @@ import {
   buildMonthlyDrawNoUploadSourceReference,
   buildMonthlyDrawResultId,
   isMonthlyDrawEntrantAccountEligible,
+  isMonthlyDrawUploadSelectableStatus,
   isValidMonthKey,
 } from './monthlyDraw.js';
-
-export const MONTHLY_DRAW_SELECTION_BLOCKED_MESSAGE =
-  'Monthly draw selection is blocked because uploads are still awaiting review.';
 
 export const MONTHLY_DRAW_UPLOAD_SELECTION_PROJECTION = Object.freeze({
   _id: 1,
@@ -98,7 +96,7 @@ async function findOneLean(Model, filter, projection, session) {
 }
 
 function isCurrentUploadEntry(upload, monthKey) {
-  return upload?.monthlyDraw?.status === 'eligible' &&
+  return isMonthlyDrawUploadSelectableStatus(upload?.monthlyDraw?.status) &&
     upload.monthlyDraw.monthKey === monthKey &&
     upload.monthlyDraw.rulesVersion === MONTHLY_DRAW_RULES_VERSION;
 }
@@ -224,7 +222,6 @@ export function createMonthlyDrawSelectionService({
   async function readEligiblePool(monthKey, session) {
     const uploadRecords = await findLean(UploadModel, {
       monthlyDraw: { $exists: true },
-      'monthlyDraw.status': 'eligible',
       'monthlyDraw.monthKey': monthKey,
       'monthlyDraw.rulesVersion': MONTHLY_DRAW_RULES_VERSION,
     }, MONTHLY_DRAW_UPLOAD_SELECTION_PROJECTION, session);
@@ -286,7 +283,7 @@ export function createMonthlyDrawSelectionService({
       monthKey,
       pendingUploads,
       ...pool.summary,
-      selectionReady: pendingUploads === 0 && !existing,
+      selectionReady: !existing,
       resultAlreadyExists: existing,
     });
   }
@@ -326,16 +323,6 @@ export function createMonthlyDrawSelectionService({
           }
 
           const pendingUploads = await countPending(monthKey, session);
-          if (pendingUploads > 0) {
-            transactionOutcome = Object.freeze({
-              state: 'blocked-pending-review',
-              monthKey,
-              pendingUploads,
-              message: MONTHLY_DRAW_SELECTION_BLOCKED_MESSAGE,
-            });
-            return;
-          }
-
           const pool = await readEligiblePool(monthKey, session);
           const candidates = selectWeightedDistinctCandidates(
             pool.entries,
@@ -360,7 +347,7 @@ export function createMonthlyDrawSelectionService({
             poolSummary: {
               ...pool.summary,
               candidatesSelected: candidates.length,
-              pendingUploadsAtSelection: 0,
+              pendingUploadsAtSelection: pendingUploads,
             },
           };
           const created = await ResultModel.create([resultData], {

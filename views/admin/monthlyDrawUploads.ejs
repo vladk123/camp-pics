@@ -9,7 +9,7 @@
     <div>
       <p class="admin-dashboard-eyebrow">CampPics operations</p>
       <h1>Monthly draw upload review</h1>
-      <p>Review prospective upload entries without changing whether their photos or videos are visible on CampPics.</p>
+      <p>Uploads from qualifying accounts enter automatically, so no approval action is required. Use this page to mark unsuitable uploads ineligible. An ineligible upload can later be restored to eligible without changing whether its photo or video is visible on CampPics.</p>
     </div>
     <a class="admin-dashboard-link admin-dashboard-link--secondary" href="/a/dashboard">Back to dashboard</a>
   </header>
@@ -22,10 +22,10 @@
     <div>
       <label for="monthly-draw-status-filter">Qualification status</label>
       <select id="monthly-draw-status-filter" name="status">
-        <option value="pending"<% if (filters.status === 'pending') { %> selected<% } %>>Pending</option>
         <option value="eligible"<% if (filters.status === 'eligible') { %> selected<% } %>>Eligible</option>
         <option value="ineligible"<% if (filters.status === 'ineligible') { %> selected<% } %>>Ineligible</option>
         <option value="all"<% if (filters.status === 'all') { %> selected<% } %>>All statuses</option>
+        <option value="pending"<% if (filters.status === 'pending') { %> selected<% } %>>Legacy pending</option>
       </select>
     </div>
     <button type="submit">Apply filters</button>
@@ -33,8 +33,8 @@
 
   <dl class="admin-monthly-draw-summary" aria-label="Selected month review counts">
     <div>
-      <dt>Pending</dt>
-      <dd><%= counts.pending %></dd>
+      <dt>Currently in the draw</dt>
+      <dd><%= counts.currentlyInDraw %></dd>
     </div>
     <div>
       <dt>Eligible</dt>
@@ -45,7 +45,11 @@
       <dd><%= counts.ineligible %></dd>
     </div>
     <div>
-      <dt>Total prospective uploads</dt>
+      <dt>Legacy pending</dt>
+      <dd><%= counts.pending %></dd>
+    </div>
+    <div>
+      <dt>Total draw-tracked uploads</dt>
       <dd><%= counts.total %></dd>
     </div>
   </dl>
@@ -53,7 +57,7 @@
   <section class="admin-monthly-draw-results" aria-labelledby="monthly-draw-results-heading">
     <header>
       <h2 id="monthly-draw-results-heading"><%= filters.month %> upload entries</h2>
-      <p>Showing <%= filters.status === 'all' ? 'all statuses' : filters.status %>, page <%= filters.page %> of <%= totalPages %>.</p>
+      <p>Showing <%= filters.status === 'all' ? 'all statuses' : filters.status === 'pending' ? 'legacy pending' : filters.status %>, page <%= filters.page %> of <%= totalPages %>.</p>
     </header>
 
     <% if (uploads.length === 0) { %>
@@ -87,7 +91,7 @@
               <header class="admin-monthly-draw-card__header">
                 <div class="admin-upload-card__badges">
                   <span class="admin-status-badge admin-status-badge--media"><%= upload.mediaType === 'photo' ? 'Photo' : 'Video' %></span>
-                  <span class="admin-status-badge admin-status-badge--draw admin-status-badge--draw-<%= upload.status %>">Draw: <%= upload.status === 'pending' ? 'Pending' : upload.status === 'eligible' ? 'Eligible' : 'Ineligible' %></span>
+                  <span class="admin-status-badge admin-status-badge--draw admin-status-badge--draw-<%= upload.status %>">Draw: <%= upload.status === 'pending' ? 'Eligible (legacy)' : upload.status === 'eligible' ? 'Eligible' : 'Ineligible' %></span>
                 </div>
                 <time<% if (uploadedDateIsValid) { %> datetime="<%= uploadedDate.toISOString() %>"<% } %>><%= uploadedDateIsValid ? uploadedDate.toLocaleString() : 'Upload date unavailable' %></time>
               </header>
@@ -156,8 +160,7 @@
                 <div>
                   <label for="draw-status-<%= upload._id %>">Qualification status</label>
                   <select id="draw-status-<%= upload._id %>" name="status">
-                    <option value="pending"<% if (upload.status === 'pending') { %> selected<% } %>>Pending</option>
-                    <option value="eligible"<% if (upload.status === 'eligible') { %> selected<% } %>>Eligible</option>
+                    <option value="eligible"<% if (upload.status === 'eligible' || upload.status === 'pending') { %> selected<% } %>>Eligible</option>
                     <option value="ineligible"<% if (upload.status === 'ineligible') { %> selected<% } %>>Ineligible</option>
                   </select>
                 </div>

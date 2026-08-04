@@ -17,6 +17,7 @@ import {
 import {
   MONTHLY_DRAW_UPLOAD_STATUSES,
   deriveEasternMonthKey,
+  isMonthlyDrawUploadSelectableStatus,
 } from '../utils/monthlyDraw.js';
 
 // import { getIP } from '../utils/getIP.js'
@@ -91,6 +92,9 @@ const ADMIN_CAMPSITE_URL_PATTERN =
 const ADMIN_USER_DETAIL_PAGE_SIZE = 20;
 const ADMIN_LOGIN_ACTIVITY_LIMIT = 20;
 const MONTHLY_DRAW_UPLOAD_STATUS_SET = new Set(MONTHLY_DRAW_UPLOAD_STATUSES);
+const MONTHLY_DRAW_SELECTABLE_UPLOAD_STATUSES = Object.freeze(
+  MONTHLY_DRAW_UPLOAD_STATUSES.filter(isMonthlyDrawUploadSelectableStatus),
+);
 
 function isValidAdminLocationSlug(value) {
   return typeof value === 'string' &&
@@ -420,15 +424,18 @@ export function createAdminDashboardHandler({
         dashboardTotalUsers,
         verifiedUsers,
         blockedUsers,
-        pendingMonthlyDrawUploads,
+        currentMonthlyDrawUploads,
       ] = await Promise.all([
         UploadModel.countDocuments({}),
         UserModel.countDocuments({}),
         UserModel.countDocuments({ email_verified: true }),
         UserModel.countDocuments({ blocked: true }),
         UploadModel.countDocuments({
+          monthlyDraw: { $exists: true },
           'monthlyDraw.monthKey': monthlyDrawMonthKey,
-          'monthlyDraw.status': 'pending',
+          'monthlyDraw.status': {
+            $in: [...MONTHLY_DRAW_SELECTABLE_UPLOAD_STATUSES],
+          },
         }),
       ]);
       const dashboardStats = Object.freeze({
@@ -448,9 +455,9 @@ export function createAdminDashboardHandler({
           blockedUsers,
           'blockedUsers',
         ),
-        pendingMonthlyDrawUploads: requireNumericDashboardCount(
-          pendingMonthlyDrawUploads,
-          'pendingMonthlyDrawUploads',
+        currentMonthlyDrawUploads: requireNumericDashboardCount(
+          currentMonthlyDrawUploads,
+          'currentMonthlyDrawUploads',
         ),
       });
 

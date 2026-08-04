@@ -226,24 +226,24 @@ describe('Scheduler-ready combined selection and notification workflow', () => {
     assert.equal(harness.calls.notify.length, 1);
   });
 
-  test('pending review exits nonzero without provider initialization or notification', async () => {
+  test('legacy pending records do not prevent first-day notification', async () => {
     const harness = createHarness({
       selectionOutcome: {
-        state: 'blocked-pending-review', monthKey: MONTH,
-        pendingUploads: 3,
+        state: 'result', created: true, monthKey: MONTH,
+        result: {
+          ...result(),
+          poolSummary: { pendingUploadsAtSelection: 3 },
+        },
       },
     });
-    delete harness.dependencies.notificationService;
     const report = await runScheduledMonthlyDraw([], harness.dependencies);
-    assert.equal(report.selectionState, 'blocked-pending-review');
-    assert.equal(report.pendingReviewCount, 3);
-    assert.equal(report.notificationState, 'not-attempted');
-    assert.equal(harness.calls.notify.length, 0);
+    assert.equal(report.selectionState, 'newly-created');
+    assert.equal(report.notificationState, 'sent');
+    assert.equal(harness.calls.notify.length, 1);
     assert.equal(harness.calls.initializeEmail, 0);
     assert.equal(harness.calls.createNotification, 0);
     assert.equal(harness.calls.disconnect, 1);
-    assert.deepEqual(harness.exits,
-      [SCHEDULED_MONTHLY_DRAW_EXIT_CODES.pendingReviews]);
+    assert.deepEqual(harness.exits, []);
   });
 
   test('active notification lease is a successful no-op', async () => {
@@ -345,6 +345,7 @@ describe('scheduled monthly draw source and package guards', () => {
     assert.doesNotMatch(`${adminRoutes}\n${otherRoutes}`,
       /monthly-draw.*(?:notify|select|result)/iu);
     assert.doesNotMatch(scheduled, /--apply|--month|--dry-run/iu);
+    assert.doesNotMatch(scheduled, /blocked-pending-review/iu);
   });
 
   test('preserves dependencies, package lock and exact engines', async () => {

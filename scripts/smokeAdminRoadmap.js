@@ -148,6 +148,9 @@ function validateRoadmap() {
   );
   assert(monthlyQualification.status === 'completed');
   assert(monthlyQualification.completedOn === '2026-08-03');
+  assert(monthlyQualification.notes.some(note =>
+    note === 'Pending remains only for backward compatibility, and legacy pending records remain selectable.'
+  ));
   const monthlySelection = itemsById.get(
     'monthly-draw-selection-and-notification',
   );
@@ -159,10 +162,21 @@ function validateRoadmap() {
   assert(monthlySelection.notes.some(note =>
     note === 'A Scheduler-ready combined command self-gates to the first Eastern calendar day.'
   ));
+  assert(monthlySelection.notes.some(note =>
+    note === 'Legacy pending Upload records do not block selection.'
+  ));
   const monthlyScheduler = itemsById.get('monthly-draw-scheduler-activation');
-  assert(monthlyScheduler.status === 'blocked');
+  assert(monthlyScheduler.status === 'in_progress');
   assert(monthlyScheduler.notes.some(note =>
-    note === 'Production Heroku Scheduler jobs are not configured.'
+    note.startsWith('User-reported external configuration:') &&
+      note.includes('06:00 UTC') && note.includes('11:00 UTC') &&
+      note.includes('did not inspect or verify Heroku')
+  ));
+  assert(monthlyScheduler.notes.some(note =>
+    note === 'A third daily backup at 23:00 UTC remains recommended.'
+  ));
+  assert(monthlyScheduler.notes.some(note =>
+    note === 'The latest committed code still needs deployment and verification.'
   ));
 
   const activeIds = new Set(

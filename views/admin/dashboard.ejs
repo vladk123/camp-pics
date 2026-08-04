@@ -41,11 +41,11 @@
       <dd class="admin-summary-card__helper">Access restricted</dd>
     </div>
     <div class="admin-summary-card admin-summary-card--draw-review">
-      <dt>Uploads awaiting draw review</dt>
-      <dd class="admin-summary-card__value"><%= dashboardStats.pendingMonthlyDrawUploads ?? 0 %></dd>
+      <dt>Uploads currently in this month’s draw</dt>
+      <dd class="admin-summary-card__value"><%= dashboardStats.currentMonthlyDrawUploads ?? 0 %></dd>
       <dd class="admin-summary-card__helper">
         <% const dashboardDrawMonth = typeof monthlyDrawMonthKey === 'string' ? monthlyDrawMonthKey : 'Current'; %>
-        <a href="/a/monthly-draw/uploads<% if (dashboardDrawMonth !== 'Current') { %>?month=<%= dashboardDrawMonth %>&amp;status=pending&amp;page=1<% } %>"><%= dashboardDrawMonth %> Eastern month</a>
+        <a href="/a/monthly-draw/uploads<% if (dashboardDrawMonth !== 'Current') { %>?month=<%= dashboardDrawMonth %>&amp;status=eligible&amp;page=1<% } %>"><%= dashboardDrawMonth %> Eastern month</a>
       </dd>
     </div>
   </dl>

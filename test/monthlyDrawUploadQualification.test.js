@@ -29,6 +29,7 @@ import {
   MONTHLY_DRAW_RULES_VERSION,
   MONTHLY_DRAW_UPLOAD_STATUSES,
   isMonthlyDrawEntrantAccountEligible,
+  isMonthlyDrawUploadSelectableStatus,
 } from '../utils/monthlyDraw.js';
 import { createMediaPersistenceService } from '../utils/mediaPersistence.js';
 import { PUBLIC_MEDIA_KEYS } from '../utils/publicMediaSerializer.js';
@@ -69,6 +70,14 @@ function reviewed(status, overrides = {}) {
     status,
     reviewedAt: NOW,
     reviewedBy: ADMIN_ID,
+    ...overrides,
+  };
+}
+
+function automaticEligible(overrides = {}) {
+  return {
+    ...pending(),
+    status: 'eligible',
     ...overrides,
   };
 }
@@ -133,9 +142,10 @@ describe('additive Upload monthly draw qualification schema', () => {
     );
   });
 
-  test('accepts the three exact state contracts', () => {
+  test('accepts automatic eligibility, reviewed eligibility and legacy states', () => {
     for (const monthlyDraw of [
       pending(),
+      automaticEligible(),
       reviewed('eligible'),
       reviewed('ineligible', { ineligibilityReason: 'duplicate' }),
     ]) {
@@ -160,11 +170,14 @@ describe('additive Upload monthly draw qualification schema', () => {
     }
   });
 
-  test('requires reviewer/date for eligible and forbids its reason', () => {
+  test('requires eligible review fields together and always forbids a reason', () => {
     for (const monthlyDraw of [
       reviewed('eligible', { reviewedAt: null }),
       reviewed('eligible', { reviewedBy: null }),
+      automaticEligible({ reviewedAt: NOW }),
+      automaticEligible({ reviewedBy: ADMIN_ID }),
       reviewed('eligible', { ineligibilityReason: 'duplicate' }),
+      automaticEligible({ ineligibilityReason: 'duplicate' }),
     ]) {
       assert.ok(new Upload({ ...uploadBase(), monthlyDraw }).validateSync());
     }
@@ -224,6 +237,16 @@ describe('monthly draw account eligibility', () => {
     assert.equal(isMonthlyDrawEntrantAccountEligible({ ...account, blocked: true }), false);
     for (const prohibited of ['age', 'province', 'household', 'phone', 'address']) {
       assert.equal(Object.hasOwn(account, prohibited), false);
+    }
+  });
+
+  test('selects only eligible and legacy pending Upload statuses', () => {
+    assert.equal(isMonthlyDrawUploadSelectableStatus('eligible'), true);
+    assert.equal(isMonthlyDrawUploadSelectableStatus('pending'), true);
+    for (const value of [
+      'ineligible', 'unknown', 'Eligible', '', null, undefined, {},
+    ]) {
+      assert.equal(isMonthlyDrawUploadSelectableStatus(value), false);
     }
   });
 });
@@ -335,11 +358,14 @@ describe('transactional prospective upload creation', () => {
     ['park video', 'video', false],
     ['campsite video', 'video', true],
   ]) {
-    test(`${label} creates exactly one server-authored pending entry`, async () => {
+    test(`${label} creates exactly one server-authored eligible entry`, async () => {
       const harness = createMediaHarness({ account: eligibleAccount });
       await commitMedia(harness, mediaType, campsite);
       assert.equal(harness.state.uploads.length, 1);
-      assert.deepEqual(harness.state.uploads[0].monthlyDraw, pending());
+      assert.deepEqual(
+        harness.state.uploads[0].monthlyDraw,
+        automaticEligible(),
+      );
     });
   }
 
@@ -348,12 +374,19 @@ describe('transactional prospective upload creation', () => {
     ['blocked account', { ...eligibleAccount, blocked: true }],
     ['unverified account', { ...eligibleAccount, email_verified: false }],
   ]) {
-    test(`${label} receives no draw subdocument`, async () => {
-      const harness = createMediaHarness({ account });
-      await commitMedia(harness, 'photo', false);
-      assert.equal(harness.state.uploads.length, 1);
-      assert.equal(harness.state.uploads[0].monthlyDraw, undefined);
-    });
+    for (const [flow, mediaType, campsite] of [
+      ['park photo', 'photo', false],
+      ['campsite photo', 'photo', true],
+      ['park video', 'video', false],
+      ['campsite video', 'video', true],
+    ]) {
+      test(`${label} receives no draw subdocument for ${flow}`, async () => {
+        const harness = createMediaHarness({ account });
+        await commitMedia(harness, mediaType, campsite);
+        assert.equal(harness.state.uploads.length, 1);
+        assert.equal(harness.state.uploads[0].monthlyDraw, undefined);
+      });
+    }
   }
 
   test('failed transaction commits no Upload or qualification metadata', async () => {
@@ -386,14 +419,21 @@ describe('administrator qualification routes and parsing', () => {
     assert.deepEqual(normalizeMonthlyDrawReviewQuery({
       month: '2026-07', status: 'all', page: '12',
     }, NOW), { month: '2026-07', status: 'all', page: 12 });
+    assert.deepEqual(normalizeMonthlyDrawReviewQuery({}, NOW), {
+      month: '2026-08', status: 'eligible', page: 1,
+    });
+    assert.deepEqual(normalizeMonthlyDrawReviewQuery({
+      month: '2026-7', status: 'pending', page: '1',
+    }, NOW), {
+      month: '2026-08', status: 'pending', page: 1,
+    });
     for (const query of [
-      { month: '2026-7', status: 'pending', page: '1' },
       { month: ['2026-07'], status: ['all'], page: ['2'] },
       { month: 'bad', status: 'winner', page: '0' },
       { month: '2026-13', status: 'PENDING', page: '1.5' },
     ]) {
       assert.deepEqual(normalizeMonthlyDrawReviewQuery(query, NOW), {
-        month: '2026-08', status: 'pending', page: 1,
+        month: '2026-08', status: 'eligible', page: 1,
       });
     }
     assert.equal(ADMIN_MONTHLY_DRAW_PAGE_SIZE, 20);
@@ -513,6 +553,7 @@ describe('administrator qualification routes and parsing', () => {
       pending: 21,
       eligible: 3,
       ineligible: 2,
+      currentlyInDraw: 24,
       total: 26,
     });
     assert.deepEqual(rendered.locals.filters, {
@@ -665,14 +706,12 @@ describe('administrator qualification state mutation', () => {
     );
   });
 
-  test('pending clears every review field and preserves month/version', async () => {
+  test('browser status pending is rejected without changing a legacy record', async () => {
     const harness = statusHarness({
-      uploadMonthlyDraw: reviewed('ineligible', {
-        ineligibilityReason: 'duplicate',
-      }),
+      uploadMonthlyDraw: pending(),
     });
     await harness.invoke({ status: 'pending', ineligibilityReason: 'duplicate' });
-    assert.deepEqual(harness.updates[0].update.$set.monthlyDraw, pending());
+    assert.equal(harness.updates.length, 0);
     assert.equal(harness.userQueries.length, 0);
   });
 
@@ -681,14 +720,14 @@ describe('administrator qualification state mutation', () => {
     await malformed.handler({
       params: { uploadId: 'not-an-object-id' },
       query: {},
-      body: { status: 'pending' },
+      body: { status: 'eligible' },
       user: { _id: ADMIN_ID },
     }, {});
     assert.equal(malformed.uploadQueries.length, 0);
     assert.equal(malformed.flash.calls[0][1], ADMIN_MONTHLY_DRAW_NOT_FOUND_MESSAGE);
 
     const legacy = statusHarness({ uploadMonthlyDraw: null });
-    await legacy.invoke({ status: 'pending' });
+    await legacy.invoke({ status: 'eligible' });
     assert.equal(legacy.updates.length, 0);
 
     const forged = statusHarness();
@@ -717,7 +756,7 @@ describe('administrator qualification state mutation', () => {
     await handler({
       params: { uploadId: PARK_ID.toHexString() },
       query: {},
-      body: { status: 'pending' },
+      body: { status: 'ineligible', ineligibilityReason: 'duplicate' },
       user: { _id: ADMIN_ID },
     }, {});
     assert.equal(logs.length, 1);
@@ -765,7 +804,13 @@ describe('administrator qualification rendering and source guards', () => {
         layout() {},
         currentPath: '/a/monthly-draw/uploads',
         filters: { month: '2026-08', status: 'pending', page: 1 },
-        counts: { pending: 1, eligible: 2, ineligible: 3, total: 6 },
+        counts: {
+          pending: 1,
+          eligible: 2,
+          ineligible: 3,
+          currentlyInDraw: 3,
+          total: 6,
+        },
         totalPages: 1,
         hasPreviousPage: false,
         hasNextPage: false,
@@ -798,8 +843,14 @@ describe('administrator qualification rendering and source guards', () => {
     );
     assert.equal((html.match(/<h1\b/gu) || []).length, 1);
     assert.match(html, /Monthly draw upload review/u);
-    assert.match(html, /Total prospective uploads/u);
-    assert.match(html, /Draw: Pending/u);
+    assert.match(html, /Uploads from qualifying accounts enter automatically/u);
+    assert.match(html, /no approval action is required/u);
+    assert.match(html, /Currently in the draw[\s\S]*?>3</u);
+    assert.match(html, /Legacy pending/u);
+    assert.match(html, /Total draw-tracked uploads/u);
+    assert.match(html, /Draw: Eligible \(legacy\)/u);
+    assert.doesNotMatch(html, /Draw: Pending/u);
+    assert.equal((html.match(/value="pending"/gu) || []).length, 1);
     for (const label of Object.values(MONTHLY_DRAW_INELIGIBILITY_REASON_LABELS)) {
       assert.match(html, new RegExp(label, 'u'));
     }
@@ -817,7 +868,13 @@ describe('administrator qualification rendering and source guards', () => {
         layout() {},
         currentPath: '/a/monthly-draw/uploads',
         filters: { month: '2026-08', status: 'pending', page: 1 },
-        counts: { pending: 0, eligible: 0, ineligible: 0, total: 0 },
+        counts: {
+          pending: 0,
+          eligible: 0,
+          ineligible: 0,
+          currentlyInDraw: 0,
+          total: 0,
+        },
         uploads: [],
         totalPages: 1,
         hasPreviousPage: false,
@@ -854,9 +911,19 @@ describe('administrator qualification rendering and source guards', () => {
       showUploader: false,
       extractYouTubeVideoId,
     });
+    const pendingLegacy = await ejs.renderFile(cardPath, {
+      upload: { ...base, monthlyDrawStatus: 'pending' },
+      showUploader: false,
+      extractYouTubeVideoId,
+    });
     assert.doesNotMatch(legacy, /Draw:/u);
     assert.match(eligible, /Draw: Eligible/u);
-    assert.doesNotMatch(legacy + eligible, /monthly-draw\/uploads\/.+\/status/iu);
+    assert.match(pendingLegacy, /Draw: Eligible \(legacy\)/u);
+    assert.doesNotMatch(pendingLegacy, /Draw: Pending/u);
+    assert.doesNotMatch(
+      legacy + eligible + pendingLegacy,
+      /monthly-draw\/uploads\/.+\/status/iu,
+    );
   });
 
   test('has no inline executable/style sinks and keeps mutation controls dedicated', async () => {
@@ -884,7 +951,8 @@ describe('non-retroactive and deferred-scope guards', () => {
   test('states the narrow non-retroactive qualification rule', async () => {
     const rules = await read('views/other/monthlyDraw.ejs');
     assert.match(rules, /Earlier uploads are not entered retroactively\./u);
-    assert.match(rules, /must be found qualifying/u);
+    assert.match(rules, /Uploads from eligible CampPics accounts are entered automatically\./u);
+    assert.match(rules, /may mark an upload ineligible/u);
     assert.equal((rules.match(/2026-08-03-v1/gu) || []).length, 0);
   });
 

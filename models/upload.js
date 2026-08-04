@@ -27,8 +27,9 @@ function isValidMonthlyDrawState(value) {
     return reviewedAtIsEmpty && reviewedByIsEmpty && reasonIsEmpty;
   }
   if (value.status === 'eligible') {
-    return hasReviewDate(value.reviewedAt) &&
-      !reviewedByIsEmpty &&
+    const reviewMetadataMatches = reviewedAtIsEmpty === reviewedByIsEmpty;
+    return reviewMetadataMatches &&
+      (reviewedAtIsEmpty || hasReviewDate(value.reviewedAt)) &&
       reasonIsEmpty;
   }
   if (value.status === 'ineligible') {

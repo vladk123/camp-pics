@@ -628,7 +628,8 @@ describe('monthly draw rendering and upload notices', () => {
       '12:00:00 a.m. Eastern Time',
       '11:59:59 p.m. Eastern Time',
       'one entry. There is no limit on the number of qualifying upload entries',
-      'Uploads are not automatically approved',
+      'Uploads from eligible CampPics accounts are entered automatically',
+      'CampPics may mark an upload ineligible',
       'approximate retail value of CAD $10',
       'digital Amazon.ca or Bass Pro Shops gift card',
       'The odds of being selected depend on the number of eligible entries received for that monthly draw.',
@@ -738,11 +739,5 @@ describe('monthly draw source and scope guards', () => {
       { cwd: root, encoding: 'utf8' },
     );
     assert.equal(schemaStatus.trim(), '');
-    const uploadStatus = execFileSync(
-      'git',
-      ['status', '--short', '--', 'models/upload.js'],
-      { cwd: root, encoding: 'utf8' },
-    );
-    assert.equal(uploadStatus.trim(), '');
   });
 });

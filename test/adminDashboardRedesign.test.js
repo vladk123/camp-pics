@@ -147,7 +147,7 @@ describe('administrator dashboard summary controller', () => {
       records: [uploadRecord()],
       countDocuments(filter) {
         if (filter === undefined) return 11;
-        if (filter?.['monthlyDraw.status'] === 'pending') {
+        if (Array.isArray(filter?.['monthlyDraw.status']?.$in)) {
           return pending.monthlyDraw.promise;
         }
         return pending.uploads.promise;
@@ -174,8 +174,9 @@ describe('administrator dashboard summary controller', () => {
       [],
       [{}],
       [{
+        monthlyDraw: { $exists: true },
         'monthlyDraw.monthKey': '2026-08',
-        'monthlyDraw.status': 'pending',
+        'monthlyDraw.status': { $in: ['pending', 'eligible'] },
       }],
     ]);
     assert.deepEqual(users.countCalls, [
@@ -198,7 +199,7 @@ describe('administrator dashboard summary controller', () => {
       totalUsers: 60,
       verifiedUsers: 49,
       blockedUsers: 3,
-      pendingMonthlyDrawUploads: 4,
+      currentMonthlyDrawUploads: 4,
     });
     assert.equal(
       Object.values(invocation.result.renders[0].locals.dashboardStats)
@@ -330,7 +331,7 @@ async function renderDashboard(overrides = {}) {
       totalUsers: 20,
       verifiedUsers: 15,
       blockedUsers: 2,
-      pendingMonthlyDrawUploads: 3,
+      currentMonthlyDrawUploads: 3,
     },
     monthlyDrawMonthKey: '2026-08',
     data: { currentPath: '/a/dashboard' },
@@ -394,7 +395,12 @@ describe('administrator dashboard rendering', () => {
     }
     assert.match(html, /Tracked upload records/u);
     assert.match(html, /Includes administrators/u);
-    assert.doesNotMatch(html, /Needs review|Uploads not yet approved/u);
+    assert.match(html, /Uploads currently in this month’s draw[\s\S]*?>3</u);
+    assert.match(html, /href="\/a\/monthly-draw\/uploads\?month=2026-08&amp;status=eligible&amp;page=1"/u);
+    assert.doesNotMatch(
+      html,
+      /Uploads awaiting draw review|Needs review|Uploads not yet approved/u,
+    );
     assert.match(html, /id="admin-uploads-heading">Recent uploads<\/h2>/u);
     assert.match(html, /class="upload-item admin-upload-card"/u);
     assert.match(html, /id="admin-users-heading">Users<\/h2>/u);
@@ -630,6 +636,7 @@ describe('administrator dashboard browser behavior', () => {
                   campsiteName: hostile,
                   createdAt: '2026-08-01T00:00:00.000Z',
                   mediaType: 'photo',
+                  monthlyDrawStatus: 'pending',
                   parkName: hostile,
                   uploader: { fname: hostile, username: hostile },
                 }],
@@ -661,6 +668,16 @@ describe('administrator dashboard browser behavior', () => {
       'upload-item admin-upload-card',
     );
     assert.equal(combinedText(harness.uploads.children[0]).includes(hostile), true);
+    assert.equal(
+      combinedText(harness.uploads.children[0]).includes(
+        'Draw: Eligible (legacy)',
+      ),
+      true,
+    );
+    assert.equal(
+      combinedText(harness.uploads.children[0]).includes('Draw: Pending'),
+      false,
+    );
     assert.deepEqual(harness.mediaCalls.photoUrls, [
       'https://cdn.example.test/photo.jpg',
     ]);

@@ -84,6 +84,7 @@ export const ADMIN_MONTHLY_DRAW_INVALID_STATUS_MESSAGE =
 
 const STATUS_FILTERS = new Set([...MONTHLY_DRAW_UPLOAD_STATUSES, 'all']);
 const STATUS_SET = new Set(MONTHLY_DRAW_UPLOAD_STATUSES);
+const UPDATE_STATUS_SET = new Set(['eligible', 'ineligible']);
 const REASON_SET = new Set(MONTHLY_DRAW_INELIGIBILITY_REASONS);
 const UPDATE_BODY_FIELDS = new Set([
   '_csrf',
@@ -106,7 +107,7 @@ export function normalizeMonthlyDrawReviewQuery(query, now = new Date()) {
   const status = typeof query?.status === 'string' &&
     STATUS_FILTERS.has(query.status)
     ? query.status
-    : 'pending';
+    : 'eligible';
 
   return Object.freeze({
     month,
@@ -268,10 +269,13 @@ export function createMonthlyDrawUploadReviewHandler({
         }),
         UploadModel.countDocuments(monthFilter),
       ]);
+      const pendingCount = requireCount(pending);
+      const eligibleCount = requireCount(eligible);
       const counts = Object.freeze({
-        pending: requireCount(pending),
-        eligible: requireCount(eligible),
+        pending: pendingCount,
+        eligible: eligibleCount,
         ineligible: requireCount(ineligible),
+        currentlyInDraw: requireCount(pendingCount + eligibleCount),
         total: requireCount(total),
       });
       const filteredCount = filters.status === 'all'
@@ -358,7 +362,7 @@ function normalizeStatusUpdateBody(body) {
     Object.getOwnPropertySymbols(body).length > 0 ||
     fields.some(field => !UPDATE_BODY_FIELDS.has(field)) ||
     typeof body.status !== 'string' ||
-    !STATUS_SET.has(body.status) ||
+    !UPDATE_STATUS_SET.has(body.status) ||
     (body._csrf !== undefined && typeof body._csrf !== 'string') ||
     (
       body.ineligibilityReason !== undefined &&
@@ -447,9 +451,8 @@ export function createMonthlyDrawUploadStatusHandler({
         }
       }
 
-      const reviewedAt = requested.status === 'pending' ? null : currentTime();
+      const reviewedAt = currentTime();
       if (
-        reviewedAt !== null &&
         (!(reviewedAt instanceof Date) || Number.isNaN(reviewedAt.getTime()))
       ) {
         throw new TypeError('Invalid review time.');
@@ -459,7 +462,7 @@ export function createMonthlyDrawUploadStatusHandler({
         monthKey: upload.monthlyDraw.monthKey,
         rulesVersion: upload.monthlyDraw.rulesVersion,
         reviewedAt,
-        reviewedBy: requested.status === 'pending' ? null : req.user?._id,
+        reviewedBy: req.user?._id,
         ineligibilityReason: requested.status === 'ineligible'
           ? requested.reason
           : null,

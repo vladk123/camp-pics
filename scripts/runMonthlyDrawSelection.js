@@ -111,18 +111,6 @@ function outputDryRun(output, inspection) {
 }
 
 function outputApply(output, outcome) {
-  if (outcome.state === 'blocked-pending-review') {
-    const report = Object.freeze({
-      mode: 'apply',
-      targetMonth: outcome.monthKey,
-      pendingReviewCount: outcome.pendingUploads,
-      selectionReady: false,
-      message: outcome.message,
-    });
-    output.log(JSON.stringify(report, null, 2));
-    return report;
-  }
-
   const result = outcome.result;
   const report = Object.freeze({
     mode: 'apply',
@@ -166,12 +154,6 @@ export async function runMonthlyDrawSelectionCli(
         monthKey: options.monthKey,
       });
       const report = outputDryRun(output, inspection);
-      if (
-        inspection.pendingUploads > 0 &&
-        inspection.resultAlreadyExists === false
-      ) {
-        setExitCode(MONTHLY_DRAW_SELECTION_EXIT_CODES.pendingReviews);
-      }
       return report;
     }
 
@@ -179,9 +161,6 @@ export async function runMonthlyDrawSelectionCli(
       monthKey: options.monthKey,
     });
     const report = outputApply(output, outcome);
-    if (outcome.state === 'blocked-pending-review') {
-      setExitCode(MONTHLY_DRAW_SELECTION_EXIT_CODES.pendingReviews);
-    }
     return report;
   } finally {
     await disconnect();

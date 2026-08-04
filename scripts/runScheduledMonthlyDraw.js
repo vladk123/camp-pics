@@ -84,16 +84,6 @@ export async function runScheduledMonthlyDraw(
     const selection = await activeSelectionService.selectAndPersist({
       monthKey,
     });
-    if (selection.state === 'blocked-pending-review') {
-      const report = writeReport(output, {
-        targetMonth: monthKey,
-        selectionState: selection.state,
-        pendingReviewCount: selection.pendingUploads,
-        notificationState: 'not-attempted',
-      });
-      setExitCode(SCHEDULED_MONTHLY_DRAW_EXIT_CODES.pendingReviews);
-      return report;
-    }
     if (selection.state !== 'result' || !selection.result) {
       throw new Error('Monthly draw selection returned no result.');
     }

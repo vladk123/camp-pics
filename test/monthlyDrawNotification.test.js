@@ -554,6 +554,39 @@ describe('stored candidate resolution and administrator delivery', () => {
     );
   });
 
+  test('keeps eligible and legacy pending upload sources resolvable without redrawing', async () => {
+    for (const status of ['eligible', 'pending']) {
+      const storedCandidate = candidate();
+      const harness = createHarness({
+        result: resultData({
+          candidates: [storedCandidate],
+          poolSummary: {
+            eligibleUploadEntries: 1,
+            eligibleNoUploadEntries: 0,
+            totalEligibleEntries: 1,
+            eligibleDistinctEntrants: 1,
+            excludedAccountEntries: 0,
+            candidatesSelected: 1,
+            pendingUploadsAtSelection: status === 'pending' ? 1 : 0,
+          },
+        }),
+        uploads: [upload({ monthlyDraw: {
+          status,
+          monthKey: MONTH,
+          rulesVersion: MONTHLY_DRAW_RULES_VERSION,
+        } })],
+      });
+
+      await harness.service.notifyStoredResult({ monthKey: MONTH });
+
+      const resolved = harness.calls.sends[0].templateData.candidates;
+      assert.equal(resolved.length, 1, status);
+      assert.equal(resolved[0].rank, storedCandidate.rank, status);
+      assert.equal(resolved[0].available, true, status);
+      assert.deepEqual(harness.state.result.candidates, [storedCandidate]);
+    }
+  });
+
   test('marks missing, ineligible and unverifiable sources unavailable without replacement', async () => {
     const cases = [
       {

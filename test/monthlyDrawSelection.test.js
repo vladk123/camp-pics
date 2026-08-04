@@ -25,7 +25,6 @@ import {
 import {
   MONTHLY_DRAW_ACCOUNT_SELECTION_PROJECTION,
   MONTHLY_DRAW_NO_UPLOAD_SELECTION_PROJECTION,
-  MONTHLY_DRAW_SELECTION_BLOCKED_MESSAGE,
   MONTHLY_DRAW_UPLOAD_SELECTION_PROJECTION,
   createMonthlyDrawSelectionService,
   selectWeightedDistinctCandidates,
@@ -538,7 +537,8 @@ describe('privacy-minimal MonthlyDrawResult model', () => {
         candidatesSelected: 1,
       },
       { candidatesSelected: 0 },
-      { pendingUploadsAtSelection: 1 },
+      { pendingUploadsAtSelection: -1 },
+      { pendingUploadsAtSelection: 0.5 },
     ];
     for (const poolSummary of invalidSummaries) {
       assert.ok(validationError(validResultData({ poolSummary })));
@@ -553,6 +553,9 @@ describe('privacy-minimal MonthlyDrawResult model', () => {
         candidatesSelected: 0,
       },
     })));
+    assert.equal(validationError(validResultData({
+      poolSummary: { pendingUploadsAtSelection: 2 },
+    })), undefined);
   });
 
   test('declares no direct identity, contact, location or caption storage', () => {
@@ -683,12 +686,12 @@ describe('monthly draw pool inspection', () => {
     assert.deepEqual(inspection, {
       monthKey: MONTH,
       pendingUploads: 1,
-      eligibleUploadEntries: 2,
+      eligibleUploadEntries: 3,
       eligibleNoUploadEntries: 2,
-      totalEligibleEntries: 4,
+      totalEligibleEntries: 5,
       eligibleDistinctEntrants: 2,
       excludedAccountEntries: 6,
-      selectionReady: false,
+      selectionReady: true,
       resultAlreadyExists: false,
     });
     assert.equal(harness.calls.userFinds.length, 1);
@@ -700,6 +703,11 @@ describe('monthly draw pool inspection', () => {
       harness.calls.uploadFinds[0].projection,
       MONTHLY_DRAW_UPLOAD_SELECTION_PROJECTION,
     );
+    assert.deepEqual(harness.calls.uploadFinds[0].filter, {
+      monthlyDraw: { $exists: true },
+      'monthlyDraw.monthKey': MONTH,
+      'monthlyDraw.rulesVersion': MONTHLY_DRAW_RULES_VERSION,
+    });
     assert.deepEqual(
       harness.calls.noUploadFinds[0].projection,
       MONTHLY_DRAW_NO_UPLOAD_SELECTION_PROJECTION,
@@ -758,22 +766,19 @@ describe('monthly draw pool inspection', () => {
 });
 
 describe('transactional persistence, idempotence and concurrency', () => {
-  test('pending uploads block before pool reads, randomness and creation', async () => {
+  test('legacy pending uploads remain selectable and persist their diagnostic count', async () => {
     const harness = createSelectionHarness({
       uploads: [upload({ status: 'pending' })],
     });
     const outcome = await harness.service.selectAndPersist({ monthKey: MONTH });
-    assert.deepEqual(outcome, {
-      state: 'blocked-pending-review',
-      monthKey: MONTH,
-      pendingUploads: 1,
-      message: MONTHLY_DRAW_SELECTION_BLOCKED_MESSAGE,
-    });
-    assert.equal(harness.calls.uploadFinds.length, 0);
-    assert.equal(harness.calls.userFinds.length, 0);
-    assert.equal(harness.calls.randomMaximums.length, 0);
-    assert.equal(harness.calls.creates.length, 0);
-    assert.equal(harness.state.result, null);
+    assert.equal(outcome.state, 'result');
+    assert.equal(outcome.created, true);
+    assert.equal(outcome.result.candidates[0].sourceId, UPLOAD_1);
+    assert.equal(outcome.result.poolSummary.eligibleUploadEntries, 1);
+    assert.equal(outcome.result.poolSummary.pendingUploadsAtSelection, 1);
+    assert.deepEqual(harness.calls.randomMaximums, [1]);
+    assert.equal(harness.calls.creates.length, 1);
+    assert.ok(harness.state.result);
   });
 
   test('creates one ready result and uses the same session for every query and write', async () => {
@@ -1006,7 +1011,7 @@ describe('monthly draw repository command', () => {
       /fixture-secret|userId|fingerprint|sourceId|email|username|caption|location/iu);
   });
 
-  test('dry-run with pending reviews and no result exits nonzero without selecting', async () => {
+  test('dry-run with legacy pending records remains successful and ready', async () => {
     const calls = { inspect: 0, select: 0 };
     const exits = [];
     const report = await runMonthlyDrawSelectionCli(
@@ -1022,7 +1027,7 @@ describe('monthly draw repository command', () => {
               eligibleNoUploadEntries: 0,
               eligibleDistinctEntrants: 1,
               excludedAccountEntries: 0,
-              selectionReady: false,
+              selectionReady: true,
               resultAlreadyExists: false,
             };
           },
@@ -1041,10 +1046,9 @@ describe('monthly draw repository command', () => {
 
     assert.deepEqual(calls, { inspect: 1, select: 0 });
     assert.equal(report.pendingReviewCount, 2);
+    assert.equal(report.selectionReady, true);
     assert.equal(report.resultAlreadyExists, false);
-    assert.deepEqual(exits, [
-      MONTHLY_DRAW_SELECTION_EXIT_CODES.pendingReviews,
-    ]);
+    assert.deepEqual(exits, []);
   });
 
   test('dry-run keeps an existing result successful while reporting pending reviews', async () => {
@@ -1139,54 +1143,39 @@ describe('monthly draw repository command', () => {
       ));
   });
 
-  test('pending state exits nonzero while an existing result is successful', async () => {
-    const pendingExits = [];
-    await runMonthlyDrawSelectionCli(['--apply', '--month', MONTH], {
-      service: {
-        async selectAndPersist() {
-          return {
-            state: 'blocked-pending-review',
-            monthKey: MONTH,
-            pendingUploads: 2,
-            message: MONTHLY_DRAW_SELECTION_BLOCKED_MESSAGE,
-          };
-        },
-      },
-      connect: async () => {},
-      disconnect: async () => {},
-      databaseUrl: 'mongodb://fixture',
-      currentTime: () => now,
-      output: { log() {} },
-      setExitCode: code => pendingExits.push(code),
-    });
-    assert.deepEqual(pendingExits, [
-      MONTHLY_DRAW_SELECTION_EXIT_CODES.pendingReviews,
-    ]);
-
-    const existingExits = [];
-    const report = await runMonthlyDrawSelectionCli(
-      ['--apply', '--month', MONTH],
-      {
-        service: {
-          async selectAndPersist() {
-            return {
-              state: 'result',
-              created: false,
-              monthKey: MONTH,
-              result: storedResult(),
-            };
+  test('apply with legacy pending records persists or reuses a result successfully', async () => {
+    for (const created of [true, false]) {
+      const exits = [];
+      const report = await runMonthlyDrawSelectionCli(
+        ['--apply', '--month', MONTH],
+        {
+          service: {
+            async selectAndPersist() {
+              return {
+                state: 'result',
+                created,
+                monthKey: MONTH,
+                result: storedResult({
+                  poolSummary: { pendingUploadsAtSelection: 2 },
+                }),
+              };
+            },
           },
+          connect: async () => {},
+          disconnect: async () => {},
+          databaseUrl: 'mongodb://fixture',
+          currentTime: () => now,
+          output: { log() {} },
+          setExitCode: code => exits.push(code),
         },
-        connect: async () => {},
-        disconnect: async () => {},
-        databaseUrl: 'mongodb://fixture',
-        currentTime: () => now,
-        output: { log() {} },
-        setExitCode: code => existingExits.push(code),
-      },
-    );
-    assert.equal(report.persistence, 'already-existed');
-    assert.deepEqual(existingExits, []);
+      );
+      assert.equal(
+        report.persistence,
+        created ? 'newly-created' : 'already-existed',
+      );
+      assert.equal(report.poolSummary.pendingUploadsAtSelection, 2);
+      assert.deepEqual(exits, []);
+    }
   });
 
   test('direct failures use distinct safe nonzero exit codes', () => {
@@ -1227,7 +1216,7 @@ describe('rules, roadmap and deferred-scope source guards', () => {
     assert.match(rules, /Earlier uploads are not entered retroactively/u);
   });
 
-  test('records completed selection and notification while Scheduler activation remains blocked', () => {
+  test('records completed selection and in-progress Scheduler activation', () => {
     const items = adminRoadmap.phases.flatMap(phase => phase.items);
     const selection = items.find(item =>
       item.id === 'monthly-draw-selection-and-notification'
@@ -1244,9 +1233,12 @@ describe('rules, roadmap and deferred-scope source guards', () => {
       /notification lease and sent marker/u);
     assert.match(selection.notes.join('\n'),
       /Scheduler-ready combined command self-gates/u);
-    assert.equal(scheduler.status, 'blocked');
+    assert.equal(scheduler.status, 'in_progress');
     assert.match(scheduler.notes.join('\n'),
-      /Production Heroku Scheduler jobs are not configured/u);
+      /User-reported external configuration/u);
+    assert.match(scheduler.notes.join('\n'), /06:00 UTC/u);
+    assert.match(scheduler.notes.join('\n'), /11:00 UTC/u);
+    assert.match(scheduler.notes.join('\n'), /23:00 UTC remains recommended/u);
   });
 
   test('keeps providers, email, Scheduler, routes, migrations and startup mutation deferred', async () => {
@@ -1312,7 +1304,6 @@ describe('rules, roadmap and deferred-scope source guards', () => {
       '--short',
       '--',
       'models/user.js',
-      'models/upload.js',
       'models/park.js',
       'utils/accountDeletion.js',
     ], { cwd: root, encoding: 'utf8' });

@@ -193,7 +193,7 @@ function buildUploadRecord(
   };
 }
 
-function buildPendingMonthlyDrawQualification({
+function buildAutomaticMonthlyDrawQualification({
   entrantAccount,
   userId,
   currentTime,
@@ -211,7 +211,7 @@ function buildPendingMonthlyDrawQualification({
   }
 
   return Object.freeze({
-    status: 'pending',
+    status: 'eligible',
     monthKey: deriveEasternMonthKey(createdAt),
     rulesVersion: MONTHLY_DRAW_RULES_VERSION,
     reviewedAt: null,
@@ -318,7 +318,7 @@ export function createMediaPersistenceService({
       : mediaConfig.park;
 
     try {
-      const monthlyDraw = buildPendingMonthlyDrawQualification({
+      const monthlyDraw = buildAutomaticMonthlyDrawQualification({
         entrantAccount,
         userId,
         currentTime,

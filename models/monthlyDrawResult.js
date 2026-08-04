@@ -282,8 +282,7 @@ function hasValidCandidates(candidates) {
 
 function hasValidPoolSummary(summary) {
   if (!summary || typeof summary !== 'object') return false;
-  return summary.pendingUploadsAtSelection === 0 &&
-    summary.candidatesSelected === this.candidates.length &&
+  return summary.candidatesSelected === this.candidates.length &&
     summary.totalEligibleEntries ===
       summary.eligibleUploadEntries + summary.eligibleNoUploadEntries &&
     summary.eligibleDistinctEntrants <= summary.totalEligibleEntries &&

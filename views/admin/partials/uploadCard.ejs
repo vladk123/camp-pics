@@ -26,7 +26,7 @@
         </span>
         <% if (upload.monthlyDrawStatus) { %>
           <span class="admin-status-badge admin-status-badge--draw admin-status-badge--draw-<%= upload.monthlyDrawStatus %>">
-            Draw: <%= upload.monthlyDrawStatus === 'pending' ? 'Pending' : upload.monthlyDrawStatus === 'eligible' ? 'Eligible' : 'Ineligible' %>
+            Draw: <%= upload.monthlyDrawStatus === 'pending' ? 'Eligible (legacy)' : upload.monthlyDrawStatus === 'eligible' ? 'Eligible' : 'Ineligible' %>
           </span>
         <% } %>
       </div>

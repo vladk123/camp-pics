@@ -178,7 +178,7 @@
     badges.className = 'admin-upload-card__badges';
     badges.append(mediaBadge);
     const drawLabels = {
-      pending: 'Pending',
+      pending: 'Eligible (legacy)',
       eligible: 'Eligible',
       ineligible: 'Ineligible',
     };

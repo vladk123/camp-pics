@@ -197,8 +197,8 @@ describe('authoritative administrator roadmap configuration', () => {
       total: 27,
       active: 12,
       planned: 4,
-      inProgress: 0,
-      blocked: 8,
+      inProgress: 1,
+      blocked: 7,
       completed: 15,
     });
   });
@@ -345,7 +345,7 @@ describe('authoritative administrator roadmap configuration', () => {
       ['monthly-draw-rules-and-no-upload-entry', 'completed', '2026-08-03'],
       ['monthly-draw-upload-qualification', 'completed', '2026-08-03'],
       ['monthly-draw-selection-and-notification', 'completed', '2026-08-04'],
-      ['monthly-draw-scheduler-activation', 'blocked', null],
+      ['monthly-draw-scheduler-activation', 'in_progress', null],
     ]);
     assert.deepEqual(
       phase.items[0].dependencies,
@@ -363,11 +363,12 @@ describe('authoritative administrator roadmap configuration', () => {
     );
     assert.deepEqual(phase.items[1].notes, [
       'The completed implementation adds optional draw qualification metadata to Upload records.',
-      'Pending, eligible and ineligible states use fixed ineligibility reasons with no free-text note.',
-      'New uploads from eligible verified non-administrator, non-blocked accounts automatically become pending prospective entries.',
-      'Legacy uploads are not entered retroactively.',
+      'New uploads from eligible verified non-administrator, non-blocked accounts enter the draw automatically with eligible status.',
+      'Administrators mark duplicate, irrelevant, poor-quality, wrong-location, rights/policy or otherwise unsuitable uploads ineligible.',
+      'An ineligible upload can be restored to eligible after current account eligibility is rechecked.',
+      'Pending remains only for backward compatibility, and legacy pending records remain selectable.',
+      'Uploads without monthlyDraw metadata are not entered retroactively.',
       'Administrator review includes safe month and status filters, selected-month counts and bounded pagination.',
-      'Current account eligibility is enforced before an upload can be marked eligible.',
       'Draw qualification has no effect on public media approval or visibility.',
       'Eligible Upload records retain the month, rules version, uploader, timestamp, media and location references needed by future selection work.',
     ]);
@@ -419,7 +420,9 @@ describe('authoritative administrator roadmap configuration', () => {
     );
     for (const note of [
       'The completed implementation keeps permanent privacy-minimal stored selections.',
-      'The pending-review gate prevents selection while uploads await review.',
+      'Selectable Upload statuses include eligible and legacy pending.',
+      'Ineligible Upload records are excluded from selection.',
+      'Legacy pending Upload records do not block selection.',
       'Weighted selection stores one primary and any available ranked alternates.',
       'No-upload candidates use opaque source references.',
       'Notification rechecks current source and account state before exposing contact details.',
@@ -431,15 +434,25 @@ describe('authoritative administrator roadmap configuration', () => {
       'Definite provider failures release the matching lease for a safe later retry.',
       'A manual notification command supports safe dry-run and explicit apply modes.',
       'A Scheduler-ready combined command self-gates to the first Eastern calendar day.',
+      'Stored-result and notification idempotence remain unchanged.',
       'The implementation does not automatically contact entrants or deliver a prize.',
     ]) assert.equal(phase.items[2].notes.includes(note), true, note);
     assert.deepEqual(phase.items[3].notes, [
-      'The repository command is ready.',
-      'Production Heroku Scheduler jobs are not configured.',
-      'Activation requires explicit user approval and deployment verification.',
-      'The command is intended to be invoked daily and self-gates to the first Eastern calendar day.',
-      'Repeated invocations reuse one selection and one sent notification.',
+      'User-reported external configuration: production Heroku Scheduler runs `npm run monthly-draw:scheduled` daily at 06:00 UTC and 11:00 UTC; this repository pass did not inspect or verify Heroku.',
+      'A third daily backup at 23:00 UTC remains recommended.',
+      'The latest committed code still needs deployment and verification.',
+      'First-Eastern-day self-gating is implemented.',
+      'A successful controlled Heroku command/email test and an observed scheduled execution remain outstanding.',
+      'Scheduler execution can occasionally be skipped or duplicated, while repository idempotence handles repeats.',
     ]);
+    assert.deepEqual(phase.items[3].dependencies, [
+      'monthly-draw-selection-and-notification.',
+      'Deployment and controlled verification of the latest committed code.',
+    ]);
+    const schedulerNotes = phase.items[3].notes.join('\n');
+    assert.match(schedulerNotes, /User-reported external configuration/u);
+    assert.match(schedulerNotes, /did not inspect or verify Heroku/u);
+    assert.doesNotMatch(schedulerNotes, /repository-verified|Heroku verification succeeded/iu);
   });
 
   test('produces deterministic plain text with active and completed work', () => {
@@ -1016,7 +1029,6 @@ describe('administrator roadmap smoke and source guards', () => {
       'models/token.js',
       'models/user.js',
     ).trim(), '');
-    assert.equal(gitStatus('models/upload.js').trim(), '');
     assert.equal(gitStatus('package-lock.json').trim(), '');
     assert.deepEqual(packageJson.dependencies, headPackage.dependencies);
     assert.deepEqual(packageLock.packages, headLock.packages);

@@ -7,6 +7,10 @@ export const MONTHLY_DRAW_UPLOAD_STATUSES = Object.freeze([
   'eligible',
   'ineligible',
 ]);
+const MONTHLY_DRAW_SELECTABLE_UPLOAD_STATUS_SET = new Set([
+  'eligible',
+  'pending',
+]);
 export const MONTHLY_DRAW_INELIGIBILITY_REASONS = Object.freeze([
   'duplicate',
   'wrong-location',
@@ -128,6 +132,10 @@ export function isFirstEasternCalendarDay(date = new Date()) {
 
 export function isValidMonthKey(monthKey) {
   return monthKeyParts(monthKey) !== null;
+}
+
+export function isMonthlyDrawUploadSelectableStatus(status) {
+  return MONTHLY_DRAW_SELECTABLE_UPLOAD_STATUS_SET.has(status);
 }
 
 export function buildMonthlyDrawNoUploadEntryId(userId, monthKey) {

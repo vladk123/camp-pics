@@ -20,6 +20,7 @@ import {
   buildMonthlyDrawResultId,
   formatMonthlyDrawMonth,
   isMonthlyDrawEntrantAccountEligible,
+  isMonthlyDrawUploadSelectableStatus,
   isValidMonthKey,
 } from './monthlyDraw.js';
 import { parseStrictMongoObjectId } from './mongoObjectId.js';
@@ -316,7 +317,7 @@ function sourceLabelForUpload(upload) {
 }
 
 function isCurrentUpload(upload, result, candidate) {
-  return upload?.monthlyDraw?.status === 'eligible' &&
+  return isMonthlyDrawUploadSelectableStatus(upload?.monthlyDraw?.status) &&
     upload.monthlyDraw.monthKey === result.monthKey &&
     upload.monthlyDraw.rulesVersion === result.rulesVersion &&
     buildMonthlyDrawEntrantFingerprint(upload.userId, result.monthKey) ===

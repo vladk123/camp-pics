@@ -238,7 +238,7 @@ describe('browser EJS inline-style contract', () => {
         .split(/\r?\n/u)
         .filter(Boolean)
         .map(line => line.slice(3).replaceAll('\\', '/')),
-      ['views/emails/monthly-draw-admin-notification.ejs'],
+      [],
     );
   });
 });
