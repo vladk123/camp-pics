@@ -1,5 +1,28 @@
 export const MONTHLY_DRAW_RULES_VERSION = '2026-08-03-v1';
 export const MONTHLY_DRAW_TIME_ZONE = 'America/Toronto';
+export const MONTHLY_DRAW_UPLOAD_STATUSES = Object.freeze([
+  'pending',
+  'eligible',
+  'ineligible',
+]);
+export const MONTHLY_DRAW_INELIGIBILITY_REASONS = Object.freeze([
+  'duplicate',
+  'wrong-location',
+  'not-useful',
+  'insufficient-quality',
+  'rights-or-policy',
+  'account-ineligible',
+  'other-ineligible',
+]);
+export const MONTHLY_DRAW_INELIGIBILITY_REASON_LABELS = Object.freeze({
+  duplicate: 'Duplicate upload',
+  'wrong-location': 'Incorrect location',
+  'not-useful': 'Not useful to campers',
+  'insufficient-quality': 'Insufficient quality',
+  'rights-or-policy': 'Rights or policy issue',
+  'account-ineligible': 'Account not eligible',
+  'other-ineligible': 'Other ineligible upload',
+});
 
 const MONTH_KEY_PATTERN = /^(?<year>\d{4})-(?<month>0[1-9]|1[0-2])$/u;
 const OBJECT_ID_HEX_PATTERN = /^[a-f0-9]{24}$/iu;
@@ -98,12 +121,17 @@ export function formatMonthlyDrawPeriod(monthKey) {
   return `${MONTH_NAMES[parts.month - 1]} 1–${finalDay}, ${parts.year} (Eastern Time)`;
 }
 
-export function isNoUploadEntrantAccountEligible(user) {
+export function isMonthlyDrawEntrantAccountEligible(user) {
   return Boolean(
     user?._id &&
     user.email_verified === true &&
-    user.isAdmin !== true,
+    user.isAdmin !== true &&
+    user.blocked !== true,
   );
+}
+
+export function isNoUploadEntrantAccountEligible(user) {
+  return isMonthlyDrawEntrantAccountEligible(user);
 }
 
 export function maySubmitNoUploadEntry({

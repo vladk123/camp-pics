@@ -313,6 +313,13 @@
   font-size: 0.68rem;
 }
 
+.admin-upload-card__badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
 .admin-status-badge,
 .admin-email-status,
 .admin-account-status {
@@ -330,6 +337,25 @@
   background: #dcebea;
   color: #174746;
   text-transform: uppercase;
+}
+
+.admin-status-badge--draw {
+  border: 1px solid currentColor;
+}
+
+.admin-status-badge--draw-pending {
+  background: #fff0c7;
+  color: #734e00;
+}
+
+.admin-status-badge--draw-eligible {
+  background: #dcefe2;
+  color: #1f5431;
+}
+
+.admin-status-badge--draw-ineligible {
+  background: #f9ddda;
+  color: #76251e;
 }
 
 .admin-upload-card__details {
@@ -451,6 +477,21 @@
 [data-theme="dark"] .admin-status-badge--media {
   background: #244b49;
   color: #c9efec;
+}
+
+[data-theme="dark"] .admin-status-badge--draw-pending {
+  background: #594615;
+  color: #ffe49e;
+}
+
+[data-theme="dark"] .admin-status-badge--draw-eligible {
+  background: #244a31;
+  color: #c8f0d2;
+}
+
+[data-theme="dark"] .admin-status-badge--draw-ineligible {
+  background: #572723;
+  color: #ffc4bd;
 }
 
 [data-theme="dark"] .admin-email-status,

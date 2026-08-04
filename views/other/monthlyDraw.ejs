@@ -30,6 +30,8 @@
     <% } else if (!emailVerified) { %>
       <p>Your account email must be verified before you can submit a no-upload entry.</p>
       <a class="btn btn-primary" href="/user/account">Go to email verification</a>
+    <% } else if (!accountEligible) { %>
+      <p role="status">This account is not eligible to enter the monthly draw.</p>
     <% } else if (!entryStatusAvailable) { %>
       <p role="status">Your entry status is temporarily unavailable. Please try again later.</p>
     <% } else if (alreadyEntered) { %>
@@ -86,6 +88,8 @@
       <h2 id="monthly-draw-upload-method">Upload entry method</h2>
       <ul>
         <li>Each qualifying photo or video uploaded during the monthly period earns one entry. There is no limit on the number of qualifying upload entries.</li>
+        <li>Only uploads submitted after the CampPics Monthly Upload Draw became available are prospective entries. Earlier uploads are not entered retroactively.</li>
+        <li>Each prospective upload is reviewed and must be found qualifying before it becomes an eligible entry.</li>
         <li>Each upload must be original or properly authorized, associated with the correct park, campground or campsite, and useful to other campers.</li>
         <li>Each upload must comply with the <a href="/other/privacy-and-terms#tac">Terms of Service</a> and upload rules.</li>
         <li>Duplicate, irrelevant, misleading, unsafe, spam, rights-infringing or otherwise unsuitable uploads do not qualify.</li>

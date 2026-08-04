@@ -2106,7 +2106,7 @@ describe('POST/DELETE-only route wiring and middleware order', () => {
     }
   });
 
-  test('administrator limiter appears only on the three intended production POST routes', () => {
+  test('administrator limiter appears only on the four intended production POST routes', () => {
     const unrelatedRouters = [userRouter, otherRouter, campRouter];
     for (const router of unrelatedRouters) {
       for (const layer of router.stack) {
@@ -2133,6 +2133,7 @@ describe('POST/DELETE-only route wiring and middleware order', () => {
 
     assert.deepEqual(actualWiring, [
       ['/announcements', 'post'],
+      ['/monthly-draw/uploads/:uploadId/status', 'post'],
       ['/user/:id/block', 'post'],
       ['/user/:id/unblock', 'post'],
     ]);
@@ -3042,11 +3043,13 @@ describe('dependency, dead-helper, global-protection, and documentation guards',
           'controllers/admin.js',
           'controllers/media.js',
           'controllers/monthlyDraw.js',
+          'controllers/monthlyDrawAdmin.js',
           'controllers/siteAnnouncements.js',
           'controllers/users.js',
           'middleware.js',
           'models/siteAnnouncement.js',
           'models/monthlyDrawNoUploadEntry.js',
+          'models/upload.js',
           'package.json',
           'package-lock.json',
         ]).has(line.slice(3).replaceAll('\\', '/'))

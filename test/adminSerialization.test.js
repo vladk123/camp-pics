@@ -30,9 +30,11 @@ const ADMIN_UPLOAD_KEYS = [
   'campsiteName',
   'parkUrl',
   'campgroundUrl',
+  'campsiteUrl',
   'youtubeId',
   'adminPhotoUrl',
   'uploader',
+  'monthlyDrawStatus',
 ];
 
 function sensitiveUser(overrides = {}) {
@@ -179,6 +181,8 @@ describe('administrator dashboard serialization', () => {
     assert.equal('_id' in serialized.uploader, false);
     assert.equal(serialized.parkUrl, null);
     assert.equal(serialized.campgroundUrl, null);
+    assert.equal(serialized.campsiteUrl, null);
+    assert.equal(serialized.monthlyDrawStatus, null);
     for (const rawId of ['parkId', 'campgroundId', 'campsiteId']) {
       assert.equal(rawId in serialized, false);
     }

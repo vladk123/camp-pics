@@ -1,0 +1,254 @@
+.admin-monthly-draw-page {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.admin-monthly-draw-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.admin-monthly-draw-header h1,
+.admin-monthly-draw-header p {
+  margin-top: 0;
+}
+
+.admin-monthly-draw-filters,
+.admin-monthly-draw-review-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  align-items: end;
+  gap: 0.85rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  background: var(--admin-surface);
+}
+
+.admin-monthly-draw-filters div,
+.admin-monthly-draw-review-form div {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.admin-monthly-draw-filters label,
+.admin-monthly-draw-review-form label {
+  color: var(--admin-muted);
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+
+.admin-monthly-draw-filters input,
+.admin-monthly-draw-filters select,
+.admin-monthly-draw-review-form select {
+  min-height: 44px;
+  width: 100%;
+  border: 1px solid var(--admin-border);
+  border-radius: 0.45rem;
+  padding: 0.55rem 0.65rem;
+  background: var(--admin-surface);
+  color: var(--admin-text);
+  font: inherit;
+}
+
+.admin-monthly-draw-filters button,
+.admin-monthly-draw-review-form button,
+.admin-monthly-draw-pagination a {
+  min-height: 44px;
+  border: 1px solid var(--admin-accent-strong);
+  border-radius: 0.45rem;
+  padding: 0.6rem 0.85rem;
+  background: var(--admin-accent-strong);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 750;
+}
+
+.admin-monthly-draw-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.admin-monthly-draw-summary div {
+  border: 1px solid var(--admin-border);
+  border-radius: 0.75rem;
+  padding: 0.9rem;
+  background: var(--admin-surface);
+}
+
+.admin-monthly-draw-summary dt {
+  color: var(--admin-muted);
+  font-size: 0.75rem;
+  font-weight: 750;
+}
+
+.admin-monthly-draw-summary dd {
+  margin: 0.3rem 0 0;
+  font-size: 1.5rem;
+  font-weight: 850;
+}
+
+.admin-monthly-draw-results {
+  display: grid;
+  gap: 1rem;
+}
+
+.admin-monthly-draw-results > header h2,
+.admin-monthly-draw-results > header p {
+  margin: 0;
+}
+
+.admin-monthly-draw-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.admin-monthly-draw-card {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.32fr) minmax(0, 1fr);
+  gap: 1rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 0.8rem;
+  padding: 1rem;
+  background: var(--admin-surface);
+}
+
+.admin-monthly-draw-card__media {
+  display: grid;
+  align-content: start;
+}
+
+.admin-monthly-draw-card__media a {
+  display: grid;
+  gap: 0.4rem;
+  color: var(--admin-accent-strong);
+  font-size: 0.76rem;
+  font-weight: 750;
+  text-align: center;
+}
+
+.admin-monthly-draw-card__media img {
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  border-radius: 0.55rem;
+  object-fit: cover;
+}
+
+.admin-monthly-draw-card__body {
+  min-width: 0;
+}
+
+.admin-monthly-draw-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.admin-monthly-draw-card__header time {
+  color: var(--admin-muted);
+  font-size: 0.72rem;
+}
+
+.admin-monthly-draw-card__details {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0.85rem 0;
+}
+
+.admin-monthly-draw-card__details div {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.3fr) minmax(0, 1fr);
+  gap: 0.7rem;
+}
+
+.admin-monthly-draw-card__details dt {
+  color: var(--admin-muted);
+  font-size: 0.74rem;
+  font-weight: 750;
+}
+
+.admin-monthly-draw-card__details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.admin-monthly-draw-card__details a {
+  color: var(--admin-accent-strong);
+  font-weight: 750;
+}
+
+.admin-monthly-draw-warning {
+  border-left: 4px solid #a05b00;
+  padding: 0.7rem 0.8rem;
+  background: #fff0c7;
+  color: #653d00;
+  font-weight: 750;
+}
+
+.admin-monthly-draw-review-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  margin-top: 0.9rem;
+  padding: 0.8rem;
+  background: var(--admin-surface-muted);
+}
+
+.admin-monthly-draw-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.admin-monthly-draw-pagination div {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.admin-monthly-draw-pagination a {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.admin-monthly-draw-filters :focus-visible,
+.admin-monthly-draw-review-form :focus-visible,
+.admin-monthly-draw-card a:focus-visible,
+.admin-monthly-draw-pagination a:focus-visible {
+  outline: 3px solid var(--admin-focus);
+  outline-offset: 3px;
+}
+
+[data-theme="dark"] .admin-monthly-draw-warning {
+  background: #594615;
+  color: #ffe49e;
+}
+
+@media (max-width: 760px) {
+  .admin-monthly-draw-header,
+  .admin-monthly-draw-pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-monthly-draw-filters,
+  .admin-monthly-draw-review-form,
+  .admin-monthly-draw-summary,
+  .admin-monthly-draw-card {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-monthly-draw-filters button,
+  .admin-monthly-draw-review-form button {
+    width: 100%;
+  }
+}

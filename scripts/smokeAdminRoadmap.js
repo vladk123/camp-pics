@@ -143,7 +143,11 @@ function validateRoadmap() {
   const monthlyRules = itemsById.get('monthly-draw-rules-and-no-upload-entry');
   assert(monthlyRules.status === 'completed');
   assert(monthlyRules.completedOn === '2026-08-03');
-  assert(itemsById.get('monthly-draw-upload-qualification').status === 'planned');
+  const monthlyQualification = itemsById.get(
+    'monthly-draw-upload-qualification',
+  );
+  assert(monthlyQualification.status === 'completed');
+  assert(monthlyQualification.completedOn === '2026-08-03');
   assert(
     itemsById.get('monthly-draw-selection-and-notification').status ===
       'planned',

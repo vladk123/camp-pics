@@ -20,9 +20,16 @@
 
   <div class="admin-upload-card__content">
     <header class="admin-upload-card__header">
-      <span class="admin-status-badge admin-status-badge--media">
-        <%= upload.mediaType === 'photo' ? 'Photo' : upload.mediaType === 'video' ? 'Video' : 'Unknown media' %>
-      </span>
+      <div class="admin-upload-card__badges">
+        <span class="admin-status-badge admin-status-badge--media">
+          <%= upload.mediaType === 'photo' ? 'Photo' : upload.mediaType === 'video' ? 'Video' : 'Unknown media' %>
+        </span>
+        <% if (upload.monthlyDrawStatus) { %>
+          <span class="admin-status-badge admin-status-badge--draw admin-status-badge--draw-<%= upload.monthlyDrawStatus %>">
+            Draw: <%= upload.monthlyDrawStatus === 'pending' ? 'Pending' : upload.monthlyDrawStatus === 'eligible' ? 'Eligible' : 'Ineligible' %>
+          </span>
+        <% } %>
+      </div>
       <time<% if (uploadedDateIsValid) { %> datetime="<%= uploadedDate.toISOString() %>"<% } %>>
         <%= uploadedDateIsValid ? uploadedDate.toLocaleString() : 'Upload date unavailable' %>
       </time>
@@ -62,7 +69,13 @@
       <% if (upload.campsiteName) { %>
         <div>
           <dt>Campsite</dt>
-          <dd><%= upload.campsiteName %></dd>
+          <dd>
+            <% if (upload.campsiteUrl) { %>
+              <a class="admin-upload-card__location-link" href="<%= upload.campsiteUrl %>" target="_blank" rel="noopener noreferrer"><%= upload.campsiteName %></a>
+            <% } else { %>
+              <%= upload.campsiteName %>
+            <% } %>
+          </dd>
         </div>
       <% } %>
     </dl>

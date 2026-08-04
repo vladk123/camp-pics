@@ -1,0 +1,193 @@
+<% layout('/layouts/boilerplate') %>
+<link rel="stylesheet" href="/css/adminDashboard.css">
+<link rel="stylesheet" href="/css/adminMonthlyDrawUploads.css">
+
+<div class="admin-dashboard-page admin-monthly-draw-page">
+  <%- include('./partials/adminNav', { currentPath }) %>
+
+  <header class="admin-monthly-draw-header">
+    <div>
+      <p class="admin-dashboard-eyebrow">CampPics operations</p>
+      <h1>Monthly draw upload review</h1>
+      <p>Review prospective upload entries without changing whether their photos or videos are visible on CampPics.</p>
+    </div>
+    <a class="admin-dashboard-link admin-dashboard-link--secondary" href="/a/dashboard">Back to dashboard</a>
+  </header>
+
+  <form class="admin-monthly-draw-filters" action="/a/monthly-draw/uploads" method="get">
+    <div>
+      <label for="monthly-draw-month">Draw month</label>
+      <input id="monthly-draw-month" type="month" name="month" value="<%= filters.month %>" required>
+    </div>
+    <div>
+      <label for="monthly-draw-status-filter">Qualification status</label>
+      <select id="monthly-draw-status-filter" name="status">
+        <option value="pending"<% if (filters.status === 'pending') { %> selected<% } %>>Pending</option>
+        <option value="eligible"<% if (filters.status === 'eligible') { %> selected<% } %>>Eligible</option>
+        <option value="ineligible"<% if (filters.status === 'ineligible') { %> selected<% } %>>Ineligible</option>
+        <option value="all"<% if (filters.status === 'all') { %> selected<% } %>>All statuses</option>
+      </select>
+    </div>
+    <button type="submit">Apply filters</button>
+  </form>
+
+  <dl class="admin-monthly-draw-summary" aria-label="Selected month review counts">
+    <div>
+      <dt>Pending</dt>
+      <dd><%= counts.pending %></dd>
+    </div>
+    <div>
+      <dt>Eligible</dt>
+      <dd><%= counts.eligible %></dd>
+    </div>
+    <div>
+      <dt>Ineligible</dt>
+      <dd><%= counts.ineligible %></dd>
+    </div>
+    <div>
+      <dt>Total prospective uploads</dt>
+      <dd><%= counts.total %></dd>
+    </div>
+  </dl>
+
+  <section class="admin-monthly-draw-results" aria-labelledby="monthly-draw-results-heading">
+    <header>
+      <h2 id="monthly-draw-results-heading"><%= filters.month %> upload entries</h2>
+      <p>Showing <%= filters.status === 'all' ? 'all statuses' : filters.status %>, page <%= filters.page %> of <%= totalPages %>.</p>
+    </header>
+
+    <% if (uploads.length === 0) { %>
+      <p class="admin-empty-state">No prospective uploads match these review filters.</p>
+    <% } else { %>
+      <div class="admin-monthly-draw-list">
+        <% uploads.forEach(upload => { %>
+          <% const uploadedDate = new Date(upload.createdAt); %>
+          <% const uploadedDateIsValid = !Number.isNaN(uploadedDate.getTime()); %>
+          <% const reviewedDate = new Date(upload.reviewedAt); %>
+          <% const reviewedDateIsValid = upload.reviewedAt != null && !Number.isNaN(reviewedDate.getTime()); %>
+          <% const youtubeVideoId = extractYouTubeVideoId(upload.youtubeId); %>
+          <article class="admin-monthly-draw-card">
+            <div class="admin-monthly-draw-card__media">
+              <% if (upload.mediaType === 'photo' && upload.adminPhotoUrl) { %>
+                <a href="<%= upload.adminPhotoUrl %>" target="_blank" rel="noopener noreferrer">
+                  <img src="<%= upload.adminPhotoUrl %>" alt="Photo upload preview">
+                  <span>Open photo</span>
+                </a>
+              <% } else if (upload.mediaType === 'video' && youtubeVideoId) { %>
+                <a href="https://www.youtube.com/watch?v=<%= youtubeVideoId %>" target="_blank" rel="noopener noreferrer">
+                  <img src="https://img.youtube.com/vi/<%= youtubeVideoId %>/hqdefault.jpg" alt="YouTube video preview">
+                  <span>Open video</span>
+                </a>
+              <% } else { %>
+                <p>Preview unavailable</p>
+              <% } %>
+            </div>
+
+            <div class="admin-monthly-draw-card__body">
+              <header class="admin-monthly-draw-card__header">
+                <div class="admin-upload-card__badges">
+                  <span class="admin-status-badge admin-status-badge--media"><%= upload.mediaType === 'photo' ? 'Photo' : 'Video' %></span>
+                  <span class="admin-status-badge admin-status-badge--draw admin-status-badge--draw-<%= upload.status %>">Draw: <%= upload.status === 'pending' ? 'Pending' : upload.status === 'eligible' ? 'Eligible' : 'Ineligible' %></span>
+                </div>
+                <time<% if (uploadedDateIsValid) { %> datetime="<%= uploadedDate.toISOString() %>"<% } %>><%= uploadedDateIsValid ? uploadedDate.toLocaleString() : 'Upload date unavailable' %></time>
+              </header>
+
+              <dl class="admin-monthly-draw-card__details">
+                <div>
+                  <dt>Draw month</dt>
+                  <dd><%= upload.monthKey %></dd>
+                </div>
+                <div>
+                  <dt>Uploader</dt>
+                  <dd>
+                    <% if (upload.uploader.userDetailUrl) { %>
+                      <a href="<%= upload.uploader.userDetailUrl %>"><%= upload.uploader.fname || 'Unnamed user' %></a>
+                    <% } else { %>
+                      <%= upload.uploader.fname || 'Missing account' %>
+                    <% } %>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Park</dt>
+                  <dd><% if (upload.parkUrl) { %><a href="<%= upload.parkUrl %>" target="_blank" rel="noopener noreferrer"><%= upload.parkName || 'Not recorded' %></a><% } else { %><%= upload.parkName || 'Not recorded' %><% } %></dd>
+                </div>
+                <% if (upload.campgroundName) { %>
+                  <div>
+                    <dt>Campground</dt>
+                    <dd><% if (upload.campgroundUrl) { %><a href="<%= upload.campgroundUrl %>" target="_blank" rel="noopener noreferrer"><%= upload.campgroundName %></a><% } else { %><%= upload.campgroundName %><% } %></dd>
+                  </div>
+                <% } %>
+                <% if (upload.campsiteName) { %>
+                  <div>
+                    <dt>Campsite</dt>
+                    <dd><% if (upload.campsiteUrl) { %><a href="<%= upload.campsiteUrl %>" target="_blank" rel="noopener noreferrer"><%= upload.campsiteName %></a><% } else { %><%= upload.campsiteName %><% } %></dd>
+                  </div>
+                <% } %>
+                <% if (upload.caption) { %>
+                  <div>
+                    <dt>Caption</dt>
+                    <dd><%= upload.caption %></dd>
+                  </div>
+                <% } %>
+                <% if (upload.ineligibilityReasonLabel) { %>
+                  <div>
+                    <dt>Ineligibility reason</dt>
+                    <dd><%= upload.ineligibilityReasonLabel %></dd>
+                  </div>
+                <% } %>
+                <% if (reviewedDateIsValid) { %>
+                  <div>
+                    <dt>Last reviewed</dt>
+                    <dd><time datetime="<%= reviewedDate.toISOString() %>"><%= reviewedDate.toLocaleString() %></time></dd>
+                  </div>
+                <% } %>
+              </dl>
+
+              <% if (!upload.accountEligible) { %>
+                <p class="admin-monthly-draw-warning" role="status">This account is not currently eligible for the monthly draw.</p>
+              <% } %>
+
+              <form
+                class="admin-monthly-draw-review-form"
+                action="/a/monthly-draw/uploads/<%= upload._id %>/status?month=<%= filters.month %>&amp;status=<%= filters.status %>&amp;page=<%= filters.page %>"
+                method="post"
+              >
+                <%- include('../partials/csrfField') %>
+                <div>
+                  <label for="draw-status-<%= upload._id %>">Qualification status</label>
+                  <select id="draw-status-<%= upload._id %>" name="status">
+                    <option value="pending"<% if (upload.status === 'pending') { %> selected<% } %>>Pending</option>
+                    <option value="eligible"<% if (upload.status === 'eligible') { %> selected<% } %>>Eligible</option>
+                    <option value="ineligible"<% if (upload.status === 'ineligible') { %> selected<% } %>>Ineligible</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="draw-reason-<%= upload._id %>">Fixed ineligibility reason</label>
+                  <select id="draw-reason-<%= upload._id %>" name="ineligibilityReason">
+                    <option value="">Select when marking ineligible</option>
+                    <% reasonValues.forEach(reason => { %>
+                      <option value="<%= reason %>"<% if (upload.ineligibilityReason === reason) { %> selected<% } %>><%= reasonLabels[reason] %></option>
+                    <% }) %>
+                  </select>
+                </div>
+                <button type="submit">Save review status</button>
+              </form>
+            </div>
+          </article>
+        <% }) %>
+      </div>
+    <% } %>
+  </section>
+
+  <nav class="admin-monthly-draw-pagination" aria-label="Monthly draw upload pages">
+    <div>
+      <% if (hasPreviousPage) { %>
+        <a href="/a/monthly-draw/uploads?month=<%= filters.month %>&amp;status=<%= filters.status %>&amp;page=<%= filters.page - 1 %>">Previous</a>
+      <% } %>
+      <% if (hasNextPage) { %>
+        <a href="/a/monthly-draw/uploads?month=<%= filters.month %>&amp;status=<%= filters.status %>&amp;page=<%= filters.page + 1 %>">Next</a>
+      <% } %>
+    </div>
+    <p>Page <%= filters.page %> of <%= totalPages %></p>
+  </nav>
+</div>

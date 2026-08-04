@@ -482,6 +482,7 @@ async function uploadPhotoHandler(req, res, next, dependencies) {
         campsiteSlug,
       },
       userId,
+      entrantAccount: req.user,
       mediaType: 'photo',
       preparedMedia: Object.freeze(preparedPhotos),
     });
@@ -596,6 +597,7 @@ async function addVideoHandler(req, res, next, dependencies) {
         campsiteSlug,
       },
       userId,
+      entrantAccount: req.user,
       mediaType: 'video',
       preparedMedia: Object.freeze([preparedVideo]),
     });
@@ -743,6 +745,7 @@ export function createMediaHandlers(overrides = {}) {
         UploadModel,
         UserModel,
         transactionRunner: overrides.transactionRunner,
+        currentTime: overrides.currentTime,
       }),
     mediaDeletion: overrides.mediaDeletion ||
       createMediaDeletionService({

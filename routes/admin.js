@@ -2,6 +2,7 @@ import express from "express";
 const router = express.Router();
 import * as admin from '../controllers/admin.js';
 import * as siteAnnouncements from '../controllers/siteAnnouncements.js';
+import * as monthlyDrawAdmin from '../controllers/monthlyDrawAdmin.js';
 // const {noDoubleSubmission, isLoggedIn, isLoggedOut, usernameToLowerCaseAndTrim} = from '../middleware';
 import { isAdmin, usernameToLowerCaseAndTrim, catchAsyncErrors } from '../middleware.js'; //
 import passport from 'passport';
@@ -19,6 +20,16 @@ router.route('/announcements')
     isAdmin,
     adminUserStatusLimiter,
     catchAsyncErrors(siteAnnouncements.saveAnnouncement),
+  );
+
+router.route('/monthly-draw/uploads')
+  .get(isAdmin, catchAsyncErrors(monthlyDrawAdmin.monthlyDrawUploadReview));
+
+router.route('/monthly-draw/uploads/:uploadId/status')
+  .post(
+    isAdmin,
+    adminUserStatusLimiter,
+    catchAsyncErrors(monthlyDrawAdmin.updateMonthlyDrawUploadStatus),
   );
 
 router.route('/users/:userId')

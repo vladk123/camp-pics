@@ -141,11 +141,16 @@ describe('administrator dashboard summary controller', () => {
       total: deferred(),
       verified: deferred(),
       blocked: deferred(),
+      monthlyDraw: deferred(),
     };
     const uploads = createQueryModel({
       records: [uploadRecord()],
       countDocuments(filter) {
-        return filter === undefined ? 11 : pending.uploads.promise;
+        if (filter === undefined) return 11;
+        if (filter?.['monthlyDraw.status'] === 'pending') {
+          return pending.monthlyDraw.promise;
+        }
+        return pending.uploads.promise;
       },
     });
     const users = createQueryModel({
@@ -160,11 +165,19 @@ describe('administrator dashboard summary controller', () => {
     const handler = createAdminDashboardHandler({
       UploadModel: uploads.model,
       UserModel: users.model,
+      currentTime: () => new Date('2026-08-03T16:00:00.000Z'),
     });
     const invocation = invokeDashboard(handler);
 
     await new Promise(resolve => setImmediate(resolve));
-    assert.deepEqual(uploads.countCalls, [[], [{}]]);
+    assert.deepEqual(uploads.countCalls, [
+      [],
+      [{}],
+      [{
+        'monthlyDraw.monthKey': '2026-08',
+        'monthlyDraw.status': 'pending',
+      }],
+    ]);
     assert.deepEqual(users.countCalls, [
       [{ _id: { $ne: ADMIN_ID } }],
       [{}],
@@ -177,6 +190,7 @@ describe('administrator dashboard summary controller', () => {
     pending.total.resolve(60);
     pending.verified.resolve(49);
     pending.blocked.resolve(3);
+    pending.monthlyDraw.resolve(4);
     await invocation.promise;
 
     assert.deepEqual(invocation.result.renders[0].locals.dashboardStats, {
@@ -184,6 +198,7 @@ describe('administrator dashboard summary controller', () => {
       totalUsers: 60,
       verifiedUsers: 49,
       blockedUsers: 3,
+      pendingMonthlyDrawUploads: 4,
     });
     assert.equal(
       Object.values(invocation.result.renders[0].locals.dashboardStats)
@@ -242,6 +257,8 @@ describe('administrator dashboard summary controller', () => {
       '/dashboard',
       '/roadmap',
       '/announcements',
+      '/monthly-draw/uploads',
+      '/monthly-draw/uploads/:uploadId/status',
       '/users/:userId',
       '/user/:id/block',
       '/user/:id/unblock',
@@ -313,7 +330,9 @@ async function renderDashboard(overrides = {}) {
       totalUsers: 20,
       verifiedUsers: 15,
       blockedUsers: 2,
+      pendingMonthlyDrawUploads: 3,
     },
+    monthlyDrawMonthKey: '2026-08',
     data: { currentPath: '/a/dashboard' },
     extractYouTubeVideoId: () => null,
     hasMoreUploads: true,

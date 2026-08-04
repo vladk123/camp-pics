@@ -10,6 +10,11 @@
     <% if (currentPath === '/a/announcements') { %>aria-current="page"<% } %>
   >Announcements</a>
   <a
+    class="admin-section-nav__link<% if (currentPath === '/a/monthly-draw/uploads') { %> admin-section-nav__link--current<% } %>"
+    href="/a/monthly-draw/uploads"
+    <% if (currentPath === '/a/monthly-draw/uploads') { %>aria-current="page"<% } %>
+  >Monthly Draw</a>
+  <a
     class="admin-section-nav__link<% if (currentPath === '/a/roadmap') { %> admin-section-nav__link--current<% } %>"
     href="/a/roadmap"
     <% if (currentPath === '/a/roadmap') { %>aria-current="page"<% } %>

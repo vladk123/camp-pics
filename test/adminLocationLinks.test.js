@@ -12,6 +12,7 @@ import {
   ADMIN_UPLOAD_PROJECTION,
   ADMIN_UPLOAD_USER_PROJECTION,
   createAdminDashboardHandler,
+  getAdminCampsiteUrl,
   getAdminCampgroundUrl,
   getAdminParkUrl,
   resolveAdminUploadLocationUrls,
@@ -25,6 +26,9 @@ const PARK_B_ID = '64b7f2d4c9f1e8a123456702';
 const STALE_PARK_ID = '64b7f2d4c9f1e8a123456703';
 const CAMPGROUND_ID = '74b7f2d4c9f1e8a123456701';
 const STALE_CAMPGROUND_ID = '74b7f2d4c9f1e8a123456702';
+const CAMPSITE_ID = '84b7f2d4c9f1e8a123456701';
+const STANDALONE_CAMPSITE_ID = '84b7f2d4c9f1e8a123456702';
+const STALE_CAMPSITE_ID = '84b7f2d4c9f1e8a123456703';
 
 function objectId(value) {
   return new mongoose.Types.ObjectId(value);
@@ -38,12 +42,32 @@ function uploadRecord(overrides = {}) {
     parkName: 'Stale Park Display Name',
     campgroundId: objectId(CAMPGROUND_ID),
     campgroundName: 'Stale Campground Display Name',
-    campsiteId: objectId('84b7f2d4c9f1e8a123456701'),
+    campsiteId: objectId(CAMPSITE_ID),
     campsiteName: 'Site 12',
     cloudinaryUrl: 'https://cdn.example.test/photo.jpg',
     userId: { fname: 'Camper', username: 'camper@example.test' },
     ...overrides,
   };
+}
+
+function applyInclusionProjection(record, projection) {
+  if (!projection) return record;
+  const projected = {};
+  for (const [pathName, included] of Object.entries(projection)) {
+    if (included !== 1) continue;
+    const pathParts = pathName.split('.');
+    let source = record;
+    for (const pathPart of pathParts) source = source?.[pathPart];
+    if (source === undefined) continue;
+
+    let target = projected;
+    for (const pathPart of pathParts.slice(0, -1)) {
+      target[pathPart] ??= {};
+      target = target[pathPart];
+    }
+    target[pathParts.at(-1)] = source;
+  }
+  return projected;
 }
 
 function createUploadModel(records) {
@@ -83,7 +107,9 @@ function createUploadModel(records) {
             return chain;
           },
           async lean() {
-            return records;
+            return records.map(record =>
+              applyInclusionProjection(record, call.projection)
+            );
           },
         };
         return chain;
@@ -166,7 +192,10 @@ describe('administrator upload location lookup', () => {
   test('uses one deduplicated Park query for the bounded page and restrictive projections', async () => {
     const records = [
       uploadRecord(),
-      uploadRecord({ campgroundId: null }),
+      uploadRecord({
+        campgroundId: null,
+        campsiteId: objectId(STANDALONE_CAMPSITE_ID),
+      }),
       uploadRecord({ parkId: objectId(PARK_B_ID), campgroundId: null }),
       uploadRecord({ parkId: 'not-an-object-id' }),
     ];
@@ -176,7 +205,15 @@ describe('administrator upload location lookup', () => {
         {
           _id: objectId(PARK_A_ID),
           slug: 'current-park',
-          campgrounds: [{ _id: objectId(CAMPGROUND_ID), slug: 'north-loop' }],
+          campgrounds: [{
+            _id: objectId(CAMPGROUND_ID),
+            slug: 'north-loop',
+            campsites: [{ _id: objectId(CAMPSITE_ID), slug: 'site-12' }],
+          }],
+          campsites: [{
+            _id: objectId(STANDALONE_CAMPSITE_ID),
+            slug: 'standalone-site',
+          }],
         },
         {
           _id: objectId(PARK_B_ID),
@@ -187,16 +224,34 @@ describe('administrator upload location lookup', () => {
     });
 
     assert.equal(uploadState.calls.finds.length, 1);
+    const expectedUploadProjection = {
+      _id: 0,
+      mediaType: 1,
+      createdAt: 1,
+      parkId: 1,
+      parkName: 1,
+      campgroundId: 1,
+      campgroundName: 1,
+      campsiteId: 1,
+      campsiteName: 1,
+      youtubeId: 1,
+      cloudinaryUrl: 1,
+      cloudinaryId: 1,
+      userId: 1,
+      'monthlyDraw.status': 1,
+    };
+    assert.deepEqual(ADMIN_UPLOAD_PROJECTION, expectedUploadProjection);
     assert.deepEqual(uploadState.calls.finds[0], {
       filter: {},
       limit: 10,
       populate: { path: 'userId', select: ADMIN_UPLOAD_USER_PROJECTION },
-      projection: ADMIN_UPLOAD_PROJECTION,
+      projection: expectedUploadProjection,
       skip: 0,
       sort: { createdAt: -1 },
     });
     assert.equal(ADMIN_UPLOAD_PROJECTION.parkId, 1);
     assert.equal(ADMIN_UPLOAD_PROJECTION.campgroundId, 1);
+    assert.equal(ADMIN_UPLOAD_PROJECTION.campsiteId, 1);
 
     assert.equal(parkState.calls.length, 1);
     assert.deepEqual(parkState.calls[0].projection, ADMIN_PARK_LOCATION_PROJECTION);
@@ -210,6 +265,10 @@ describe('administrator upload location lookup', () => {
       slug: 1,
       'campgrounds._id': 1,
       'campgrounds.slug': 1,
+      'campgrounds.campsites._id': 1,
+      'campgrounds.campsites.slug': 1,
+      'campsites._id': 1,
+      'campsites.slug': 1,
     });
 
     assert.deepEqual(Object.keys(result.body), [
@@ -223,12 +282,22 @@ describe('administrator upload location lookup', () => {
       result.body.uploads[0].campgroundUrl,
       '/camp/park/current-park#north-loop',
     );
+    assert.equal(
+      result.body.uploads[0].campsiteUrl,
+      '/camp/park/current-park/campground/north-loop/campsite/site-12',
+    );
     assert.equal(result.body.uploads[1].parkUrl, '/camp/park/current-park');
     assert.equal(result.body.uploads[1].campgroundUrl, null);
+    assert.equal(
+      result.body.uploads[1].campsiteUrl,
+      '/camp/park/current-park/campsite/standalone-site',
+    );
     assert.equal(result.body.uploads[2].parkUrl, '/camp/park/second-park');
     assert.equal(result.body.uploads[2].campgroundUrl, null);
+    assert.equal(result.body.uploads[2].campsiteUrl, null);
     assert.equal(result.body.uploads[3].parkUrl, null);
     assert.equal(result.body.uploads[3].campgroundUrl, null);
+    assert.equal(result.body.uploads[3].campsiteUrl, null);
 
     for (const serialized of result.body.uploads) {
       assert.deepEqual(Object.keys(serialized), [
@@ -239,9 +308,11 @@ describe('administrator upload location lookup', () => {
         'campsiteName',
         'parkUrl',
         'campgroundUrl',
+        'campsiteUrl',
         'youtubeId',
         'adminPhotoUrl',
         'uploader',
+        'monthlyDrawStatus',
       ]);
       for (const rawId of ['parkId', 'campgroundId', 'campsiteId']) {
         assert.equal(rawId in serialized, false);
@@ -249,7 +320,11 @@ describe('administrator upload location lookup', () => {
     }
     assert.doesNotMatch(
       JSON.stringify(result.body),
-      new RegExp(`${PARK_A_ID}|${PARK_B_ID}|${CAMPGROUND_ID}`, 'u'),
+      new RegExp(
+        `${PARK_A_ID}|${PARK_B_ID}|${CAMPGROUND_ID}|` +
+        `${CAMPSITE_ID}|${STANDALONE_CAMPSITE_ID}`,
+        'u',
+      ),
     );
   });
 
@@ -271,6 +346,10 @@ describe('administrator upload location URL resolution', () => {
       getAdminCampgroundUrl('current-park', 'north-loop'),
       '/camp/park/current-park#north-loop',
     );
+    assert.equal(
+      getAdminCampsiteUrl('current-park', 'site-12', 'north-loop'),
+      '/camp/park/current-park/campground/north-loop/campsite/site-12',
+    );
 
     for (const unsafeSlug of [
       '',
@@ -287,17 +366,26 @@ describe('administrator upload location URL resolution', () => {
     ]) {
       assert.equal(getAdminParkUrl(unsafeSlug), null, unsafeSlug);
       assert.equal(getAdminCampgroundUrl('current-park', unsafeSlug), null, unsafeSlug);
+      assert.equal(getAdminCampsiteUrl('current-park', unsafeSlug), null, unsafeSlug);
     }
     assert.equal(getAdminCampgroundUrl('bad/park', 'north-loop'), null);
   });
 
-  test('matches current embedded IDs, preserves Park-only links and ignores names', () => {
+  test('resolves scoped campsites and rejects missing, malformed or mismatched IDs', () => {
     const currentPark = {
       _id: objectId(PARK_A_ID),
       slug: 'authoritative-current-park',
       campgrounds: [{
         _id: objectId(CAMPGROUND_ID),
         slug: 'authoritative-current-campground',
+        campsites: [{
+          _id: objectId(CAMPSITE_ID),
+          slug: 'authoritative-site-12',
+        }],
+      }],
+      campsites: [{
+        _id: objectId(STANDALONE_CAMPSITE_ID),
+        slug: 'authoritative-standalone-site',
       }],
     };
     const parks = new Map([[PARK_A_ID, currentPark]]);
@@ -309,36 +397,67 @@ describe('administrator upload location URL resolution', () => {
       parkUrl: '/camp/park/authoritative-current-park',
       campgroundUrl:
         '/camp/park/authoritative-current-park#authoritative-current-campground',
+      campsiteUrl:
+        '/camp/park/authoritative-current-park/campground/authoritative-current-campground/campsite/authoritative-site-12',
     });
     assert.deepEqual(resolveAdminUploadLocationUrls(uploadRecord({
       campgroundId: null,
+      campsiteId: objectId(STANDALONE_CAMPSITE_ID),
     }), parks), {
       parkUrl: '/camp/park/authoritative-current-park',
       campgroundUrl: null,
+      campsiteUrl:
+        '/camp/park/authoritative-current-park/campsite/authoritative-standalone-site',
+    });
+    for (const campsiteId of [
+      null,
+      'not-an-object-id',
+      objectId(STALE_CAMPSITE_ID),
+    ]) {
+      assert.deepEqual(resolveAdminUploadLocationUrls(uploadRecord({
+        campsiteId,
+      }), parks), {
+        parkUrl: '/camp/park/authoritative-current-park',
+        campgroundUrl:
+          '/camp/park/authoritative-current-park#authoritative-current-campground',
+        campsiteUrl: null,
+      });
+    }
+    assert.deepEqual(resolveAdminUploadLocationUrls(uploadRecord({
+      campsiteId: objectId(STANDALONE_CAMPSITE_ID),
+    }), parks), {
+      parkUrl: '/camp/park/authoritative-current-park',
+      campgroundUrl:
+        '/camp/park/authoritative-current-park#authoritative-current-campground',
+      campsiteUrl: null,
     });
     assert.deepEqual(resolveAdminUploadLocationUrls(uploadRecord({
       campgroundId: objectId(STALE_CAMPGROUND_ID),
     }), parks), {
       parkUrl: '/camp/park/authoritative-current-park',
       campgroundUrl: null,
+      campsiteUrl: null,
     });
     assert.deepEqual(resolveAdminUploadLocationUrls(uploadRecord({
       parkId: objectId(STALE_PARK_ID),
     }), parks), {
       parkUrl: null,
       campgroundUrl: null,
+      campsiteUrl: null,
     });
 
     currentPark.slug = 'unsafe/park';
     assert.deepEqual(resolveAdminUploadLocationUrls(uploadRecord(), parks), {
       parkUrl: null,
       campgroundUrl: null,
+      campsiteUrl: null,
     });
     currentPark.slug = 'safe-park';
     currentPark.campgrounds[0].slug = 'unsafe?campground';
     assert.deepEqual(resolveAdminUploadLocationUrls(uploadRecord(), parks), {
       parkUrl: '/camp/park/safe-park',
       campgroundUrl: null,
+      campsiteUrl: null,
     });
   });
 
@@ -346,23 +465,28 @@ describe('administrator upload location URL resolution', () => {
     const serialized = serializeAdminUpload(uploadRecord(), {
       parkUrl: 'https://evil.example/camp/park/current-park',
       campgroundUrl: '/camp/park/current-park#north-loop?attack=1',
+      campsiteUrl: '/camp/park/current-park/campsite/site-12?attack=1',
     });
 
     assert.equal(serialized.parkUrl, null);
     assert.equal(serialized.campgroundUrl, null);
+    assert.equal(serialized.campsiteUrl, null);
 
     const mismatched = serializeAdminUpload(uploadRecord(), {
       parkUrl: '/camp/park/current-park',
       campgroundUrl: '/camp/park/different-park#north-loop',
+      campsiteUrl: '/camp/park/different-park/campsite/site-12',
     });
     assert.equal(mismatched.parkUrl, '/camp/park/current-park');
     assert.equal(mismatched.campgroundUrl, null);
+    assert.equal(mismatched.campsiteUrl, null);
 
     const campgroundWithoutPark = serializeAdminUpload(uploadRecord(), {
       campgroundUrl: '/camp/park/current-park#north-loop',
     });
     assert.equal(campgroundWithoutPark.parkUrl, null);
     assert.equal(campgroundWithoutPark.campgroundUrl, null);
+    assert.equal(campgroundWithoutPark.campsiteUrl, null);
     for (const rawId of ['parkId', 'campgroundId', 'campsiteId']) {
       assert.equal(rawId in serialized, false);
     }

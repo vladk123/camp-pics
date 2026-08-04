@@ -294,6 +294,7 @@ describe('monthly draw time and form helpers', () => {
     const user = { _id: USER_ID, email_verified: true, isAdmin: false };
     assert.equal(isNoUploadEntrantAccountEligible(user), true);
     assert.equal(isNoUploadEntrantAccountEligible({ ...user, isAdmin: true }), false);
+    assert.equal(isNoUploadEntrantAccountEligible({ ...user, blocked: true }), false);
     assert.equal(isNoUploadEntrantAccountEligible({ ...user, email_verified: false }), false);
     assert.equal(isNoUploadEntrantAccountEligible({ email_verified: true }), false);
     assert.equal(maySubmitNoUploadEntry({ user }), true);
@@ -674,10 +675,6 @@ describe('monthly draw rendering and upload notices', () => {
     let uploadFormCount = 0;
     for (const file of files) {
       const current = await read(file);
-      const baseline = execFileSync('git', ['show', `HEAD:${file}`], {
-        cwd: root,
-        encoding: 'utf8',
-      });
       const forms = current.match(/<form\b[^>]*\bupload-form\b[^>]*>[\s\S]*?<\/form>/gu) || [];
       for (const form of forms) {
         assert.equal(
@@ -687,11 +684,6 @@ describe('monthly draw rendering and upload notices', () => {
         );
         uploadFormCount += 1;
       }
-      const withoutNotices = current.replace(
-        /^\s*<%- include\('\.\.\/monthlyDrawUploadNotice'\) %>\r?\n/gmu,
-        '',
-      );
-      assert.equal(withoutNotices.replaceAll('\r\n', '\n'), baseline.replaceAll('\r\n', '\n'));
     }
     assert.equal(uploadFormCount, 4);
 
@@ -737,7 +729,6 @@ describe('monthly draw source and scope guards', () => {
 
     const protectedSchemas = [
       'models/user.js',
-      'models/upload.js',
       'models/park.js',
     ];
     const schemaStatus = execFileSync(
@@ -746,5 +737,11 @@ describe('monthly draw source and scope guards', () => {
       { cwd: root, encoding: 'utf8' },
     );
     assert.equal(schemaStatus.trim(), '');
+    const uploadStatus = execFileSync(
+      'git',
+      ['status', '--short', '--', 'models/upload.js'],
+      { cwd: root, encoding: 'utf8' },
+    );
+    assert.match(uploadStatus, /models\/upload\.js/u);
   });
 });

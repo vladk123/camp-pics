@@ -9,6 +9,8 @@
     /^\/camp\/park\/[a-z0-9]+(?:-[a-z0-9]+)*$/u;
   const DASHBOARD_CAMPGROUND_URL_PATTERN =
     /^\/camp\/park\/[a-z0-9]+(?:-[a-z0-9]+)*#[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+  const DASHBOARD_CAMPSITE_URL_PATTERN =
+    /^\/camp\/park\/[a-z0-9]+(?:-[a-z0-9]+)*(?:\/campground\/[a-z0-9]+(?:-[a-z0-9]+)*)?\/campsite\/[a-z0-9]+(?:-[a-z0-9]+)*$/u;
   const DASHBOARD_USER_DETAIL_URL_PATTERN =
     /^\/a\/users\/[a-f0-9]{24}$/u;
 
@@ -172,7 +174,22 @@
     const uploadDate = formatDate(upload.createdAt, true);
     const time = createTextElement('time', '', uploadDate.label);
     if (uploadDate.dateTime) time.dateTime = uploadDate.dateTime;
-    header.append(mediaBadge, time);
+    const badges = document.createElement('div');
+    badges.className = 'admin-upload-card__badges';
+    badges.append(mediaBadge);
+    const drawLabels = {
+      pending: 'Pending',
+      eligible: 'Eligible',
+      ineligible: 'Ineligible',
+    };
+    if (Object.hasOwn(drawLabels, upload.monthlyDrawStatus)) {
+      badges.append(createTextElement(
+        'span',
+        `admin-status-badge admin-status-badge--draw admin-status-badge--draw-${upload.monthlyDrawStatus}`,
+        `Draw: ${drawLabels[upload.monthlyDrawStatus]}`,
+      ));
+    }
+    header.append(badges, time);
 
     const details = document.createElement('dl');
     details.className = 'admin-upload-card__details';
@@ -209,7 +226,12 @@
       ));
     }
     if (upload.campsiteName) {
-      details.append(createUploadDetail('Campsite', upload.campsiteName));
+      details.append(createUploadDetail(
+        'Campsite',
+        upload.campsiteName,
+        upload.campsiteUrl,
+        DASHBOARD_CAMPSITE_URL_PATTERN,
+      ));
     }
 
     content.append(header, details);

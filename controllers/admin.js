@@ -14,6 +14,10 @@ import {
   getCompletedRoadmapItems,
   getRoadmapSummary,
 } from '../config/adminRoadmap.js';
+import {
+  MONTHLY_DRAW_UPLOAD_STATUSES,
+  deriveEasternMonthKey,
+} from '../utils/monthlyDraw.js';
 
 // import { getIP } from '../utils/getIP.js'
 import { redirectedFlash } from '../utils/redirectedFlash.js';
@@ -46,11 +50,13 @@ export const ADMIN_UPLOAD_PROJECTION = Object.freeze({
   parkName: 1,
   campgroundId: 1,
   campgroundName: 1,
+  campsiteId: 1,
   campsiteName: 1,
   youtubeId: 1,
   cloudinaryUrl: 1,
   cloudinaryId: 1,
   userId: 1,
+  'monthlyDraw.status': 1,
 });
 
 export const ADMIN_PARK_LOCATION_PROJECTION = Object.freeze({
@@ -58,6 +64,10 @@ export const ADMIN_PARK_LOCATION_PROJECTION = Object.freeze({
   slug: 1,
   'campgrounds._id': 1,
   'campgrounds.slug': 1,
+  'campgrounds.campsites._id': 1,
+  'campgrounds.campsites.slug': 1,
+  'campsites._id': 1,
+  'campsites.slug': 1,
 });
 
 export const ADMIN_UPLOAD_USER_PROJECTION = Object.freeze({
@@ -76,8 +86,11 @@ const ADMIN_PARK_URL_PATTERN =
   /^\/camp\/park\/[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const ADMIN_CAMPGROUND_URL_PATTERN =
   /^\/camp\/park\/[a-z0-9]+(?:-[a-z0-9]+)*#[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+const ADMIN_CAMPSITE_URL_PATTERN =
+  /^\/camp\/park\/[a-z0-9]+(?:-[a-z0-9]+)*(?:\/campground\/[a-z0-9]+(?:-[a-z0-9]+)*)?\/campsite\/[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const ADMIN_USER_DETAIL_PAGE_SIZE = 20;
 const ADMIN_LOGIN_ACTIVITY_LIMIT = 20;
+const MONTHLY_DRAW_UPLOAD_STATUS_SET = new Set(MONTHLY_DRAW_UPLOAD_STATUSES);
 
 function isValidAdminLocationSlug(value) {
   return typeof value === 'string' &&
@@ -93,6 +106,22 @@ export function getAdminCampgroundUrl(parkSlug, campgroundSlug) {
   const parkUrl = getAdminParkUrl(parkSlug);
   if (!parkUrl || !isValidAdminLocationSlug(campgroundSlug)) return null;
   return `${parkUrl}#${encodeURIComponent(campgroundSlug)}`;
+}
+
+export function getAdminCampsiteUrl(
+  parkSlug,
+  campsiteSlug,
+  campgroundSlug = null,
+) {
+  const parkUrl = getAdminParkUrl(parkSlug);
+  if (!parkUrl || !isValidAdminLocationSlug(campsiteSlug)) return null;
+  if (campgroundSlug == null) {
+    return `${parkUrl}/campsite/${encodeURIComponent(campsiteSlug)}`;
+  }
+  if (!isValidAdminLocationSlug(campgroundSlug)) return null;
+  return `${parkUrl}/campground/${encodeURIComponent(
+    campgroundSlug,
+  )}/campsite/${encodeURIComponent(campsiteSlug)}`;
 }
 
 export function getAdminUserDetailUrl(value) {
@@ -117,7 +146,7 @@ function parseAdminLocationObjectId(value) {
   }
 }
 
-function collectAdminUploadParkIds(uploadRecords) {
+export function collectAdminUploadParkIds(uploadRecords) {
   const parkIdsByString = new Map();
   for (const upload of uploadRecords) {
     const parkId = parseAdminLocationObjectId(upload?.parkId);
@@ -128,7 +157,7 @@ function collectAdminUploadParkIds(uploadRecords) {
   return [...parkIdsByString.values()];
 }
 
-function buildAdminParkLocationMap(parkRecords) {
+export function buildAdminParkLocationMap(parkRecords) {
   const parksById = new Map();
   for (const park of parkRecords) {
     const parkId = parseAdminLocationObjectId(park?._id);
@@ -140,27 +169,50 @@ function buildAdminParkLocationMap(parkRecords) {
 export function resolveAdminUploadLocationUrls(upload, parksById) {
   const uploadParkId = parseAdminLocationObjectId(upload?.parkId);
   if (!uploadParkId.valid) {
-    return { parkUrl: null, campgroundUrl: null };
+    return { parkUrl: null, campgroundUrl: null, campsiteUrl: null };
   }
 
   const park = parksById.get(uploadParkId.stringValue);
   const parkUrl = getAdminParkUrl(park?.slug);
-  if (!parkUrl) return { parkUrl: null, campgroundUrl: null };
-
-  const uploadCampgroundId = parseAdminLocationObjectId(upload?.campgroundId);
-  if (!uploadCampgroundId.valid || !Array.isArray(park.campgrounds)) {
-    return { parkUrl, campgroundUrl: null };
+  if (!parkUrl) {
+    return { parkUrl: null, campgroundUrl: null, campsiteUrl: null };
   }
 
-  const campground = park.campgrounds.find(candidate =>
-    strictMongoObjectIdsEqual(
+  const uploadCampgroundId = parseAdminLocationObjectId(upload?.campgroundId);
+  const campground = uploadCampgroundId.valid && Array.isArray(park.campgrounds)
+    ? park.campgrounds.find(candidate => strictMongoObjectIdsEqual(
       uploadCampgroundId.objectId,
       candidate?._id,
-    ));
+    ))
+    : null;
+  const campgroundUrl = getAdminCampgroundUrl(
+    park.slug,
+    campground?.slug,
+  );
+
+  const uploadCampsiteId = parseAdminLocationObjectId(upload?.campsiteId);
+  let campsiteUrl = null;
+  if (uploadCampsiteId.valid) {
+    const campsiteCollection = uploadCampgroundId.valid
+      ? campground?.campsites
+      : park.campsites;
+    const campsite = Array.isArray(campsiteCollection)
+      ? campsiteCollection.find(candidate => strictMongoObjectIdsEqual(
+        uploadCampsiteId.objectId,
+        candidate?._id,
+      ))
+      : null;
+    campsiteUrl = getAdminCampsiteUrl(
+      park.slug,
+      campsite?.slug,
+      uploadCampgroundId.valid ? campground?.slug : null,
+    );
+  }
 
   return {
     parkUrl,
-    campgroundUrl: getAdminCampgroundUrl(park.slug, campground?.slug),
+    campgroundUrl,
+    campsiteUrl,
   };
 }
 
@@ -244,6 +296,15 @@ export function serializeAdminUpload(upload, locationUrls = {}) {
     locationUrls.campgroundUrl,
     ADMIN_CAMPGROUND_URL_PATTERN,
   );
+  const campsiteUrl = getValidatedAdminLocationUrl(
+    locationUrls.campsiteUrl,
+    ADMIN_CAMPSITE_URL_PATTERN,
+  );
+  const monthlyDrawStatus = MONTHLY_DRAW_UPLOAD_STATUS_SET.has(
+    upload?.monthlyDraw?.status,
+  )
+    ? upload.monthlyDraw.status
+    : null;
 
   return {
     mediaType: upload?.mediaType ?? null,
@@ -256,6 +317,10 @@ export function serializeAdminUpload(upload, locationUrls = {}) {
       campgroundUrl.startsWith(`${parkUrl}#`)
       ? campgroundUrl
       : null,
+    campsiteUrl: parkUrl && campsiteUrl &&
+      campsiteUrl.startsWith(`${parkUrl}/`)
+      ? campsiteUrl
+      : null,
     youtubeId: upload?.youtubeId ?? null,
     adminPhotoUrl: upload?.mediaType === 'photo'
       ? getAdminPhotoUrl(upload)
@@ -264,6 +329,7 @@ export function serializeAdminUpload(upload, locationUrls = {}) {
       fname: upload?.userId?.fname ?? null,
       username: upload?.userId?.username ?? null,
     },
+    monthlyDrawStatus,
   };
 }
 
@@ -280,6 +346,7 @@ export function createAdminDashboardHandler({
   ParkModel = Park,
   log = logger,
   redirectWithFlash = redirectedFlash,
+  currentTime = () => new Date(),
 } = {}) {
   return async (req, res, next) => {
     try {
@@ -347,16 +414,22 @@ export function createAdminDashboardHandler({
       }
 
       // Regular render (first load)
+      const monthlyDrawMonthKey = deriveEasternMonthKey(currentTime());
       const [
         dashboardTotalUploads,
         dashboardTotalUsers,
         verifiedUsers,
         blockedUsers,
+        pendingMonthlyDrawUploads,
       ] = await Promise.all([
         UploadModel.countDocuments({}),
         UserModel.countDocuments({}),
         UserModel.countDocuments({ email_verified: true }),
         UserModel.countDocuments({ blocked: true }),
+        UploadModel.countDocuments({
+          'monthlyDraw.monthKey': monthlyDrawMonthKey,
+          'monthlyDraw.status': 'pending',
+        }),
       ]);
       const dashboardStats = Object.freeze({
         totalUploads: requireNumericDashboardCount(
@@ -375,6 +448,10 @@ export function createAdminDashboardHandler({
           blockedUsers,
           'blockedUsers',
         ),
+        pendingMonthlyDrawUploads: requireNumericDashboardCount(
+          pendingMonthlyDrawUploads,
+          'pendingMonthlyDrawUploads',
+        ),
       });
 
       return res.render('admin/dashboard', {
@@ -382,6 +459,7 @@ export function createAdminDashboardHandler({
 				title: 'Admin dashboard',
 			},
         dashboardStats,
+        monthlyDrawMonthKey,
         uploads,
         users,
         uploadPage,

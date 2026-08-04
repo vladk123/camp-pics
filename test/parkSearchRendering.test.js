@@ -148,6 +148,7 @@ describe('park-search source guards', () => {
       .filter(line => !new Set([
         'models/siteAnnouncement.js',
         'models/monthlyDrawNoUploadEntry.js',
+        'models/upload.js',
       ]).has(line.slice(3).replaceAll('\\', '/')))
       .join('\n');
 

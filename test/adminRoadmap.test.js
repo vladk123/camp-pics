@@ -169,7 +169,7 @@ describe('authoritative administrator roadmap configuration', () => {
       activePhases.map(phase => phase.id),
       [REQUIRED_PHASE_IDS[0], REQUIRED_PHASE_IDS[2], REQUIRED_PHASE_IDS[3]],
     );
-    assert.equal(activeIds.length, 14);
+    assert.equal(activeIds.length, 13);
     assert.deepEqual(completedIds, [
       'restore-production-shaped-staging-database',
       'source-controlled-admin-roadmap',
@@ -177,6 +177,7 @@ describe('authoritative administrator roadmap configuration', () => {
       'admin-user-detail',
       'upload-incentive-banner',
       'monthly-draw-rules-and-no-upload-entry',
+      'monthly-draw-upload-qualification',
       'auth-session-hardening',
       'csrf-csp-safe-rendering',
       'bounded-media-upload-hardening',
@@ -193,11 +194,11 @@ describe('authoritative administrator roadmap configuration', () => {
     assert.equal(activeIds.some(id => completedIds.includes(id)), false);
     assert.deepEqual(getRoadmapSummary(), {
       total: 27,
-      active: 14,
-      planned: 6,
+      active: 13,
+      planned: 5,
       inProgress: 0,
       blocked: 8,
-      completed: 13,
+      completed: 14,
     });
   });
 
@@ -341,7 +342,7 @@ describe('authoritative administrator roadmap configuration', () => {
       item.completedOn,
     ]), [
       ['monthly-draw-rules-and-no-upload-entry', 'completed', '2026-08-03'],
-      ['monthly-draw-upload-qualification', 'planned', null],
+      ['monthly-draw-upload-qualification', 'completed', '2026-08-03'],
       ['monthly-draw-selection-and-notification', 'planned', null],
       ['monthly-draw-scheduler-activation', 'blocked', null],
     ]);
@@ -359,6 +360,16 @@ describe('authoritative administrator roadmap configuration', () => {
       ),
       true,
     );
+    assert.deepEqual(phase.items[1].notes, [
+      'The completed implementation adds optional draw qualification metadata to Upload records.',
+      'Pending, eligible and ineligible states use fixed ineligibility reasons with no free-text note.',
+      'New uploads from eligible verified non-administrator, non-blocked accounts automatically become pending prospective entries.',
+      'Legacy uploads are not entered retroactively.',
+      'Administrator review includes safe month and status filters, selected-month counts and bounded pagination.',
+      'Current account eligibility is enforced before an upload can be marked eligible.',
+      'Draw qualification has no effect on public media approval or visibility.',
+      'Eligible Upload records retain the month, rules version, uploader, timestamp, media and location references needed by future selection work.',
+    ]);
     assert.equal(
       phase.items[2].scope.includes(
         'Administrator/operator accounts and other known ineligible accounts are excluded from the selection pool.',
@@ -943,9 +954,9 @@ describe('administrator roadmap smoke and source guards', () => {
       'models/park.js',
       'models/parkSearch.js',
       'models/token.js',
-      'models/upload.js',
       'models/user.js',
     ).trim(), '');
+    assert.match(gitStatus('models/upload.js'), /models\/upload\.js/u);
     assert.equal(gitStatus('package-lock.json').trim(), '');
     assert.deepEqual(packageJson.dependencies, headPackage.dependencies);
     assert.deepEqual(packageLock.packages, headLock.packages);
@@ -999,7 +1010,6 @@ describe('administrator roadmap smoke and source guards', () => {
       'models/park.js',
       'models/parkSearch.js',
       'models/token.js',
-      'models/upload.js',
       'models/user.js',
       'middleware.js',
     ).trim(), '');

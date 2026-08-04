@@ -7,6 +7,11 @@ import {
   MongoTransactionUnavailableError,
   runMongoTransaction,
 } from './mongoTransaction.js';
+import {
+  MONTHLY_DRAW_RULES_VERSION,
+  deriveEasternMonthKey,
+  isMonthlyDrawEntrantAccountEligible,
+} from './monthlyDraw.js';
 
 export const MEDIA_QUOTA_CHANGED = 'MEDIA_QUOTA_CHANGED';
 export const MEDIA_TRANSACTION_UNAVAILABLE =
@@ -147,7 +152,13 @@ function buildEmbeddedMedia(mediaType, item, userId) {
   };
 }
 
-function buildUploadRecord(mediaType, item, userId, metadata) {
+function buildUploadRecord(
+  mediaType,
+  item,
+  userId,
+  metadata,
+  monthlyDraw,
+) {
   const location = {
     parkId: metadata.parkId,
     parkName: metadata.parkName,
@@ -167,6 +178,7 @@ function buildUploadRecord(mediaType, item, userId, metadata) {
       cloudinaryId: item.cloudinaryUrl,
       ...location,
       userId,
+      ...(monthlyDraw ? { monthlyDraw: { ...monthlyDraw } } : {}),
     };
   }
 
@@ -177,7 +189,35 @@ function buildUploadRecord(mediaType, item, userId, metadata) {
     youtubeId: item.youtubeUrl,
     ...location,
     userId,
+    ...(monthlyDraw ? { monthlyDraw: { ...monthlyDraw } } : {}),
   };
+}
+
+function buildPendingMonthlyDrawQualification({
+  entrantAccount,
+  userId,
+  currentTime,
+}) {
+  if (
+    !idsEqual(entrantAccount?._id, userId) ||
+    !isMonthlyDrawEntrantAccountEligible(entrantAccount)
+  ) {
+    return undefined;
+  }
+
+  const createdAt = currentTime();
+  if (!(createdAt instanceof Date) || Number.isNaN(createdAt.getTime())) {
+    throw new MediaPersistenceError(MEDIA_PERSISTENCE_FAILED);
+  }
+
+  return Object.freeze({
+    status: 'pending',
+    monthKey: deriveEasternMonthKey(createdAt),
+    rulesVersion: MONTHLY_DRAW_RULES_VERSION,
+    reviewedAt: null,
+    reviewedBy: null,
+    ineligibilityReason: null,
+  });
 }
 
 function buildUserHistoryEntry(mediaType, item, metadata) {
@@ -253,6 +293,7 @@ export function createMediaPersistenceService({
   UserModel,
   transactionRunner = runMongoTransaction,
   campsiteResolver = resolveCampsiteTarget,
+  currentTime = () => new Date(),
 }) {
   if (!ParkModel || !UploadModel || !UserModel) {
     throw new TypeError('Media persistence models are required.');
@@ -262,6 +303,7 @@ export function createMediaPersistenceService({
     parkSlug,
     locationInput = {},
     userId,
+    entrantAccount,
     mediaType,
     preparedMedia,
   }) {
@@ -276,6 +318,11 @@ export function createMediaPersistenceService({
       : mediaConfig.park;
 
     try {
+      const monthlyDraw = buildPendingMonthlyDrawQualification({
+        entrantAccount,
+        userId,
+        currentTime,
+      });
       return await transactionRunner(async session => {
         const park = await ParkModel.findOne(
           { slug: parkSlug },
@@ -319,7 +366,13 @@ export function createMediaPersistenceService({
           buildEmbeddedMedia(mediaType, item, userId)
         );
         const uploadRecords = prepared.map(item =>
-          buildUploadRecord(mediaType, item, userId, metadata)
+          buildUploadRecord(
+            mediaType,
+            item,
+            userId,
+            metadata,
+            monthlyDraw,
+          )
         );
         const userHistory = prepared.map(item =>
           buildUserHistoryEntry(mediaType, item, metadata)

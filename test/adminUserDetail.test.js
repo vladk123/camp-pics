@@ -28,6 +28,7 @@ const ADMIN_ID = '74b7f2d4c9f1e8a123456789';
 const OTHER_USER_ID = '84b7f2d4c9f1e8a123456789';
 const PARK_ID = '94b7f2d4c9f1e8a123456789';
 const CAMPGROUND_ID = 'a4b7f2d4c9f1e8a123456789';
+const CAMPSITE_ID = 'b4b7f2d4c9f1e8a123456789';
 
 function objectId(value) {
   return new mongoose.Types.ObjectId(value);
@@ -69,6 +70,7 @@ function uploadRecord(index, overrides = {}) {
     parkName: `Park ${index}`,
     campgroundId: objectId(CAMPGROUND_ID),
     campgroundName: `Campground ${index}`,
+    campsiteId: objectId(CAMPSITE_ID),
     campsiteName: `Site ${index}`,
     cloudinaryUrl: `https://cdn.example.test/photo-${index}.jpg`,
     userId: objectId(TARGET_ID),
@@ -102,6 +104,26 @@ function createUserModel(record) {
 
 function idsEqual(left, right) {
   return left?.toString?.() === right?.toString?.();
+}
+
+function applyInclusionProjection(record, projection) {
+  if (!projection) return record;
+  const projected = {};
+  for (const [pathName, included] of Object.entries(projection)) {
+    if (included !== 1) continue;
+    const pathParts = pathName.split('.');
+    let source = record;
+    for (const pathPart of pathParts) source = source?.[pathPart];
+    if (source === undefined) continue;
+
+    let target = projected;
+    for (const pathPart of pathParts.slice(0, -1)) {
+      target[pathPart] ??= {};
+      target = target[pathPart];
+    }
+    target[pathParts.at(-1)] = source;
+  }
+  return projected;
 }
 
 function createUploadModel(records) {
@@ -143,7 +165,11 @@ function createUploadModel(records) {
             return records
               .filter(record => idsEqual(record.userId, filter.userId))
               .sort((left, right) => right.createdAt - left.createdAt)
-              .slice(call.skip, call.skip + call.limit);
+              .slice(call.skip, call.skip + call.limit)
+              .map(record => applyInclusionProjection(
+                record,
+                call.projection,
+              ));
           },
         };
         return chain;
@@ -418,7 +444,14 @@ describe('administrator user upload ownership, pagination and locations', () => 
       parks: [{
         _id: objectId(PARK_ID),
         slug: 'safe-park',
-        campgrounds: [{ _id: objectId(CAMPGROUND_ID), slug: 'safe-campground' }],
+        campgrounds: [{
+          _id: objectId(CAMPGROUND_ID),
+          slug: 'safe-campground',
+          campsites: [{
+            _id: objectId(CAMPSITE_ID),
+            slug: 'safe-campsite',
+          }],
+        }],
       }],
     });
     const locals = invocation.recorder.state.renders[0].locals;
@@ -431,7 +464,25 @@ describe('administrator user upload ownership, pagination and locations', () => 
     assert.equal(invocation.uploadState.calls.finds.length, 1);
     const find = invocation.uploadState.calls.finds[0];
     assert.equal(find.filter.userId.toHexString(), TARGET_ID);
-    assert.deepEqual(find.projection, ADMIN_UPLOAD_PROJECTION);
+    const expectedUploadProjection = {
+      _id: 0,
+      mediaType: 1,
+      createdAt: 1,
+      parkId: 1,
+      parkName: 1,
+      campgroundId: 1,
+      campgroundName: 1,
+      campsiteId: 1,
+      campsiteName: 1,
+      youtubeId: 1,
+      cloudinaryUrl: 1,
+      cloudinaryId: 1,
+      userId: 1,
+      'monthlyDraw.status': 1,
+    };
+    assert.equal(ADMIN_UPLOAD_PROJECTION.campsiteId, 1);
+    assert.deepEqual(ADMIN_UPLOAD_PROJECTION, expectedUploadProjection);
+    assert.deepEqual(find.projection, expectedUploadProjection);
     assert.deepEqual(find.sort, { createdAt: -1 });
     assert.equal(find.skip, 20);
     assert.equal(find.limit, 20);
@@ -456,6 +507,10 @@ describe('administrator user upload ownership, pagination and locations', () => 
     assert.equal(
       locals.uploads[0].campgroundUrl,
       '/camp/park/safe-park#safe-campground',
+    );
+    assert.equal(
+      locals.uploads[0].campsiteUrl,
+      '/camp/park/safe-park/campground/safe-campground/campsite/safe-campsite',
     );
     for (const upload of locals.uploads) {
       for (const rawId of ['parkId', 'campgroundId', 'campsiteId', 'userId']) {
