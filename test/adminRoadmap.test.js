@@ -34,6 +34,7 @@ const ITEM_ARRAY_FIELDS = [
 const REQUIRED_PHASE_IDS = [
   'operations-launch-readiness',
   'admin-product-experience',
+  'monthly-draw-program',
   'conditional-maintenance',
   'completed-foundation',
 ];
@@ -50,6 +51,10 @@ const REQUIRED_ITEM_IDS = [
   'redesign-admin-dashboard',
   'admin-user-detail',
   'upload-incentive-banner',
+  'monthly-draw-rules-and-no-upload-entry',
+  'monthly-draw-upload-qualification',
+  'monthly-draw-selection-and-notification',
+  'monthly-draw-scheduler-activation',
   'shared-rate-limit-store-before-multi-dyno',
   'review-token-ttl-and-retention',
   'targeted-dependency-maintenance',
@@ -162,15 +167,16 @@ describe('authoritative administrator roadmap configuration', () => {
 
     assert.deepEqual(
       activePhases.map(phase => phase.id),
-      [REQUIRED_PHASE_IDS[0], REQUIRED_PHASE_IDS[2]],
+      [REQUIRED_PHASE_IDS[0], REQUIRED_PHASE_IDS[2], REQUIRED_PHASE_IDS[3]],
     );
-    assert.equal(activeIds.length, 11);
+    assert.equal(activeIds.length, 14);
     assert.deepEqual(completedIds, [
       'restore-production-shaped-staging-database',
       'source-controlled-admin-roadmap',
       'redesign-admin-dashboard',
       'admin-user-detail',
       'upload-incentive-banner',
+      'monthly-draw-rules-and-no-upload-entry',
       'auth-session-hardening',
       'csrf-csp-safe-rendering',
       'bounded-media-upload-hardening',
@@ -186,12 +192,12 @@ describe('authoritative administrator roadmap configuration', () => {
     );
     assert.equal(activeIds.some(id => completedIds.includes(id)), false);
     assert.deepEqual(getRoadmapSummary(), {
-      total: 23,
-      active: 11,
-      planned: 4,
+      total: 27,
+      active: 14,
+      planned: 6,
       inProgress: 0,
-      blocked: 7,
-      completed: 12,
+      blocked: 8,
+      completed: 13,
     });
   });
 
@@ -318,6 +324,51 @@ describe('authoritative administrator roadmap configuration', () => {
       'Monthly upload promotion and winner-announcement use cases are supported.',
       'Announcement content is plain text and rendered safely against XSS.',
     ]);
+  });
+
+  test('records the complete staged monthly draw roadmap', () => {
+    const phase = adminRoadmap.phases.find(
+      candidate => candidate.id === 'monthly-draw-program',
+    );
+    assert.equal(phase.title, 'Monthly upload draw');
+    assert.equal(
+      phase.description,
+      'Implement and operate the CampPics monthly upload and no-purchase draw in clear, testable stages.',
+    );
+    assert.deepEqual(phase.items.map(item => [
+      item.id,
+      item.status,
+      item.completedOn,
+    ]), [
+      ['monthly-draw-rules-and-no-upload-entry', 'completed', '2026-08-03'],
+      ['monthly-draw-upload-qualification', 'planned', null],
+      ['monthly-draw-selection-and-notification', 'planned', null],
+      ['monthly-draw-scheduler-activation', 'blocked', null],
+    ]);
+    assert.deepEqual(
+      phase.items[0].dependencies,
+      ['site-wide announcements and campaigns.'],
+    );
+    assert.deepEqual(phase.items[0].notes, [
+      'The completed implementation uses a deterministic built-in _id for atomic one-account-per-month enforcement.',
+      'Transactional account deletion removes the account’s no-upload entries.',
+    ]);
+    assert.equal(
+      phase.items[1].scope.includes(
+        'Administrator/operator accounts are excluded from the qualification pool.',
+      ),
+      true,
+    );
+    assert.equal(
+      phase.items[2].scope.includes(
+        'Administrator/operator accounts and other known ineligible accounts are excluded from the selection pool.',
+      ),
+      true,
+    );
+    assert.equal(
+      phase.items[2].doneWhen.includes('Known ineligible accounts cannot be selected.'),
+      true,
+    );
   });
 
   test('produces deterministic plain text with active and completed work', () => {
@@ -951,7 +1002,6 @@ describe('administrator roadmap smoke and source guards', () => {
       'models/upload.js',
       'models/user.js',
       'middleware.js',
-      'utils/routeAbuseLimits.js',
     ).trim(), '');
 
     const blockRoute = routeFor('/user/:id/block');

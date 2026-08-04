@@ -1,4 +1,5 @@
 import rateLimit from 'express-rate-limit';
+import { getIP } from './getIP.js';
 
 export const ROUTE_ABUSE_LIMIT_MESSAGE =
   'Too many attempts. Please try again later.';
@@ -7,6 +8,8 @@ const AUTHENTICATED_USER_KEY_PREFIX = 'user:';
 const INVALID_AUTHENTICATED_USER_KEY =
   `${AUTHENTICATED_USER_KEY_PREFIX}invalid-authenticated-id`;
 const OBJECT_ID_HEX_PATTERN = /^[a-f0-9]{24}$/i;
+const CLIENT_IP_KEY_PREFIX = 'ip:';
+const INVALID_CLIENT_IP_KEY = `${CLIENT_IP_KEY_PREFIX}invalid-client-ip`;
 
 export const ROUTE_ABUSE_POLICIES = Object.freeze({
   login: Object.freeze({
@@ -26,6 +29,10 @@ export const ROUTE_ABUSE_POLICIES = Object.freeze({
     limit: 5,
   }),
   contact: Object.freeze({
+    windowMs: 60 * 60 * 1000,
+    limit: 5,
+  }),
+  monthlyDrawNoUploadEntry: Object.freeze({
     windowMs: 60 * 60 * 1000,
     limit: 5,
   }),
@@ -91,6 +98,16 @@ export function authenticatedUserKeyGenerator(req) {
   return INVALID_AUTHENTICATED_USER_KEY;
 }
 
+export function monthlyDrawEntryKeyGenerator(req) {
+  const authenticatedKey = authenticatedUserKeyGenerator(req);
+  if (authenticatedKey !== INVALID_AUTHENTICATED_USER_KEY) {
+    return authenticatedKey;
+  }
+
+  const clientIp = getIP(req);
+  return clientIp ? `${CLIENT_IP_KEY_PREFIX}${clientIp}` : INVALID_CLIENT_IP_KEY;
+}
+
 export function fixedRateLimitHandler(req, res) {
   return res
     .status(429)
@@ -122,6 +139,10 @@ export function createRouteAbuseLimiters({
       ROUTE_ABUSE_POLICIES.verificationResend,
     ),
     contactLimiter: createLimiter(ROUTE_ABUSE_POLICIES.contact),
+    monthlyDrawNoUploadEntryLimiter: createLimiter(
+      ROUTE_ABUSE_POLICIES.monthlyDrawNoUploadEntry,
+      monthlyDrawEntryKeyGenerator,
+    ),
     photoUploadLimiter: createLimiter(
       ROUTE_ABUSE_POLICIES.photoUpload,
       authenticatedUserKeyGenerator,
@@ -167,6 +188,7 @@ export const {
   forgotPasswordLimiter,
   verificationResendLimiter,
   contactLimiter,
+  monthlyDrawNoUploadEntryLimiter,
   photoUploadLimiter,
   videoUploadLimiter,
   mediaDeletionLimiter,

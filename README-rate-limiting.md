@@ -23,6 +23,17 @@ only to the listed POST route.
 | Forgotten-password email request | `POST /user/forgot-password` | 60 minutes | 10 |
 | Verification-email resend | `POST /user/resend-verification` | 60 minutes | 5 |
 | Contact submission | `POST /other/contact` | 60 minutes | 5 |
+| Monthly draw no-upload entry | `POST /other/monthly-draw/no-upload-entry` | 60 minutes | 5 |
+
+The monthly draw no-upload-entry limiter runs after authentication and verified-
+email enforcement. It permits five attempts per hour, counts successful and
+unsuccessful submissions, and is keyed by the authenticated User ID. If an
+authenticated ID is unexpectedly unavailable, it falls back to the canonical
+client IP produced by the existing trusted client-IP helper. A deterministic,
+server-authored entry `_id` combines the account and Eastern-Time month; the
+mandatory built-in MongoDB `_id` uniqueness is the authoritative duplicate
+protection. Its stable format is
+`monthly-draw-no-upload:YYYY-MM:<lowercase 24-character ObjectId>`.
 
 Password and account mutations use these additional policies:
 
@@ -120,6 +131,10 @@ query, slug, URL, header, or media details.
 ## Process-local limitation
 
 The current counters live in process memory and reset whenever the process restarts. Separate web dynos would have separate counters. This is acceptable for the current single-instance, basic abuse-prevention stage, but it is not distributed-bot protection and rate limiting alone does not prevent distributed attacks.
+
+The monthly draw no-upload-entry counter is process-local as well and resets
+with the process. Its deterministic `_id` and MongoDB's mandatory built-in
+`_id` uniqueness remain authoritative across processes and retries.
 
 The public API, authenticated media, password-change, account-deletion,
 administrator user-status, and reset-form submission counters are also

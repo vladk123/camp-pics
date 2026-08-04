@@ -50,6 +50,10 @@ test('account transaction contains every write and no external or HTTP work', ()
   assert.match(serviceSource, /TokenModel\.deleteMany\([\s\S]*\{ session \}/u);
   assert.match(serviceSource, /EmailModel\.deleteMany\([\s\S]*\{ session \}/u);
   assert.match(serviceSource, /CleanupJobModel\.updateMany\([\s\S]*\{ session \}/u);
+  assert.match(
+    serviceSource,
+    /MonthlyDrawNoUploadEntryModel\.deleteMany\([\s\S]*\{ session \}/u,
+  );
   assert.match(serviceSource, /UserModel\.deleteOne\([\s\S]*\{ session \}/u);
   assert.doesNotMatch(
     serviceSource,
@@ -64,10 +68,14 @@ test('final User deletion is credential guarded and occurs after auxiliary write
   const tokenDelete = serviceSource.indexOf('const tokenDelete = await TokenModel.deleteMany');
   const emailDelete = serviceSource.indexOf('const emailDelete = await EmailModel.deleteMany');
   const cleanupReference = serviceSource.lastIndexOf('CleanupJobModel.updateMany', userDelete);
+  const monthlyDrawEntryDelete = serviceSource.indexOf(
+    'MonthlyDrawNoUploadEntryModel.deleteMany',
+  );
 
   assert.ok(tokenDelete >= 0 && tokenDelete < userDelete);
   assert.ok(emailDelete >= 0 && emailDelete < userDelete);
   assert.ok(cleanupReference >= 0 && cleanupReference < userDelete);
+  assert.ok(monthlyDrawEntryDelete >= 0 && monthlyDrawEntryDelete < userDelete);
   const deleteBlock = serviceSource.slice(userDelete, serviceSource.indexOf(
     'return Object.freeze',
     userDelete,
@@ -77,6 +85,40 @@ test('final User deletion is credential guarded and occurs after auxiliary write
   assert.match(deleteBlock, /salt:\s*request\.authenticatedSalt/u);
   assert.match(deleteBlock, /isAdmin:\s*\{\s*\$ne:\s*true\s*\}/u);
   assert.match(deleteBlock, /deletedCount[\s\S]*!==\s*1/u);
+});
+
+test('monthly draw entries are injected and removed only inside the account transaction', () => {
+  assert.match(
+    serviceSource,
+    /import \{ MonthlyDrawNoUploadEntry \} from '\.\.\/models\/monthlyDrawNoUploadEntry\.js'/u,
+  );
+  assert.match(
+    serviceSource,
+    /MonthlyDrawNoUploadEntryModel = MonthlyDrawNoUploadEntry/u,
+  );
+  assert.match(serviceSource, /!MonthlyDrawNoUploadEntryModel/u);
+
+  const transactionStart = serviceSource.indexOf(
+    'transactionRunner(async session =>',
+  );
+  const entryDelete = serviceSource.indexOf(
+    'MonthlyDrawNoUploadEntryModel.deleteMany',
+    transactionStart,
+  );
+  const userDelete = serviceSource.indexOf(
+    'const userDelete = await UserModel.deleteOne',
+    entryDelete,
+  );
+  assert.ok(transactionStart >= 0 && entryDelete > transactionStart);
+  assert.ok(userDelete > entryDelete);
+  assert.match(
+    serviceSource.slice(entryDelete, userDelete),
+    /\{ userId: request\.userId \}[\s\S]*\{ session \}/u,
+  );
+  assert.doesNotMatch(
+    `${controllerSource}\n${postCommitSource}`,
+    /MonthlyDrawNoUploadEntry|monthlyDrawNoUploadEntr(?:y|ies).*delete/iu,
+  );
 });
 
 test('validated video plan is authoritative before any transactional mutation', () => {

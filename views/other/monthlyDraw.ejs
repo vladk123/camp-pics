@@ -1,0 +1,168 @@
+<% layout('/layouts/boilerplate') %>
+<link rel="stylesheet" href="/css/monthlyDraw.css">
+
+<div class="monthly-draw-page">
+  <header class="monthly-draw-hero">
+    <p class="monthly-draw-kicker">Official Rules</p>
+    <h1>CampPics Monthly Upload Draw</h1>
+    <p class="monthly-draw-no-purchase">NO PURCHASE NECESSARY.</p>
+    <p>
+      CampPics rewards useful camping photos and videos while providing an equal free entry method that requires no upload.
+    </p>
+  </header>
+
+  <section class="monthly-draw-summary" aria-labelledby="monthly-draw-summary-heading">
+    <h2 id="monthly-draw-summary-heading">Current monthly period</h2>
+    <p><strong><%= currentPeriod %></strong></p>
+    <p>One CAD $10 digital gift-card prize is available for this monthly draw.</p>
+    <p>Rules version <%= rulesVersion %></p>
+  </section>
+
+  <section class="monthly-draw-entry-panel" aria-labelledby="monthly-draw-entry-heading">
+    <h2 id="monthly-draw-entry-heading">Free no-upload entry</h2>
+    <p>No purchase and no upload are required. One no-upload entry is permitted per person and CampPics account per calendar month.</p>
+
+    <% if (!currentUser) { %>
+      <p>You must log in to a CampPics account with a verified email to use the no-upload entry method.</p>
+      <a class="btn btn-primary" href="/">Log in</a>
+    <% } else if (currentUser.isAdmin === true) { %>
+      <p role="status">Administrator accounts are not eligible to enter the monthly draw.</p>
+    <% } else if (!emailVerified) { %>
+      <p>Your account email must be verified before you can submit a no-upload entry.</p>
+      <a class="btn btn-primary" href="/user/account">Go to email verification</a>
+    <% } else if (!entryStatusAvailable) { %>
+      <p role="status">Your entry status is temporarily unavailable. Please try again later.</p>
+    <% } else if (alreadyEntered) { %>
+      <p class="monthly-draw-entry-confirmation" role="status">Your no-upload entry for this month has been received.</p>
+      <p>This entry applies to <strong><%= currentPeriod %></strong>.</p>
+    <% } else if (accountEligible && maySubmitEntry) { %>
+      <form action="/other/monthly-draw/no-upload-entry" method="post" class="monthly-draw-entry-form">
+        <%- include('../partials/csrfField') %>
+
+        <div class="monthly-draw-honeypot" aria-hidden="true">
+          <label for="monthly-draw-website">Leave this field blank</label>
+          <input id="monthly-draw-website" type="text" name="website" value="" tabindex="-1" autocomplete="off">
+        </div>
+
+        <label class="monthly-draw-check">
+          <input type="checkbox" name="ageOfMajorityConfirmed" value="true" required>
+          <span>I confirm that I have reached the age of majority in my province or territory.</span>
+        </label>
+
+        <label class="monthly-draw-check">
+          <input type="checkbox" name="rulesAccepted" value="true" required>
+          <span>I have read and agree to the Official Rules for this monthly draw.</span>
+        </label>
+
+        <button class="btn btn-primary" type="submit">Submit free entry</button>
+      </form>
+    <% } %>
+  </section>
+
+  <div class="monthly-draw-rules" aria-label="Official monthly draw rules">
+    <section aria-labelledby="monthly-draw-sponsor">
+      <h2 id="monthly-draw-sponsor">Sponsor</h2>
+      <p>The draw is sponsored and administered by CampPics.ca.</p>
+      <p>Questions may be sent through the <a href="/other/contact">CampPics Contact page</a>.</p>
+    </section>
+
+    <section aria-labelledby="monthly-draw-eligibility">
+      <h2 id="monthly-draw-eligibility">Eligibility</h2>
+      <ul>
+        <li>The draw is open to legal residents of Canada, including Quebec.</li>
+        <li>An entrant must have reached the age of majority in their province or territory.</li>
+        <li>The CampPics operator, people involved in administering the draw and members of their household are not eligible.</li>
+        <li>A registered CampPics account with a verified email is required.</li>
+        <li>One person may not use multiple accounts.</li>
+      </ul>
+    </section>
+
+    <section aria-labelledby="monthly-draw-period">
+      <h2 id="monthly-draw-period">Entry period</h2>
+      <p>Each monthly period begins at 12:00:00 a.m. Eastern Time on the first calendar day and ends at 11:59:59 p.m. Eastern Time on the last calendar day. Entries do not carry forward.</p>
+    </section>
+
+    <section aria-labelledby="monthly-draw-upload-method">
+      <h2 id="monthly-draw-upload-method">Upload entry method</h2>
+      <ul>
+        <li>Each qualifying photo or video uploaded during the monthly period earns one entry. There is no limit on the number of qualifying upload entries.</li>
+        <li>Each upload must be original or properly authorized, associated with the correct park, campground or campsite, and useful to other campers.</li>
+        <li>Each upload must comply with the <a href="/other/privacy-and-terms#tac">Terms of Service</a> and upload rules.</li>
+        <li>Duplicate, irrelevant, misleading, unsafe, spam, rights-infringing or otherwise unsuitable uploads do not qualify.</li>
+        <li>CampPics makes the final reasonable eligibility decision. Uploads are not automatically approved for the draw.</li>
+      </ul>
+    </section>
+
+    <section aria-labelledby="monthly-draw-free-method">
+      <h2 id="monthly-draw-free-method">No-upload entry method</h2>
+      <ul>
+        <li>No purchase and no upload are required.</li>
+        <li>One no-upload entry is permitted per person and CampPics account per calendar month.</li>
+        <li>The entrant must be logged into a verified account and submit the form on this page.</li>
+        <li>Multiple accounts, bots, scripts and automated submissions are prohibited.</li>
+      </ul>
+    </section>
+
+    <section aria-labelledby="monthly-draw-prize">
+      <h2 id="monthly-draw-prize">Prize</h2>
+      <p>There is one prize per monthly draw with an approximate retail value of CAD $10. The confirmed winner may select a digital Amazon.ca or Bass Pro Shops gift card, subject to availability. When neither is reasonably available, CampPics may offer an agreed digital gift card of equal or greater value.</p>
+      <p>The prize is not transferable except at CampPics’ discretion. No additional prize is awarded for that month.</p>
+    </section>
+
+    <section aria-labelledby="monthly-draw-odds">
+      <h2 id="monthly-draw-odds">Odds</h2>
+      <p>The odds of being selected depend on the number of eligible entries received for that monthly draw.</p>
+    </section>
+
+    <section aria-labelledby="monthly-draw-selection">
+      <h2 id="monthly-draw-selection">Selection</h2>
+      <ul>
+        <li>Selection is random from eligible entries for the previous month.</li>
+        <li>One primary selected entrant and two distinct ranked alternates are selected.</li>
+        <li>Additional entries increase a person’s chance of selection.</li>
+        <li>After a person is selected, their remaining entries are excluded before selecting the alternates.</li>
+        <li>A selected person is not a confirmed winner until all requirements are met.</li>
+      </ul>
+    </section>
+
+    <section aria-labelledby="monthly-draw-contact-response">
+      <h2 id="monthly-draw-contact-response">Contact and response</h2>
+      <ul>
+        <li>CampPics contacts the primary selected entrant using the verified account email.</li>
+        <li>The primary selected entrant has seven calendar days to respond.</li>
+        <li>If they do not respond or are ineligible, CampPics proceeds to the first alternate and then the second alternate.</li>
+        <li>Each alternate receives seven calendar days to respond.</li>
+        <li>If all three fail to meet the requirements, the prize is forfeited for that month.</li>
+      </ul>
+    </section>
+
+    <section aria-labelledby="monthly-draw-skill-question">
+      <h2 id="monthly-draw-skill-question">Skill-testing question</h2>
+      <p>The selected entrant must correctly answer, without assistance, a mathematical skill-testing question before being confirmed as the winner.</p>
+    </section>
+
+    <section aria-labelledby="monthly-draw-announcement">
+      <h2 id="monthly-draw-announcement">Winner announcement</h2>
+      <p>CampPics may ask permission to publish the winner’s nickname. No nickname or identifying information is published without consent.</p>
+    </section>
+
+    <section aria-labelledby="monthly-draw-disqualification">
+      <h2 id="monthly-draw-disqualification">Disqualification</h2>
+      <p>CampPics may disqualify bots or automated submissions; duplicate or fraudulent accounts; attempts to manipulate the draw; ineligible, duplicate, spam or rule-breaking uploads; false eligibility information; or conduct that compromises fair operation.</p>
+    </section>
+
+    <section aria-labelledby="monthly-draw-privacy">
+      <h2 id="monthly-draw-privacy">Privacy</h2>
+      <p>CampPics uses the existing account email and entry information only to administer the draw, contact selected entrants, verify eligibility, deliver the prize and maintain an appropriate draw record. No phone number is required.</p>
+      <p>Information is handled under the <a href="/other/privacy-and-terms#privacy">CampPics Privacy Policy</a>. Only necessary information should be retained, and public winner identification requires separate consent.</p>
+    </section>
+
+    <section aria-labelledby="monthly-draw-general">
+      <h2 id="monthly-draw-general">General</h2>
+      <p>CampPics’ decisions are final, acting reasonably. CampPics may suspend, modify or cancel a draw when fraud, technical failure or circumstances beyond reasonable control prevent fair operation. Any replacement process should preserve fairness where possible.</p>
+      <p>The draw is subject to applicable Canadian law and is void where prohibited.</p>
+    </section>
+  </div>
+
+  <p class="monthly-draw-rules-version">Rules version <%= rulesVersion %></p>
+</div>

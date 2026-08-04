@@ -24,6 +24,8 @@ const {
   forgotPasswordLimiter,
   loginLimiter,
   mediaDeletionLimiter,
+  monthlyDrawEntryKeyGenerator,
+  monthlyDrawNoUploadEntryLimiter,
   parkMediaApiLimiter,
   parkSearchApiLimiter,
   passwordChangeLimiter,
@@ -171,6 +173,16 @@ const existingFourteenExpectedPolicies = Object.freeze([
   ...publicApiExpectedPolicies,
 ]);
 
+const monthlyDrawExpectedPolicies = Object.freeze([
+  Object.freeze({
+    limiterName: 'monthlyDrawNoUploadEntryLimiter',
+    policyName: 'monthlyDrawNoUploadEntry',
+    windowMs: 60 * 60 * 1000,
+    limit: 5,
+    keyGenerator: monthlyDrawEntryKeyGenerator,
+  }),
+]);
+
 const adminExpectedPolicies = Object.freeze([
   Object.freeze({
     limiterName: 'adminUserStatusLimiter',
@@ -182,7 +194,11 @@ const adminExpectedPolicies = Object.freeze([
 ]);
 
 const expectedPolicies = Object.freeze([
-  ...existingFourteenExpectedPolicies,
+  ...existingExpectedPolicies,
+  ...monthlyDrawExpectedPolicies,
+  ...mediaExpectedPolicies,
+  ...passwordAndAccountExpectedPolicies,
+  ...publicApiExpectedPolicies,
   ...adminExpectedPolicies,
 ]);
 
@@ -343,7 +359,7 @@ const methodHandlers = (route, method) => route.stack
   .map(layer => layer.handle);
 
 describe('route-abuse policy construction', () => {
-  test('constructs fifteen exact independent policies with one fixed handler', () => {
+  test('constructs sixteen exact independent policies with one fixed handler', () => {
     const capturedOptions = [];
     const createdInstances = [];
     const limiters = createRouteAbuseLimiters({
@@ -355,10 +371,10 @@ describe('route-abuse policy construction', () => {
       },
     });
 
-    assert.equal(capturedOptions.length, 15);
-    assert.equal(createdInstances.length, 15);
-    assert.equal(new Set(createdInstances).size, 15);
-    assert.equal(new Set(Object.values(limiters)).size, 15);
+    assert.equal(capturedOptions.length, 16);
+    assert.equal(createdInstances.length, 16);
+    assert.equal(new Set(createdInstances).size, 16);
+    assert.equal(new Set(Object.values(limiters)).size, 16);
     assert.equal(Object.isFrozen(limiters), true);
     assert.deepEqual(
       Object.keys(ROUTE_ABUSE_POLICIES),
@@ -385,7 +401,7 @@ describe('route-abuse policy construction', () => {
         'statusCode',
         'windowMs',
       ];
-      if (expected.authenticatedUserKeyed) {
+      if (expected.authenticatedUserKeyed || expected.keyGenerator) {
         expectedOptionKeys.push('keyGenerator');
       }
       assert.deepEqual(
@@ -400,10 +416,10 @@ describe('route-abuse policy construction', () => {
       assert.equal(options.skipSuccessfulRequests, false);
       assert.equal(options.skipFailedRequests, false);
       assert.strictEqual(options.handler, fixedRateLimitHandler);
-      if (expected.authenticatedUserKeyed) {
+      if (expected.authenticatedUserKeyed || expected.keyGenerator) {
         assert.strictEqual(
           options.keyGenerator,
-          authenticatedUserKeyGenerator,
+          expected.keyGenerator || authenticatedUserKeyGenerator,
         );
       } else {
         assert.equal(Object.hasOwn(options, 'keyGenerator'), false);
@@ -445,7 +461,7 @@ describe('route-abuse policy construction', () => {
     const limiterNames = expectedPolicies.map(policy => policy.limiterName);
     const productionLimiters = limiterNames.map(name => routeAbuseModule[name]);
 
-    assert.equal(new Set(productionLimiters).size, 15);
+    assert.equal(new Set(productionLimiters).size, 16);
     for (const limiterName of limiterNames) {
       assert.strictEqual(routeAbuseModule[limiterName], secondImport[limiterName]);
     }
@@ -2857,6 +2873,7 @@ describe('dependency, dead-helper, global-protection, and documentation guards',
       /Forgotten-password email request[^\n]+60 minutes[^\n]+10/,
       /Verification-email resend[^\n]+60 minutes[^\n]+5/,
       /Contact submission[^\n]+60 minutes[^\n]+5/,
+      /Monthly draw no-upload entry[^\n]+60 minutes[^\n]+5/,
       /Photo upload[^\n]+10 minutes[^\n]+5/,
       /YouTube video addition[^\n]+60 minutes[^\n]+20/,
       /Media deletion[^\n]+60 minutes[^\n]+60/,
@@ -3024,10 +3041,12 @@ describe('dependency, dead-helper, global-protection, and documentation guards',
           'config/adminRoadmap.js',
           'controllers/admin.js',
           'controllers/media.js',
+          'controllers/monthlyDraw.js',
           'controllers/siteAnnouncements.js',
           'controllers/users.js',
           'middleware.js',
           'models/siteAnnouncement.js',
+          'models/monthlyDrawNoUploadEntry.js',
           'package.json',
           'package-lock.json',
         ]).has(line.slice(3).replaceAll('\\', '/'))

@@ -145,8 +145,10 @@ describe('park-search source guards', () => {
     )
       .split(/\r?\n/u)
       .filter(Boolean)
-      .filter(line => line.slice(3).replaceAll('\\', '/') !==
-        'models/siteAnnouncement.js')
+      .filter(line => !new Set([
+        'models/siteAnnouncement.js',
+        'models/monthlyDrawNoUploadEntry.js',
+      ]).has(line.slice(3).replaceAll('\\', '/')))
       .join('\n');
 
     assert.equal(status.trim(), '');

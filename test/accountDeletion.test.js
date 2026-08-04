@@ -192,6 +192,11 @@ function makeHarness({
       { _id: objectId(), userId: ids.otherUser, to: 'camper@example.test' },
       { _id: objectId(), userId: ids.otherUser, to: 'other@example.test' },
     ],
+    monthlyDrawNoUploadEntries: [
+      { _id: 'entry-current', userId: ids.user, monthKey: '2026-08' },
+      { _id: 'entry-past', userId: ids.user, monthKey: '2026-07' },
+      { _id: 'entry-other', userId: ids.otherUser, monthKey: '2026-08' },
+    ],
     jobs: [
       {
         _id: ids.existingJob,
@@ -224,6 +229,9 @@ function makeHarness({
     parkQueries: [],
     parkSaveIds: [],
     uploadDeleteFilters: [],
+    monthlyDrawDeleteFilters: [],
+    monthlyDrawDeleteCounts: [],
+    monthlyDrawDeleteSessions: [],
   };
   let working;
 
@@ -345,6 +353,27 @@ function makeHarness({
     },
   };
 
+  const MonthlyDrawNoUploadEntryModel = {
+    async deleteMany(filter, options) {
+      recordSession(options);
+      calls.events.push('monthly-draw-entry-delete');
+      calls.monthlyDrawDeleteFilters.push(clone(filter));
+      calls.monthlyDrawDeleteSessions.push(options?.session);
+      if (fault === 'monthly-draw-entry-delete') {
+        throw new Error('injected monthly draw entry delete');
+      }
+      const before = working.monthlyDrawNoUploadEntries.length;
+      working.monthlyDrawNoUploadEntries =
+        working.monthlyDrawNoUploadEntries.filter(entry =>
+          !idsEqual(entry.userId, filter.userId)
+        );
+      const deletedCount =
+        before - working.monthlyDrawNoUploadEntries.length;
+      calls.monthlyDrawDeleteCounts.push(deletedCount);
+      return { deletedCount };
+    },
+  };
+
   const CleanupJobModel = {
     async insertMany(records, options) {
       recordSession(options);
@@ -396,6 +425,8 @@ function makeHarness({
       state.uploads = working.uploads;
       state.tokens = working.tokens;
       state.emails = working.emails;
+      state.monthlyDrawNoUploadEntries =
+        working.monthlyDrawNoUploadEntries;
       state.jobs = working.jobs;
       calls.committed = true;
       return result;
@@ -421,6 +452,7 @@ function makeHarness({
     TokenModel,
     EmailModel,
     CleanupJobModel,
+    MonthlyDrawNoUploadEntryModel,
     transactionRunner,
     cleanupJobIdFactory() {
       const generated = objectId();
@@ -521,6 +553,7 @@ describe('transactional account deletion', () => {
     assert.equal(result.counts.videosRemoved, 1);
     assert.equal(result.counts.reviewsRemoved, 1);
     assert.equal(result.counts.likesRemoved, 1);
+    assert.equal(result.counts.monthlyDrawNoUploadEntriesDeleted, 2);
     assert.equal(harness.state.users.length, 1);
     assert.ok(idsEqual(harness.state.users[0]._id, harness.ids.otherUser));
     assert.deepEqual(
@@ -538,6 +571,15 @@ describe('transactional account deletion', () => {
     assert.equal(harness.state.tokens.length, 1);
     assert.equal(harness.state.emails.length, 1);
     assert.equal(harness.state.emails[0].to, 'other@example.test');
+    assert.deepEqual(harness.state.monthlyDrawNoUploadEntries, [{
+      _id: 'entry-other',
+      userId: harness.ids.otherUser,
+      monthKey: '2026-08',
+    }]);
+    assert.deepEqual(harness.calls.monthlyDrawDeleteFilters, [{
+      userId: harness.ids.user,
+    }]);
+    assert.deepEqual(harness.calls.monthlyDrawDeleteSessions, [harness.session]);
     assert.equal(harness.state.jobs.length, 3);
     const newJob = harness.state.jobs.find(job =>
       idsEqual(job._id, result.cleanupJobIds[0])
@@ -565,6 +607,10 @@ describe('transactional account deletion', () => {
     ));
     assert.equal(harness.calls.events.at(-1), 'user-delete');
     assert.ok(
+      harness.calls.events.indexOf('monthly-draw-entry-delete') <
+      harness.calls.events.lastIndexOf('user-delete'),
+    );
+    assert.ok(
       harness.calls.sessions.length > 0 &&
       harness.calls.sessions.every(value => value === harness.session),
     );
@@ -577,6 +623,8 @@ describe('transactional account deletion', () => {
     const result = await harness.remove();
 
     assert.equal(harness.calls.transactionAttempts, 2);
+    assert.deepEqual(harness.calls.monthlyDrawDeleteCounts, [2, 2]);
+    assert.equal(result.counts.monthlyDrawNoUploadEntriesDeleted, 2);
     assert.equal(harness.calls.cleanupIdsGenerated.length, 2);
     assert.notEqual(
       id(harness.calls.cleanupIdsGenerated[0]),
@@ -587,6 +635,10 @@ describe('transactional account deletion', () => {
       [id(harness.calls.cleanupIdsGenerated[1])],
     );
     assert.equal(harness.state.jobs.length, 3);
+    assert.deepEqual(
+      harness.state.monthlyDrawNoUploadEntries.map(entry => entry._id),
+      ['entry-other'],
+    );
   });
 });
 
@@ -1479,6 +1531,7 @@ describe('account-deletion credential and transaction failures', () => {
     'token-delete',
     'email-delete',
     'cleanup-reference-update',
+    'monthly-draw-entry-delete',
     'user-delete',
     'commit',
   ]) {
@@ -1501,5 +1554,14 @@ describe('account-deletion credential and transaction failures', () => {
     const error = await deletionError(harness);
     assert.equal(error.code, ACCOUNT_DELETE_TRANSACTION_UNAVAILABLE);
     assert.deepEqual(harness.state, harness.initial);
+  });
+
+  test('requires an injected monthly draw no-upload-entry model', () => {
+    assert.throws(
+      () => createAccountDeletionService({
+        MonthlyDrawNoUploadEntryModel: null,
+      }),
+      TypeError,
+    );
   });
 });

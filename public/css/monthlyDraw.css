@@ -1,0 +1,169 @@
+.monthly-draw-page {
+  box-sizing: border-box;
+  display: grid;
+  gap: 24px;
+  margin: 0 auto;
+  max-width: 960px;
+  overflow-wrap: anywhere;
+  padding: 0 50px 50px;
+  width: 100%;
+}
+
+.monthly-draw-hero,
+.monthly-draw-summary,
+.monthly-draw-entry-panel,
+.monthly-draw-rules section {
+  background: var(--white);
+  border: 1px solid var(--light-brown);
+  border-radius: 12px;
+  box-sizing: border-box;
+  padding: 24px;
+}
+
+.monthly-draw-hero {
+  border-top: 6px solid var(--orange);
+}
+
+.monthly-draw-kicker,
+.monthly-draw-rules-version {
+  font-size: var(--font-extra-small);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.monthly-draw-kicker {
+  color: var(--darker-orange);
+  margin: 0 0 8px;
+}
+
+.monthly-draw-no-purchase {
+  background: var(--yellow-warning);
+  border: 2px solid var(--darker-orange);
+  border-radius: 8px;
+  color: #241d00;
+  font-size: var(--font-medium);
+  font-weight: 900;
+  margin: 24px 0;
+  padding: 14px;
+  text-align: center;
+}
+
+.monthly-draw-summary {
+  display: grid;
+  gap: 8px;
+}
+
+.monthly-draw-summary h2,
+.monthly-draw-summary p {
+  margin: 0;
+}
+
+.monthly-draw-entry-panel {
+  border: 3px solid var(--orange);
+}
+
+.monthly-draw-entry-panel h2,
+.monthly-draw-rules section h2 {
+  margin-top: 0;
+}
+
+.monthly-draw-entry-confirmation {
+  background: color-mix(in srgb, var(--green-success) 35%, var(--white));
+  border-left: 5px solid #39763b;
+  font-weight: 700;
+  padding: 14px;
+}
+
+.monthly-draw-entry-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 20px;
+  position: relative;
+}
+
+.monthly-draw-check {
+  align-items: flex-start;
+  border: 1px solid var(--light-brown);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  min-height: 44px;
+  padding: 12px;
+}
+
+.monthly-draw-check input {
+  flex: 0 0 auto;
+  height: 22px;
+  margin: 1px 0 0;
+  width: 22px;
+}
+
+.monthly-draw-entry-form .btn {
+  min-height: 48px;
+}
+
+.monthly-draw-honeypot {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.monthly-draw-rules {
+  display: grid;
+  gap: 18px;
+}
+
+.monthly-draw-rules li + li {
+  margin-top: 8px;
+}
+
+.monthly-draw-page a:focus-visible,
+.monthly-draw-page button:focus-visible,
+.monthly-draw-page input:focus-visible {
+  outline: 3px solid var(--yellow);
+  outline-offset: 3px;
+}
+
+.monthly-draw-rules-version {
+  text-align: center;
+}
+
+[data-theme="dark"] .monthly-draw-hero,
+[data-theme="dark"] .monthly-draw-summary,
+[data-theme="dark"] .monthly-draw-entry-panel,
+[data-theme="dark"] .monthly-draw-rules section {
+  border-color: var(--light-brown);
+}
+
+[data-theme="dark"] .monthly-draw-entry-confirmation {
+  background: #243e29;
+  border-left-color: #7fcf7f;
+}
+
+@media (max-width: 576px) {
+  .monthly-draw-page {
+    gap: 16px;
+    padding: 0 10px 30px;
+  }
+
+  .monthly-draw-hero,
+  .monthly-draw-summary,
+  .monthly-draw-entry-panel,
+  .monthly-draw-rules section {
+    padding: 18px;
+  }
+
+  .monthly-draw-page h1 {
+    font-size: 2rem;
+  }
+
+  .monthly-draw-entry-form .btn {
+    width: 100%;
+  }
+}

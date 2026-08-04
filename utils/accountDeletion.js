@@ -5,6 +5,7 @@ import {
   CLOUDINARY_PHOTO_DELETE_JOB,
   MediaCleanupJob,
 } from '../models/mediaCleanupJob.js';
+import { MonthlyDrawNoUploadEntry } from '../models/monthlyDrawNoUploadEntry.js';
 import { Park } from '../models/park.js';
 import { Token } from '../models/token.js';
 import { Upload } from '../models/upload.js';
@@ -543,6 +544,7 @@ export function createAccountDeletionService({
   TokenModel = Token,
   EmailModel = Email,
   CleanupJobModel = MediaCleanupJob,
+  MonthlyDrawNoUploadEntryModel = MonthlyDrawNoUploadEntry,
   transactionRunner = runMongoTransaction,
   photoIdentityResolver = resolveCloudinaryPhotoIdentity,
   cleanupJobIdFactory = () => new mongoose.Types.ObjectId(),
@@ -554,7 +556,8 @@ export function createAccountDeletionService({
     !UploadModel ||
     !TokenModel ||
     !EmailModel ||
-    !CleanupJobModel
+    !CleanupJobModel ||
+    !MonthlyDrawNoUploadEntryModel
   ) {
     throw new TypeError('Account deletion models are required.');
   }
@@ -824,6 +827,12 @@ export function createAccountDeletionService({
           { session },
         );
 
+        const monthlyDrawNoUploadEntryDelete =
+          await MonthlyDrawNoUploadEntryModel.deleteMany(
+            { userId: request.userId },
+            { session },
+          );
+
         const userDelete = await UserModel.deleteOne(
           {
             _id: request.userId,
@@ -860,6 +869,11 @@ export function createAccountDeletionService({
             ),
             emailsDeleted: resultCount(
               emailDelete,
+              'deletedCount',
+              'n',
+            ),
+            monthlyDrawNoUploadEntriesDeleted: resultCount(
+              monthlyDrawNoUploadEntryDelete,
               'deletedCount',
               'n',
             ),

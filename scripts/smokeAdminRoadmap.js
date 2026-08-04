@@ -30,6 +30,10 @@ const REQUIRED_ITEM_IDS = [
   'redesign-admin-dashboard',
   'admin-user-detail',
   'upload-incentive-banner',
+  'monthly-draw-rules-and-no-upload-entry',
+  'monthly-draw-upload-qualification',
+  'monthly-draw-selection-and-notification',
+  'monthly-draw-scheduler-activation',
   'shared-rate-limit-store-before-multi-dyno',
   'review-token-ttl-and-retention',
   'targeted-dependency-maintenance',
@@ -136,6 +140,15 @@ function validateRoadmap() {
   assert(announcement.status === 'completed');
   assert(announcement.title === 'Site-wide announcements and campaigns');
   assert(announcement.completedOn === '2026-08-03');
+  const monthlyRules = itemsById.get('monthly-draw-rules-and-no-upload-entry');
+  assert(monthlyRules.status === 'completed');
+  assert(monthlyRules.completedOn === '2026-08-03');
+  assert(itemsById.get('monthly-draw-upload-qualification').status === 'planned');
+  assert(
+    itemsById.get('monthly-draw-selection-and-notification').status ===
+      'planned',
+  );
+  assert(itemsById.get('monthly-draw-scheduler-activation').status === 'blocked');
 
   const activeIds = new Set(
     getActiveRoadmapPhases().flatMap(phase => phase.items.map(item => item.id)),

@@ -53,7 +53,7 @@ test('every active unsafe or JavaScript-upload form includes exactly one shared 
     }
   }
 
-  assert.equal(protectedFormCount, 18);
+  assert.equal(protectedFormCount, 19);
 
   const adminUserDetail = stripHtmlComments(
     await readSource('views/admin/userDetail.ejs'),
@@ -229,6 +229,7 @@ const mutationInventory = [
   ['POST', '/a/user/:id/block', 'form'],
   ['POST', '/a/user/:id/unblock', 'form'],
   ['POST', '/other/contact', 'form'],
+  ['POST', '/other/monthly-draw/no-upload-entry', 'form'],
   ['POST', '/camp/park/:parkSlug/photo', 'fetch-helper'],
   ['POST', '/camp/park/:parkSlug/video', 'fetch-helper'],
   ['POST', '/camp/park/:parkSlug/campsite/:campsiteSlug/photo', 'fetch-helper'],
@@ -244,7 +245,7 @@ const mutationInventory = [
 ];
 
 test('the current mutation inventory is complete and each browser mutation has a protection path', async () => {
-  assert.equal(mutationInventory.length, 24);
+  assert.equal(mutationInventory.length, 25);
   assert.ok(mutationInventory.every(([, , protection]) =>
     ['form', 'fetch-helper', 'global-middleware'].includes(protection)));
 
