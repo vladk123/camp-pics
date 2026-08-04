@@ -386,6 +386,7 @@ describe('privacy-minimal MonthlyDrawResult model', () => {
       'selectedAt',
       'candidates',
       'poolSummary',
+      'notification',
       'createdAt',
       'updatedAt',
       '__v',
@@ -1226,7 +1227,7 @@ describe('rules, roadmap and deferred-scope source guards', () => {
     assert.match(rules, /Earlier uploads are not entered retroactively/u);
   });
 
-  test('keeps selection in progress with core complete, email remaining and Scheduler blocked', () => {
+  test('records completed selection and notification while Scheduler activation remains blocked', () => {
     const items = adminRoadmap.phases.flatMap(phase => phase.items);
     const selection = items.find(item =>
       item.id === 'monthly-draw-selection-and-notification'
@@ -1235,23 +1236,17 @@ describe('rules, roadmap and deferred-scope source guards', () => {
       item.id === 'monthly-draw-scheduler-activation'
     );
     assert.equal(adminRoadmap.updatedOn, '2026-08-04');
-    assert.equal(selection.status, 'in_progress');
-    assert.equal(selection.completedOn, null);
+    assert.equal(selection.status, 'completed');
+    assert.equal(selection.completedOn, '2026-08-04');
     assert.match(selection.notes.join('\n'),
-      /Completed in this pass: deterministic monthly result identity/u);
+      /permanent privacy-minimal stored selections/u);
     assert.match(selection.notes.join('\n'),
-      /Completed in this pass: idempotent repeated and concurrent execution/u);
+      /notification lease and sent marker/u);
     assert.match(selection.notes.join('\n'),
-      /Still required before completion: administrator notification email/u);
-    assert.match(
-      selection.notes.join('\n'),
-      /querying the result month's current no-upload entries with a minimal projection, computing buildMonthlyDrawNoUploadSourceReference for each and matching the stored opaque source reference/u,
-    );
-    assert.match(
-      selection.notes.join('\n'),
-      /no current opaque-reference match as an unavailable historical candidate and never redraw/u,
-    );
+      /Scheduler-ready combined command self-gates/u);
     assert.equal(scheduler.status, 'blocked');
+    assert.match(scheduler.notes.join('\n'),
+      /Production Heroku Scheduler jobs are not configured/u);
   });
 
   test('keeps providers, email, Scheduler, routes, migrations and startup mutation deferred', async () => {
@@ -1262,24 +1257,25 @@ describe('rules, roadmap and deferred-scope source guards', () => {
       read('app.js'),
       read('routes/admin.js'),
     ]);
-    const newRuntime = `${selection}\n${model}\n${command}`;
+    const selectionRuntime = `${selection}\n${command}`;
     assert.doesNotMatch(
-      newRuntime,
+      selectionRuntime,
       /Mailgun|sendEmail|SentEmail|cloudinary|gift.?card|skill.?test|winner contact/iu,
     );
     assert.doesNotMatch(
-      newRuntime,
+      selectionRuntime,
       /notification|notify|resolveMonthlyDrawCandidate/iu,
     );
-    assert.doesNotMatch(newRuntime, /scheduler|cron/iu);
-    assert.doesNotMatch(newRuntime, /migrat|backfill|bulkWrite/iu);
+    assert.doesNotMatch(selectionRuntime, /scheduler|cron/iu);
+    assert.doesNotMatch(selectionRuntime, /migrat|backfill|bulkWrite/iu);
+    assert.doesNotMatch(model, /email|nickname|template HTML|administrator email/iu);
     assert.doesNotMatch(model, /\.index\s*\(/u);
     assert.doesNotMatch(`${app}\n${routes}`,
       /runMonthlyDrawSelection|MonthlyDrawResult|monthly-draw\/result/iu);
     assert.doesNotMatch(routes, /monthly-draw.*(?:select|draw|result)/iu);
   });
 
-  test('adds only the command script, preserves engines, dependencies and package lock', async () => {
+  test('keeps all three repository commands and preserves engines, dependencies and package lock', async () => {
     const packageJson = JSON.parse(await read('package.json'));
     const headPackage = JSON.parse(execFileSync(
       'git', ['show', 'HEAD:package.json'], { cwd: root, encoding: 'utf8' },
@@ -1287,6 +1283,14 @@ describe('rules, roadmap and deferred-scope source guards', () => {
     assert.equal(
       packageJson.scripts['monthly-draw:select'],
       'node scripts/runMonthlyDrawSelection.js',
+    );
+    assert.equal(
+      packageJson.scripts['monthly-draw:notify'],
+      'node scripts/runMonthlyDrawNotification.js',
+    );
+    assert.equal(
+      packageJson.scripts['monthly-draw:scheduled'],
+      'node scripts/runScheduledMonthlyDraw.js',
     );
     assert.deepEqual(packageJson.dependencies, headPackage.dependencies);
     assert.deepEqual(packageJson.engines, { node: '24.x', npm: '11.x' });

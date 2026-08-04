@@ -148,21 +148,22 @@ function validateRoadmap() {
   );
   assert(monthlyQualification.status === 'completed');
   assert(monthlyQualification.completedOn === '2026-08-03');
-  assert(
-    itemsById.get('monthly-draw-selection-and-notification').status ===
-      'in_progress',
-  );
   const monthlySelection = itemsById.get(
     'monthly-draw-selection-and-notification',
   );
-  assert(monthlySelection.completedOn === null);
+  assert(monthlySelection.status === 'completed');
+  assert(monthlySelection.completedOn === '2026-08-04');
   assert(monthlySelection.notes.some(note =>
-    note === 'Completed in this pass: exact-once transaction persistence.'
+    note === 'The completed implementation keeps permanent privacy-minimal stored selections.'
   ));
   assert(monthlySelection.notes.some(note =>
-    note === 'Still required before completion: administrator notification email.'
+    note === 'A Scheduler-ready combined command self-gates to the first Eastern calendar day.'
   ));
-  assert(itemsById.get('monthly-draw-scheduler-activation').status === 'blocked');
+  const monthlyScheduler = itemsById.get('monthly-draw-scheduler-activation');
+  assert(monthlyScheduler.status === 'blocked');
+  assert(monthlyScheduler.notes.some(note =>
+    note === 'Production Heroku Scheduler jobs are not configured.'
+  ));
 
   const activeIds = new Set(
     getActiveRoadmapPhases().flatMap(phase => phase.items.map(item => item.id)),

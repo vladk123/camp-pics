@@ -48,6 +48,10 @@ const easternMonthFormatter = new Intl.DateTimeFormat('en-CA', {
   timeZone: MONTHLY_DRAW_TIME_ZONE,
   year: 'numeric',
 });
+const easternCalendarDayFormatter = new Intl.DateTimeFormat('en-CA', {
+  day: '2-digit',
+  timeZone: MONTHLY_DRAW_TIME_ZONE,
+});
 
 function monthKeyParts(monthKey) {
   if (typeof monthKey !== 'string') return null;
@@ -112,6 +116,16 @@ export function getPreviousMonthlyDrawMonthKey(date = new Date()) {
   return `${String(previousYear).padStart(4, '0')}-${String(previousMonth).padStart(2, '0')}`;
 }
 
+export function isFirstEasternCalendarDay(date = new Date()) {
+  if (!(date instanceof Date) || Number.isNaN(date.valueOf())) {
+    throw new TypeError('A valid Date is required.');
+  }
+  const day = easternCalendarDayFormatter
+    .formatToParts(date)
+    .find(part => part.type === 'day')?.value;
+  return day === '01';
+}
+
 export function isValidMonthKey(monthKey) {
   return monthKeyParts(monthKey) !== null;
 }
@@ -165,6 +179,12 @@ export function formatMonthlyDrawPeriod(monthKey) {
 
   const finalDay = daysInMonth(parts.year, parts.month);
   return `${MONTH_NAMES[parts.month - 1]} 1–${finalDay}, ${parts.year} (Eastern Time)`;
+}
+
+export function formatMonthlyDrawMonth(monthKey) {
+  const parts = monthKeyParts(monthKey);
+  if (!parts) throw new TypeError('A valid YYYY-MM month key is required.');
+  return `${MONTH_NAMES[parts.month - 1]} ${parts.year}`;
 }
 
 export function isMonthlyDrawEntrantAccountEligible(user) {

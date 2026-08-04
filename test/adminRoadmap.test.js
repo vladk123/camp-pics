@@ -169,7 +169,7 @@ describe('authoritative administrator roadmap configuration', () => {
       activePhases.map(phase => phase.id),
       [REQUIRED_PHASE_IDS[0], REQUIRED_PHASE_IDS[2], REQUIRED_PHASE_IDS[3]],
     );
-    assert.equal(activeIds.length, 13);
+    assert.equal(activeIds.length, 12);
     assert.deepEqual(completedIds, [
       'restore-production-shaped-staging-database',
       'source-controlled-admin-roadmap',
@@ -178,6 +178,7 @@ describe('authoritative administrator roadmap configuration', () => {
       'upload-incentive-banner',
       'monthly-draw-rules-and-no-upload-entry',
       'monthly-draw-upload-qualification',
+      'monthly-draw-selection-and-notification',
       'auth-session-hardening',
       'csrf-csp-safe-rendering',
       'bounded-media-upload-hardening',
@@ -194,11 +195,11 @@ describe('authoritative administrator roadmap configuration', () => {
     assert.equal(activeIds.some(id => completedIds.includes(id)), false);
     assert.deepEqual(getRoadmapSummary(), {
       total: 27,
-      active: 13,
+      active: 12,
       planned: 4,
-      inProgress: 1,
+      inProgress: 0,
       blocked: 8,
-      completed: 14,
+      completed: 15,
     });
   });
 
@@ -343,7 +344,7 @@ describe('authoritative administrator roadmap configuration', () => {
     ]), [
       ['monthly-draw-rules-and-no-upload-entry', 'completed', '2026-08-03'],
       ['monthly-draw-upload-qualification', 'completed', '2026-08-03'],
-      ['monthly-draw-selection-and-notification', 'in_progress', null],
+      ['monthly-draw-selection-and-notification', 'completed', '2026-08-04'],
       ['monthly-draw-scheduler-activation', 'blocked', null],
     ]);
     assert.deepEqual(
@@ -416,42 +417,29 @@ describe('authoritative administrator roadmap configuration', () => {
       phase.items[2].doneWhen.includes('Known ineligible accounts cannot be selected.'),
       true,
     );
-    assert.equal(
-      phase.items[2].notes.includes(
-        'Completed in this pass: exact-once transaction persistence.',
-      ),
-      true,
-    );
-    assert.equal(
-      phase.items[2].notes.includes(
-        'Still required before completion: administrator notification email.',
-      ),
-      true,
-    );
-    assert.equal(
-      phase.items[2].notes.includes(
-        'Still required before completion: resolve stored upload source entries to current safe account/contact details.',
-      ),
-      true,
-    );
-    assert.equal(
-      phase.items[2].notes.includes(
-        "Still required before completion: resolve a no-upload candidate by querying the result month's current no-upload entries with a minimal projection, computing buildMonthlyDrawNoUploadSourceReference for each and matching the stored opaque source reference.",
-      ),
-      true,
-    );
-    assert.equal(
-      phase.items[2].notes.includes(
-        'Still required before completion: treat a no-upload source with no current opaque-reference match as an unavailable historical candidate and never redraw.',
-      ),
-      true,
-    );
-    assert.equal(
-      phase.items[2].notes.includes(
-        'Still required before completion: resolve stored source entries to current safe account/contact details.',
-      ),
-      false,
-    );
+    for (const note of [
+      'The completed implementation keeps permanent privacy-minimal stored selections.',
+      'The pending-review gate prevents selection while uploads await review.',
+      'Weighted selection stores one primary and any available ranked alternates.',
+      'No-upload candidates use opaque source references.',
+      'Notification rechecks current source and account state before exposing contact details.',
+      'Unavailable stored candidates are labelled without redrawing or replacement.',
+      'One administrator email includes current contact and safe location details.',
+      'No-upload candidates are clearly labelled in the administrator notification.',
+      'The administrator email includes response, eligibility, skill-question, prize and publication reminders.',
+      'A hashed atomic notification lease and sent marker provide normal retry and concurrency idempotence.',
+      'Definite provider failures release the matching lease for a safe later retry.',
+      'A manual notification command supports safe dry-run and explicit apply modes.',
+      'A Scheduler-ready combined command self-gates to the first Eastern calendar day.',
+      'The implementation does not automatically contact entrants or deliver a prize.',
+    ]) assert.equal(phase.items[2].notes.includes(note), true, note);
+    assert.deepEqual(phase.items[3].notes, [
+      'The repository command is ready.',
+      'Production Heroku Scheduler jobs are not configured.',
+      'Activation requires explicit user approval and deployment verification.',
+      'The command is intended to be invoked daily and self-gates to the first Eastern calendar day.',
+      'Repeated invocations reuse one selection and one sent notification.',
+    ]);
   });
 
   test('produces deterministic plain text with active and completed work', () => {

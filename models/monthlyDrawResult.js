@@ -13,8 +13,10 @@ const RESULT_STATUSES = Object.freeze([
   'no-eligible-entries',
 ]);
 const SOURCE_TYPES = Object.freeze(['upload', 'no-upload']);
+const NOTIFICATION_STATES = Object.freeze(['pending', 'sending', 'sent']);
 const OBJECT_ID_PATTERN = /^[a-f0-9]{24}$/u;
 const FINGERPRINT_PATTERN = /^[a-f0-9]{64}$/u;
+const LEASE_TOKEN_HASH_PATTERN = /^[a-f0-9]{64}$/u;
 const NO_UPLOAD_SOURCE_PATTERN =
   /^monthly-draw-no-upload-ref:(\d{4}-(?:0[1-9]|1[0-2])):[a-f0-9]{64}$/u;
 
@@ -131,6 +133,128 @@ const poolSummarySchema = new Schema({
   strict: 'throw',
 });
 
+function notificationAttemptCountIsValid(value) {
+  return isNonNegativeInteger(value) && (
+    this.state === 'pending' || value >= 1
+  );
+}
+
+function notificationLeaseHashIsValid(value) {
+  if (this.state === 'sending') {
+    return typeof value === 'string' && LEASE_TOKEN_HASH_PATTERN.test(value);
+  }
+  return value == null;
+}
+
+function notificationLeaseExpiryIsValid(value) {
+  if (this.state === 'sending') {
+    return value instanceof Date && !Number.isNaN(value.valueOf());
+  }
+  return value == null;
+}
+
+function notificationSentAtIsValid(value) {
+  if (this.state === 'sent') {
+    return value instanceof Date && !Number.isNaN(value.valueOf());
+  }
+  return value == null;
+}
+
+function notificationAttemptTimeIsValid(value) {
+  if (this.state === 'sending' || this.state === 'sent') {
+    return value instanceof Date && !Number.isNaN(value.valueOf());
+  }
+  return value == null || (
+    value instanceof Date && !Number.isNaN(value.valueOf())
+  );
+}
+
+function providerMessageIdIsValid(value) {
+  return value == null || (
+    typeof value === 'string' &&
+    value.trim().length > 0 &&
+    value.length <= 512
+  );
+}
+
+const notificationSchema = new Schema({
+  state: {
+    type: String,
+    enum: NOTIFICATION_STATES,
+    default: 'pending',
+    required: true,
+  },
+  attemptCount: {
+    type: Number,
+    default: 0,
+    min: 0,
+    required: true,
+    validate: {
+      validator: notificationAttemptCountIsValid,
+      message: 'Notification attempt count does not match its state.',
+    },
+  },
+  lastAttemptAt: {
+    type: Date,
+    default: null,
+    required() {
+      return this.state === 'sending' || this.state === 'sent';
+    },
+    validate: {
+      validator: notificationAttemptTimeIsValid,
+      message: 'Notification attempt time does not match its state.',
+    },
+  },
+  lastFailureAt: {
+    type: Date,
+    default: null,
+  },
+  leaseTokenHash: {
+    type: String,
+    default: null,
+    required() {
+      return this.state === 'sending';
+    },
+    validate: {
+      validator: notificationLeaseHashIsValid,
+      message: 'Notification lease hash does not match its state.',
+    },
+  },
+  leaseExpiresAt: {
+    type: Date,
+    default: null,
+    required() {
+      return this.state === 'sending';
+    },
+    validate: {
+      validator: notificationLeaseExpiryIsValid,
+      message: 'Notification lease expiry does not match its state.',
+    },
+  },
+  sentAt: {
+    type: Date,
+    default: null,
+    required() {
+      return this.state === 'sent';
+    },
+    validate: {
+      validator: notificationSentAtIsValid,
+      message: 'Notification sent time does not match its state.',
+    },
+  },
+  providerMessageId: {
+    type: String,
+    default: null,
+    validate: {
+      validator: providerMessageIdIsValid,
+      message: 'Notification provider message ID is invalid.',
+    },
+  },
+}, {
+  _id: false,
+  strict: 'throw',
+});
+
 function hasValidCandidates(candidates) {
   if (!Array.isArray(candidates)) return false;
   if (this.status === 'selected') {
@@ -229,6 +353,10 @@ const monthlyDrawResultSchema = new Schema({
       validator: hasValidPoolSummary,
       message: 'Pool summary does not match the stored result.',
     },
+  },
+  notification: {
+    type: notificationSchema,
+    default: undefined,
   },
 }, {
   timestamps: true,

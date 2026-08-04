@@ -17,6 +17,8 @@
     "auth:cleanup-expired-artifacts": "node scripts/reconcileAuthArtifacts.js --apply",
     "admin:roadmap:smoke": "node scripts/smokeAdminRoadmap.js",
     "monthly-draw:select": "node scripts/runMonthlyDrawSelection.js",
+    "monthly-draw:notify": "node scripts/runMonthlyDrawNotification.js",
+    "monthly-draw:scheduled": "node scripts/runScheduledMonthlyDraw.js",
     "start": "node app.js"
   },
   "repository": {

@@ -214,7 +214,7 @@ describe('browser EJS inline-style contract', () => {
     assert.equal(active.blocks.length, 1);
   });
 
-  test('email inline styles remain present and email templates are unchanged', async () => {
+  test('email inline styles remain scoped to email templates', async () => {
     const emailFiles = [
       'views/emails/email-contact-form-submission.ejs',
       'views/emails/reset-password.ejs',
@@ -223,13 +223,23 @@ describe('browser EJS inline-style contract', () => {
     for (const file of emailFiles) {
       assert.match(await read(file), /<body style="font-family: Arial, sans-serif;">/u);
     }
+    assert.match(
+      await read('views/emails/monthly-draw-admin-notification.ejs'),
+      /<body style="font-family: Arial, sans-serif; color: #202020; line-height: 1.5;">/u,
+    );
 
     const status = execFileSync(
       'git',
       ['status', '--short', '--', 'views/emails'],
       { cwd: root, encoding: 'utf8' },
     );
-    assert.equal(status.trim(), '');
+    assert.deepEqual(
+      status
+        .split(/\r?\n/u)
+        .filter(Boolean)
+        .map(line => line.slice(3).replaceAll('\\', '/')),
+      ['views/emails/monthly-draw-admin-notification.ejs'],
+    );
   });
 });
 
@@ -506,6 +516,7 @@ describe('CSP, vendor, and scope guards', () => {
       'routes/users.js',
       'package.json',
       'package-lock.json',
+      'views/emails/monthly-draw-admin-notification.ejs',
     ]);
     const unexpectedChanges = status
       .split(/\r?\n/u)

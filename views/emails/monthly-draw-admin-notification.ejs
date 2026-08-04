@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+  <body style="font-family: Arial, sans-serif; color: #202020; line-height: 1.5;">
+    <h1>CampPics monthly draw selections</h1>
+
+    <h2>Draw summary</h2>
+    <ul>
+      <li><strong>Draw month:</strong> <%= drawMonth %></li>
+      <li><strong>Selected at:</strong> <%= selectedAt || 'Unavailable' %></li>
+      <li><strong>Result status:</strong> <%= resultStatus %></li>
+      <li><strong>Eligible upload entries:</strong> <%= poolSummary.eligibleUploadEntries %></li>
+      <li><strong>Eligible no-upload entries:</strong> <%= poolSummary.eligibleNoUploadEntries %></li>
+      <li><strong>Total eligible entries:</strong> <%= poolSummary.totalEligibleEntries %></li>
+      <li><strong>Distinct eligible entrants:</strong> <%= poolSummary.eligibleDistinctEntrants %></li>
+      <li><strong>Excluded account entries:</strong> <%= poolSummary.excludedAccountEntries %></li>
+    </ul>
+
+    <% if (noEligibleEntries) { %>
+      <p><strong>No eligible entries existed for this draw month.</strong></p>
+    <% } %>
+
+    <% for (const candidate of candidates) { %>
+      <section>
+        <h2><%= candidate.rankLabel %></h2>
+        <% if (candidate.available) { %>
+          <ul>
+            <li><strong>Nickname:</strong> <%= candidate.nickname || 'Unavailable' %></li>
+            <li><strong>Verified account email:</strong> <%= candidate.email || 'Unavailable' %></li>
+            <li><strong>Entry source:</strong> <%= candidate.sourceLabel || 'Unavailable' %></li>
+            <li><strong>Total eligible entries for this person:</strong> <%= candidate.entryCount %></li>
+            <% if (candidate.mediaType) { %>
+              <li><strong>Media type:</strong> <%= candidate.mediaType %></li>
+            <% } %>
+            <% if (candidate.uploadedAt) { %>
+              <li><strong>Upload date:</strong> <%= candidate.uploadedAt %></li>
+            <% } %>
+            <% if (candidate.parkName) { %>
+              <li><strong>Park:</strong> <%= candidate.parkName %></li>
+            <% } %>
+            <% if (candidate.campgroundName) { %>
+              <li><strong>Campground:</strong> <%= candidate.campgroundName %></li>
+            <% } %>
+            <% if (candidate.campsiteName) { %>
+              <li><strong>Campsite:</strong> <%= candidate.campsiteName %></li>
+            <% } %>
+            <% if (candidate.locationUrl) { %>
+              <li><a href="<%= candidate.locationUrl %>">Open location</a></li>
+            <% } %>
+            <% if (candidate.userDetailUrl) { %>
+              <li><a href="<%= candidate.userDetailUrl %>">Open administrator user page</a></li>
+            <% } %>
+          </ul>
+        <% } else { %>
+          <p><strong><%= candidate.unavailableReasonLabel %></strong></p>
+          <p>CampPics must not redraw or replace this stored candidate.</p>
+        <% } %>
+      </section>
+    <% } %>
+
+    <h2>Administrator reminders</h2>
+    <ul>
+      <li>There is one prize. Contact only the primary selected entrant first.</li>
+      <li>Allow seven calendar days for that person to respond.</li>
+      <li>Proceed to each stored alternate in rank order only when necessary.</li>
+      <li>Confirm Canadian residency.</li>
+      <li>Confirm the entrant is the age of majority in their province or territory.</li>
+      <li>Ask the mathematical skill-testing question.</li>
+      <li>Confirm the preferred gift card.</li>
+      <li>Request consent before publishing the entrant's nickname.</li>
+      <li>Do not select or invent a replacement beyond the stored ranks.</li>
+      <li>This email does not automatically contact entrants or deliver a prize.</li>
+    </ul>
+
+    <%- include('./partials/signature') %>
+  </body>
+</html>

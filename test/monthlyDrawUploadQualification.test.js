@@ -903,8 +903,14 @@ describe('non-retroactive and deferred-scope guards', () => {
 
     const scripts = await readdir(path.join(root, 'scripts'));
     assert.deepEqual(
-      scripts.filter(name => /monthly.*draw|draw.*monthly/iu.test(name)),
-      ['runMonthlyDrawSelection.js'],
+      scripts
+        .filter(name => /monthly.*draw|draw.*monthly/iu.test(name))
+        .sort(),
+      [
+        'runMonthlyDrawNotification.js',
+        'runMonthlyDrawSelection.js',
+        'runScheduledMonthlyDraw.js',
+      ],
     );
   });
 });
