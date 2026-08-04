@@ -632,7 +632,8 @@ describe('monthly draw rendering and upload notices', () => {
       'approximate retail value of CAD $10',
       'digital Amazon.ca or Bass Pro Shops gift card',
       'The odds of being selected depend on the number of eligible entries received for that monthly draw.',
-      'one primary selected entrant and two distinct ranked alternates',
+      'one primary selected entrant and up to two distinct ranked alternates',
+      'when enough distinct eligible entrants exist',
       'seven calendar days',
       'mathematical skill-testing question',
       'No nickname or identifying information is published without consent',
@@ -742,6 +743,6 @@ describe('monthly draw source and scope guards', () => {
       ['status', '--short', '--', 'models/upload.js'],
       { cwd: root, encoding: 'utf8' },
     );
-    assert.match(uploadStatus, /models\/upload\.js/u);
+    assert.equal(uploadStatus.trim(), '');
   });
 });

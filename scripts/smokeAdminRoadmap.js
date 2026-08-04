@@ -150,8 +150,18 @@ function validateRoadmap() {
   assert(monthlyQualification.completedOn === '2026-08-03');
   assert(
     itemsById.get('monthly-draw-selection-and-notification').status ===
-      'planned',
+      'in_progress',
   );
+  const monthlySelection = itemsById.get(
+    'monthly-draw-selection-and-notification',
+  );
+  assert(monthlySelection.completedOn === null);
+  assert(monthlySelection.notes.some(note =>
+    note === 'Completed in this pass: exact-once transaction persistence.'
+  ));
+  assert(monthlySelection.notes.some(note =>
+    note === 'Still required before completion: administrator notification email.'
+  ));
   assert(itemsById.get('monthly-draw-scheduler-activation').status === 'blocked');
 
   const activeIds = new Set(

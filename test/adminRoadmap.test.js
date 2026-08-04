@@ -103,7 +103,7 @@ function assertDeeplyFrozen(value) {
 describe('authoritative administrator roadmap configuration', () => {
   test('has the exact baseline version, date, phases and stable item IDs', () => {
     assert.equal(adminRoadmap.version, 1);
-    assert.equal(adminRoadmap.updatedOn, '2026-08-03');
+    assert.equal(adminRoadmap.updatedOn, '2026-08-04');
     assert.deepEqual(adminRoadmap.phases.map(phase => phase.id), REQUIRED_PHASE_IDS);
     assert.deepEqual(allItems().map(item => item.id), REQUIRED_ITEM_IDS);
     assertDeeplyFrozen(adminRoadmap);
@@ -195,8 +195,8 @@ describe('authoritative administrator roadmap configuration', () => {
     assert.deepEqual(getRoadmapSummary(), {
       total: 27,
       active: 13,
-      planned: 5,
-      inProgress: 0,
+      planned: 4,
+      inProgress: 1,
       blocked: 8,
       completed: 14,
     });
@@ -343,7 +343,7 @@ describe('authoritative administrator roadmap configuration', () => {
     ]), [
       ['monthly-draw-rules-and-no-upload-entry', 'completed', '2026-08-03'],
       ['monthly-draw-upload-qualification', 'completed', '2026-08-03'],
-      ['monthly-draw-selection-and-notification', 'planned', null],
+      ['monthly-draw-selection-and-notification', 'in_progress', null],
       ['monthly-draw-scheduler-activation', 'blocked', null],
     ]);
     assert.deepEqual(
@@ -377,8 +377,80 @@ describe('authoritative administrator roadmap configuration', () => {
       true,
     );
     assert.equal(
+      phase.items[2].purpose,
+      'Select one primary entrant and up to two distinct alternates for the previous month exactly once and email the stored result to the administrator.',
+    );
+    assert.equal(
+      phase.items[2].scope.includes('Up to three distinct ranked people.'),
+      true,
+    );
+    assert.equal(
+      phase.items[2].scope.includes(
+        'Primary, first alternate and second alternate when available.',
+      ),
+      true,
+    );
+    assert.equal(
+      phase.items[2].doneWhen.includes(
+        'The administrator receives the primary and any available ranked alternates.',
+      ),
+      true,
+    );
+    assert.equal(
+      phase.items[2].scope.includes('Three distinct ranked people.'),
+      false,
+    );
+    assert.equal(
+      phase.items[2].scope.includes(
+        'Primary, first alternate and second alternate.',
+      ),
+      false,
+    );
+    assert.equal(
+      phase.items[2].doneWhen.includes(
+        'The administrator receives the primary and two alternates.',
+      ),
+      false,
+    );
+    assert.equal(
       phase.items[2].doneWhen.includes('Known ineligible accounts cannot be selected.'),
       true,
+    );
+    assert.equal(
+      phase.items[2].notes.includes(
+        'Completed in this pass: exact-once transaction persistence.',
+      ),
+      true,
+    );
+    assert.equal(
+      phase.items[2].notes.includes(
+        'Still required before completion: administrator notification email.',
+      ),
+      true,
+    );
+    assert.equal(
+      phase.items[2].notes.includes(
+        'Still required before completion: resolve stored upload source entries to current safe account/contact details.',
+      ),
+      true,
+    );
+    assert.equal(
+      phase.items[2].notes.includes(
+        "Still required before completion: resolve a no-upload candidate by querying the result month's current no-upload entries with a minimal projection, computing buildMonthlyDrawNoUploadSourceReference for each and matching the stored opaque source reference.",
+      ),
+      true,
+    );
+    assert.equal(
+      phase.items[2].notes.includes(
+        'Still required before completion: treat a no-upload source with no current opaque-reference match as an unavailable historical candidate and never redraw.',
+      ),
+      true,
+    );
+    assert.equal(
+      phase.items[2].notes.includes(
+        'Still required before completion: resolve stored source entries to current safe account/contact details.',
+      ),
+      false,
     );
   });
 
@@ -387,7 +459,7 @@ describe('authoritative administrator roadmap configuration', () => {
     const second = formatAdminRoadmapPlainText();
 
     assert.equal(first, second);
-    assert.match(first, /^CampPics administrator roadmap\nVersion: 1\nUpdated: 2026-08-03\n/u);
+    assert.match(first, /^CampPics administrator roadmap\nVersion: 1\nUpdated: 2026-08-04\n/u);
     assert.match(first, /\nActive work\n/u);
     assert.match(first, /Operations and launch readiness/u);
     assert.match(first, /Schedule the media cleanup worker \[blocked\] \(schedule-media-cleanup-worker\)/u);
@@ -956,7 +1028,7 @@ describe('administrator roadmap smoke and source guards', () => {
       'models/token.js',
       'models/user.js',
     ).trim(), '');
-    assert.match(gitStatus('models/upload.js'), /models\/upload\.js/u);
+    assert.equal(gitStatus('models/upload.js').trim(), '');
     assert.equal(gitStatus('package-lock.json').trim(), '');
     assert.deepEqual(packageJson.dependencies, headPackage.dependencies);
     assert.deepEqual(packageLock.packages, headLock.packages);

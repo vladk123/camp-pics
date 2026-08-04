@@ -499,6 +499,7 @@ describe('CSP, vendor, and scope guards', () => {
       'middleware.js',
       'models/siteAnnouncement.js',
       'models/monthlyDrawNoUploadEntry.js',
+      'models/monthlyDrawResult.js',
       'models/upload.js',
       'routes/admin.js',
       'routes/other.js',

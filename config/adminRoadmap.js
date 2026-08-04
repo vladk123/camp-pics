@@ -20,7 +20,7 @@ function deepFreeze(value) {
 
 const roadmapDefinition = {
   version: 1,
-  updatedOn: '2026-08-03',
+  updatedOn: '2026-08-04',
   phases: [
     {
       id: 'operations-launch-readiness',
@@ -524,15 +524,15 @@ const roadmapDefinition = {
         {
           id: 'monthly-draw-selection-and-notification',
           title: 'Monthly selection and administrator notification',
-          status: 'planned',
-          purpose: 'Select one primary entrant and two distinct alternates for the previous month exactly once and email the stored result to the administrator.',
+          status: 'in_progress',
+          purpose: 'Select one primary entrant and up to two distinct alternates for the previous month exactly once and email the stored result to the administrator.',
           scope: [
             'Combine eligible upload entries and no-upload entries.',
             'Weighted upload entries.',
             'One no-upload entry per account/person.',
             'Administrator/operator accounts and other known ineligible accounts are excluded from the selection pool.',
-            'Three distinct ranked people.',
-            'Primary, first alternate and second alternate.',
+            'Up to three distinct ranked people.',
+            'Primary, first alternate and second alternate when available.',
             'Cryptographically sound unbiased selection.',
             'One permanent draw record per month.',
             'Idempotent retries.',
@@ -555,11 +555,30 @@ const roadmapDefinition = {
           doneWhen: [
             'Concurrent or repeated runs cannot select different people.',
             'The same stored result is reused for email retries.',
-            'The administrator receives the primary and two alternates.',
+            'The administrator receives the primary and any available ranked alternates.',
             'Private entry data is not publicly exposed.',
             'Known ineligible accounts cannot be selected.',
           ],
-          notes: [],
+          notes: [
+            'Completed in this pass: deterministic monthly result identity.',
+            'Completed in this pass: pending-review gate.',
+            'Completed in this pass: eligible upload and no-upload pool combination.',
+            'Completed in this pass: current account-eligibility rechecking.',
+            'Completed in this pass: weighted unbiased random selection.',
+            'Completed in this pass: one primary and up to two distinct alternates.',
+            'Completed in this pass: privacy-minimal stored candidates.',
+            'Completed in this pass: exact-once transaction persistence.',
+            'Completed in this pass: dry-run/apply repository command.',
+            'Completed in this pass: idempotent repeated and concurrent execution.',
+            'Still required before completion: resolve stored upload source entries to current safe account/contact details.',
+            'Still required before completion: resolve a no-upload candidate by querying the result month\'s current no-upload entries with a minimal projection, computing buildMonthlyDrawNoUploadSourceReference for each and matching the stored opaque source reference.',
+            'Still required before completion: treat a no-upload source with no current opaque-reference match as an unavailable historical candidate and never redraw.',
+            'Still required before completion: administrator notification email.',
+            'Still required before completion: safe email retry/lease behavior.',
+            'Still required before completion: Park, Campground and campsite links for upload-based selections.',
+            'Still required before completion: no-upload source labelling in the administrator notification.',
+            'Still required before completion: reminders for response deadline, eligibility confirmation, skill-testing question and publication consent.',
+          ],
           completedOn: null,
         },
         {

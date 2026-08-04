@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 export const MONTHLY_DRAW_RULES_VERSION = '2026-08-03-v1';
 export const MONTHLY_DRAW_TIME_ZONE = 'America/Toronto';
 export const MONTHLY_DRAW_UPLOAD_STATUSES = Object.freeze([
@@ -27,6 +29,8 @@ export const MONTHLY_DRAW_INELIGIBILITY_REASON_LABELS = Object.freeze({
 const MONTH_KEY_PATTERN = /^(?<year>\d{4})-(?<month>0[1-9]|1[0-2])$/u;
 const OBJECT_ID_HEX_PATTERN = /^[a-f0-9]{24}$/iu;
 const NO_UPLOAD_ENTRY_ID_PREFIX = 'monthly-draw-no-upload';
+const NO_UPLOAD_SOURCE_REFERENCE_PREFIX = 'monthly-draw-no-upload-ref';
+const RESULT_ID_PREFIX = 'monthly-draw-result';
 const MONTH_NAMES = Object.freeze(Array.from({ length: 12 }, (_, index) =>
   new Intl.DateTimeFormat('en-CA', {
     month: 'long',
@@ -56,25 +60,7 @@ function monthKeyParts(monthKey) {
   return { month, year };
 }
 
-export function deriveEasternMonthKey(date = new Date()) {
-  if (!(date instanceof Date) || Number.isNaN(date.valueOf())) {
-    throw new TypeError('A valid Date is required.');
-  }
-
-  const parts = Object.fromEntries(
-    easternMonthFormatter
-      .formatToParts(date)
-      .filter(part => part.type === 'year' || part.type === 'month')
-      .map(part => [part.type, part.value]),
-  );
-  return `${parts.year}-${parts.month}`;
-}
-
-export function isValidMonthKey(monthKey) {
-  return monthKeyParts(monthKey) !== null;
-}
-
-export function buildMonthlyDrawNoUploadEntryId(userId, monthKey) {
+function normalizedObjectIdHex(userId) {
   let userIdHex;
   try {
     if (typeof userId === 'string') {
@@ -97,11 +83,71 @@ export function buildMonthlyDrawNoUploadEntryId(userId, monthKey) {
   ) {
     throw new TypeError('A valid ObjectId is required.');
   }
+  return userIdHex.toLowerCase();
+}
+
+export function deriveEasternMonthKey(date = new Date()) {
+  if (!(date instanceof Date) || Number.isNaN(date.valueOf())) {
+    throw new TypeError('A valid Date is required.');
+  }
+
+  const parts = Object.fromEntries(
+    easternMonthFormatter
+      .formatToParts(date)
+      .filter(part => part.type === 'year' || part.type === 'month')
+      .map(part => [part.type, part.value]),
+  );
+  return `${parts.year}-${parts.month}`;
+}
+
+export function getPreviousMonthlyDrawMonthKey(date = new Date()) {
+  const currentMonth = monthKeyParts(deriveEasternMonthKey(date));
+  const previousMonth = currentMonth.month === 1 ? 12 : currentMonth.month - 1;
+  const previousYear = currentMonth.month === 1
+    ? currentMonth.year - 1
+    : currentMonth.year;
+  if (previousYear < 1) {
+    throw new TypeError('A previous monthly draw month is unavailable.');
+  }
+  return `${String(previousYear).padStart(4, '0')}-${String(previousMonth).padStart(2, '0')}`;
+}
+
+export function isValidMonthKey(monthKey) {
+  return monthKeyParts(monthKey) !== null;
+}
+
+export function buildMonthlyDrawNoUploadEntryId(userId, monthKey) {
+  const userIdHex = normalizedObjectIdHex(userId);
   if (!isValidMonthKey(monthKey)) {
     throw new TypeError('A valid YYYY-MM month key is required.');
   }
 
-  return `${NO_UPLOAD_ENTRY_ID_PREFIX}:${monthKey}:${userIdHex.toLowerCase()}`;
+  return `${NO_UPLOAD_ENTRY_ID_PREFIX}:${monthKey}:${userIdHex}`;
+}
+
+export function buildMonthlyDrawNoUploadSourceReference(userId, monthKey) {
+  const entryId = buildMonthlyDrawNoUploadEntryId(userId, monthKey);
+  const digest = createHash('sha256')
+    .update(entryId, 'utf8')
+    .digest('hex');
+  return `${NO_UPLOAD_SOURCE_REFERENCE_PREFIX}:${monthKey}:${digest}`;
+}
+
+export function buildMonthlyDrawResultId(monthKey) {
+  if (!isValidMonthKey(monthKey)) {
+    throw new TypeError('A valid YYYY-MM month key is required.');
+  }
+  return `${RESULT_ID_PREFIX}:${monthKey}`;
+}
+
+export function buildMonthlyDrawEntrantFingerprint(userId, monthKey) {
+  if (!isValidMonthKey(monthKey)) {
+    throw new TypeError('A valid YYYY-MM month key is required.');
+  }
+  const userIdHex = normalizedObjectIdHex(userId);
+  return createHash('sha256')
+    .update(`${monthKey}:${userIdHex}`, 'utf8')
+    .digest('hex');
 }
 
 function isLeapYear(year) {

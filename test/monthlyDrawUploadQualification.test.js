@@ -902,9 +902,9 @@ describe('non-retroactive and deferred-scope guards', () => {
     assert.doesNotMatch(combined, /sendEmail|Mailgun|MonthlyDrawResult/iu);
 
     const scripts = await readdir(path.join(root, 'scripts'));
-    assert.equal(
-      scripts.some(name => /monthly.*draw|draw.*monthly/iu.test(name)),
-      false,
+    assert.deepEqual(
+      scripts.filter(name => /monthly.*draw|draw.*monthly/iu.test(name)),
+      ['runMonthlyDrawSelection.js'],
     );
   });
 });
