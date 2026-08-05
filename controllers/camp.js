@@ -1,4 +1,3 @@
-import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import ParkSearch from '../models/parkSearch.js';
@@ -23,7 +22,6 @@ import {
 } from '../utils/parkSearch.js';
 
 
-const router = express.Router();
 const cacheDir = path.join(process.cwd(), 'cache');
 const cacheFile = path.join(cacheDir, 'parkSearch.json');
 const refreshIntervalHrs = 24;

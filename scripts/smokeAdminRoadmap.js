@@ -178,6 +178,20 @@ function validateRoadmap() {
   assert(monthlyScheduler.notes.some(note =>
     note === 'The latest committed code still needs deployment and verification.'
   ));
+  const targetedDependency = itemsById.get('targeted-dependency-maintenance');
+  assert(targetedDependency.status === 'planned');
+  const finalSweep = itemsById.get('final-dead-code-dry-sweep');
+  assert(finalSweep.status === 'completed');
+  assert(finalSweep.completedOn === '2026-08-04');
+  assert(
+    finalSweep.notes.join('|') === [
+      'A repository-wide narrow dead-code review was completed.',
+      'Only high-confidence unused code and stale wording were removed or corrected.',
+      'Dynamic routes, templates, models, scripts and compatibility paths were preserved.',
+      'No architectural refactor or dependency churn was performed.',
+      'Uncertain candidates were intentionally retained.',
+    ].join('|'),
+  );
 
   const activeIds = new Set(
     getActiveRoadmapPhases().flatMap(phase => phase.items.map(item => item.id)),

@@ -1,7 +1,6 @@
 import express from "express";
 const router = express.Router();
 import * as users from '../controllers/users.js';
-// const {noDoubleSubmission, isLoggedIn, isLoggedOut, usernameToLowerCaseAndTrim} = from '../middleware';
 import {
   isAuthenticatedForVerification,
   isLoggedIn,

@@ -352,42 +352,6 @@ function scrollCampsiteThumbIntoView(index) {
 
 
 
-// Loads preview in the right-hand column
-function loadCampsitePreview(item) {
-  const previewWrapper = document.getElementById('campsite-preview-wrapper');
-  const caption = document.getElementById('campsite-caption');
-  if (!previewWrapper || !caption) return;
-
-  previewWrapper.replaceChildren();
-
-  if (item.type === 'photo') {
-    const image = mediaRendering.createImageElement({
-      src: item.url,
-      alt: item.caption || 'Campsite photo',
-    });
-    image.addEventListener('click', () => {
-      openCampsiteFullscreen('photo', item.url, item.caption || '');
-    });
-    previewWrapper.appendChild(image);
-  } else {
-    const video = mediaRendering.createYouTubeIframe(item.url, {
-      title: item.caption || 'Campsite YouTube video',
-    }) || mediaRendering.createImageElement({
-      src: mediaRendering.VIDEO_PLACEHOLDER,
-      alt: 'Video unavailable',
-      fallbackSrc: '',
-    });
-    previewWrapper.appendChild(video);
-  }
-
-  caption.textContent = [
-    item.caption || '',
-    item.username ? '• by ' + item.username : '',
-    item.dateTaken ? '• taken ' + formatDate(item.dateTaken) : '',
-  ].filter(Boolean).join('  ');
-}
-
-
 document.addEventListener('DOMContentLoaded', async() => {
   const parkSlug = window.PARK.slug;
 

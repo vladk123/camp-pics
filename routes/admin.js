@@ -3,7 +3,6 @@ const router = express.Router();
 import * as admin from '../controllers/admin.js';
 import * as siteAnnouncements from '../controllers/siteAnnouncements.js';
 import * as monthlyDrawAdmin from '../controllers/monthlyDrawAdmin.js';
-// const {noDoubleSubmission, isLoggedIn, isLoggedOut, usernameToLowerCaseAndTrim} = from '../middleware';
 import { isAdmin, usernameToLowerCaseAndTrim, catchAsyncErrors } from '../middleware.js'; //
 import passport from 'passport';
 import { adminUserStatusLimiter } from '../utils/routeAbuseLimits.js';

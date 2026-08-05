@@ -2,8 +2,7 @@ import express from "express";
 const router = express.Router();
 import * as other from '../controllers/other.js';
 import * as monthlyDraw from '../controllers/monthlyDraw.js';
-import { isLoggedIn, catchAsyncErrors, uploadMemory } from '../middleware.js'; //
-import { loadCache } from '../controllers/camp.js'
+import { isLoggedIn, catchAsyncErrors } from '../middleware.js'; //
 import {
     contactLimiter,
     monthlyDrawNoUploadEntryLimiter,

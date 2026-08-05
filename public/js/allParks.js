@@ -4,7 +4,6 @@ let selectedProvince = null;
 let parksByProvince = {};
 let map;
 let currentOverlay = null;
-let currentMarkers = [];
 let backControl = null;
 let activeProvinceLayer = null;
 let activeProvinceLi = null;
@@ -553,24 +552,6 @@ function setActiveProvince(provinceData, liElement = null) {
     `#province-list li[data-abbrev="${provinceData.abbrev}"]`
   );
   if (activeProvinceLi) activeProvinceLi.classList.add('selected-province');
-}
-
-
-function clearActiveProvinceHighlight() {
-  if (activeProvinceLayer) {
-    activeProvinceLayer.setStyle({ fillOpacity: 0.1, weight: 2 });
-    activeProvinceLayer = null;
-  }
-  if (activeProvinceLi) {
-    activeProvinceLi.classList.remove('selected-province');
-    activeProvinceLi = null;
-  }
-
-  // Also unhighlight Canada (if we’re switching away)
-  const canadaLi = document.querySelector('#province-list li[data-abbrev="CANADA"]');
-  if (canadaLi) {
-    canadaLi.classList.remove('selected-province');
-  }
 }
 
 

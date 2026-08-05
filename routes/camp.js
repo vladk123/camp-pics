@@ -2,7 +2,7 @@ import express from "express";
 const router = express.Router();
 import * as camp from '../controllers/camp.js';
 import * as media from '../controllers/media.js';
-import { isLoggedIn, catchAsyncErrors, uploadMemory } from '../middleware.js'; //
+import { isLoggedIn, catchAsyncErrors } from '../middleware.js'; //
 import {
   campsiteApiLimiter,
   mediaDeletionLimiter,
@@ -11,7 +11,6 @@ import {
   photoUploadLimiter,
   videoUploadLimiter,
 } from '../utils/routeAbuseLimits.js';
-import { loadCache } from '../controllers/camp.js'
 
 router.route('/search-api')
     .get(parkSearchApiLimiter, camp.searchApi)

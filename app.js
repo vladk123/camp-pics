@@ -8,7 +8,6 @@ import mongoose from 'mongoose';
 import MongoStore from 'connect-mongo';
 import { User } from './models/user.js'; //requiring the User schema, for passport npm 
 import passport from 'passport';//plugin that allows us to easily authenticate
-import LocalStrategy from 'passport-local'; //using local strategy i.e., not FB or Twitter login, etc
 
 import compression from 'compression'
 import methodOverride from 'method-override';
@@ -25,7 +24,6 @@ import {
 	createBotUrlBlocker,
 	createNotFoundHandler,
 } from './utils/requestFilteringMiddleware.js';
-import { initializeParkSearchCache } from './utils/cacheSearch.js';
 import { enforceSessionAuthVersion } from './middleware.js';
 import {
 	csrfErrorHandler,
@@ -141,7 +139,6 @@ const connectToMongo = async () => {
   try {
     await mongoose.connect(dbUrl);
     console.log("MongoDB connected");
-	// await initializeParkSearchCache(); // rebuild search cache immediately on startup
   } catch (err) {
     await logger(null, null, 'error', {
       message: 'MongoDB connection failed.',
@@ -190,10 +187,6 @@ app.use(session(sessionConfig)); //make sure this remains located before passpor
 app.use(flash());
 app.use(methodOverride('_method')); //using "_method" when doing POST, PUT, DELETE, which isn't recognized by default
 
-// Don't enable, causes infinite errors
-// app.use(mongoSanitize({
-//   replaceWith: '_', // prevents `$`/`.` injection
-// }));
 // Custom basic sanitizer
 app.use((req, res, next) => {
   const sanitize = (obj) => {

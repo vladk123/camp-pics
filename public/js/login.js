@@ -119,7 +119,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const passwordFeedback = document.getElementById('register-password-feedback');
   const confirmInput = document.getElementById('register-password-confirm');
   const confirmFeedback = document.getElementById('register-confirm-feedback');
-  const submitBtn = document.getElementById('register-submit');
 
   // Rules
   const ruleLength = document.getElementById('rule-length');

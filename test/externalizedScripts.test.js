@@ -819,9 +819,42 @@ describe('CSP and scope regression guards for externalization', () => {
       'public/js/csrf.js',
       'public/js/passwordPolicy.js',
     ], { cwd: root, encoding: 'utf8' });
+    const exactDeadCodeChanges = [
+      [
+        'controllers/camp.js',
+        [
+          "import express from 'express';\n",
+          'const router = express.Router();\n',
+        ],
+      ],
+      [
+        'routes/camp.js',
+        [
+          'import { isLoggedIn, catchAsyncErrors, uploadMemory }',
+          "import { loadCache } from '../controllers/camp.js'\n",
+        ],
+      ],
+    ];
+    for (const [file, removals] of exactDeadCodeChanges) {
+      const baseline = execFileSync('git', ['show', `HEAD:${file}`], {
+        cwd: root,
+        encoding: 'utf8',
+      });
+      const expected = removals.reduce(
+        (value, removal) => value.replace(removal, removal.includes('uploadMemory')
+          ? 'import { isLoggedIn, catchAsyncErrors }'
+          : ''),
+        baseline,
+      );
+      assert.equal(
+        (await read(file)).replaceAll('\r\n', '\n'),
+        expected.replaceAll('\r\n', '\n'),
+      );
+    }
     const allowedProtectedFiles = new Set([
       'app.js',
       'controllers/admin.js',
+      'controllers/camp.js',
       'controllers/media.js',
       'controllers/monthlyDraw.js',
       'controllers/monthlyDrawAdmin.js',
@@ -833,6 +866,7 @@ describe('CSP and scope regression guards for externalization', () => {
       'models/monthlyDrawResult.js',
       'models/upload.js',
       'routes/admin.js',
+      'routes/camp.js',
       'routes/other.js',
       'routes/users.js',
       'package.json',

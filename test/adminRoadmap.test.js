@@ -169,7 +169,7 @@ describe('authoritative administrator roadmap configuration', () => {
       activePhases.map(phase => phase.id),
       [REQUIRED_PHASE_IDS[0], REQUIRED_PHASE_IDS[2], REQUIRED_PHASE_IDS[3]],
     );
-    assert.equal(activeIds.length, 12);
+    assert.equal(activeIds.length, 11);
     assert.deepEqual(completedIds, [
       'restore-production-shaped-staging-database',
       'source-controlled-admin-roadmap',
@@ -179,6 +179,7 @@ describe('authoritative administrator roadmap configuration', () => {
       'monthly-draw-rules-and-no-upload-entry',
       'monthly-draw-upload-qualification',
       'monthly-draw-selection-and-notification',
+      'final-dead-code-dry-sweep',
       'auth-session-hardening',
       'csrf-csp-safe-rendering',
       'bounded-media-upload-hardening',
@@ -195,12 +196,33 @@ describe('authoritative administrator roadmap configuration', () => {
     assert.equal(activeIds.some(id => completedIds.includes(id)), false);
     assert.deepEqual(getRoadmapSummary(), {
       total: 27,
-      active: 12,
-      planned: 4,
+      active: 11,
+      planned: 3,
       inProgress: 1,
       blocked: 7,
-      completed: 15,
+      completed: 16,
     });
+  });
+
+  test('records the completed narrow dead-code sweep without scope expansion', () => {
+    const finalSweep = allItems().find(
+      candidate => candidate.id === 'final-dead-code-dry-sweep',
+    );
+    const targetedDependency = allItems().find(
+      candidate => candidate.id === 'targeted-dependency-maintenance',
+    );
+
+    assert.equal(finalSweep.status, 'completed');
+    assert.equal(finalSweep.completedOn, '2026-08-04');
+    assert.deepEqual(finalSweep.notes, [
+      'A repository-wide narrow dead-code review was completed.',
+      'Only high-confidence unused code and stale wording were removed or corrected.',
+      'Dynamic routes, templates, models, scripts and compatibility paths were preserved.',
+      'No architectural refactor or dependency churn was performed.',
+      'Uncertain candidates were intentionally retained.',
+    ]);
+    assert.equal(targetedDependency.status, 'planned');
+    assert.equal(targetedDependency.completedOn, null);
   });
 
   test('tracks scheduled cleanup as deferred pending explicit future approval', () => {

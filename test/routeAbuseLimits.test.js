@@ -3041,6 +3041,7 @@ describe('dependency, dead-helper, global-protection, and documentation guards',
         !new Set([
           'config/adminRoadmap.js',
           'controllers/admin.js',
+          'controllers/camp.js',
           'controllers/media.js',
           'controllers/monthlyDraw.js',
           'controllers/monthlyDrawAdmin.js',

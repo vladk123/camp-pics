@@ -701,7 +701,7 @@ const roadmapDefinition = {
         {
           id: 'final-dead-code-dry-sweep',
           title: 'Perform a final dead-code dry sweep',
-          status: 'planned',
+          status: 'completed',
           purpose: 'Perform one final narrow cleanup after operational and administrator work.',
           scope: [
             'Dead imports.',
@@ -720,8 +720,14 @@ const roadmapDefinition = {
           doneWhen: [
             'Focused source review finds no meaningful safe cleanup remaining.',
           ],
-          notes: [],
-          completedOn: null,
+          notes: [
+            'A repository-wide narrow dead-code review was completed.',
+            'Only high-confidence unused code and stale wording were removed or corrected.',
+            'Dynamic routes, templates, models, scripts and compatibility paths were preserved.',
+            'No architectural refactor or dependency churn was performed.',
+            'Uncertain candidates were intentionally retained.',
+          ],
+          completedOn: '2026-08-04',
         },
       ],
     },
