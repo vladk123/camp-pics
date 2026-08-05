@@ -75,6 +75,33 @@ function activeRecord(overrides = {}) {
   };
 }
 
+async function renderPublicAnnouncementPage({ announcement, data }) {
+  const filename = path.join(root, 'views/layouts/boilerplate.ejs');
+  return ejs.render(await read('views/layouts/boilerplate.ejs'), {
+    body: '',
+    canonicalUrl: null,
+    cspNonce: 'test-csp-nonce',
+    csrfToken: 'test-csrf-token',
+    currentUser: null,
+    data,
+    error: [],
+    ga4EventJson: 'null',
+    info: [],
+    meta: { title: 'Announcement rendering' },
+    siteAnnouncement: announcement,
+    success: [],
+    warning: [],
+  }, { filename });
+}
+
+function renderedAnnouncementAutoOpen(html) {
+  const value = html.match(
+    /data-announcement-auto-open="(true|false)"/u,
+  )?.[1];
+  assert.ok(value, 'rendered announcement auto-open value is required');
+  return value === 'true';
+}
+
 function queryReturning(value, calls = []) {
   return {
     select(projection) {
@@ -560,6 +587,66 @@ describe('announcement rendering', () => {
     assert.match(layout, /if \(activeSiteAnnouncement\)[\s\S]*?siteAnnouncement\.js/u);
     assert.doesNotMatch(`${layout}\n${source}`, /JSON\.stringify|<%-\s*siteAnnouncement/u);
   });
+
+  test('the real homepage local suppresses only the rendered auto-open value', async () => {
+    const announcement = serializePublicSiteAnnouncement(activeRecord());
+    const app = await read('app.js');
+    const homeRoute = app.slice(
+      app.indexOf('//HOME PAGE'),
+      app.indexOf('// CATCH ALL NON-EXISTING ROUTES'),
+    );
+    assert.match(homeRoute, /data:\s*\{\s*isHomepage:\s*true\s*\}/u);
+
+    const homepage = await renderPublicAnnouncementPage({
+      announcement,
+      data: { isHomepage: true },
+    });
+    const normalPage = await renderPublicAnnouncementPage({
+      announcement,
+      data: { currentPath: '/other/faq' },
+    });
+    const missingPageData = await renderPublicAnnouncementPage({
+      announcement,
+      data: undefined,
+    });
+    const malformedPageData = await renderPublicAnnouncementPage({
+      announcement,
+      data: null,
+    });
+
+    assert.equal(renderedAnnouncementAutoOpen(homepage), false);
+    assert.equal(renderedAnnouncementAutoOpen(normalPage), true);
+    assert.equal(renderedAnnouncementAutoOpen(missingPageData), true);
+    assert.equal(renderedAnnouncementAutoOpen(malformedPageData), true);
+    assert.match(homepage, /id="site-announcement-trigger"/u);
+    assert.match(homepage, /data-announcement-key="site-wide"/u);
+    assert.match(homepage, /data-announcement-revision="4"/u);
+    assert.match(homepage, /<h2[^>]*>CampPics update<\/h2>/u);
+    assert.match(homepage, /First line\s*Second line/u);
+    assert.match(
+      homepage,
+      /href="\/camp\/all-parks\?from=announcement#parks"/u,
+    );
+
+    const storedAutoOpenFalse = serializePublicSiteAnnouncement(activeRecord({
+      autoOpen: false,
+    }));
+    for (const data of [{ isHomepage: true }, { currentPath: '/other/faq' }]) {
+      const html = await renderPublicAnnouncementPage({
+        announcement: storedAutoOpenFalse,
+        data,
+      });
+      assert.equal(renderedAnnouncementAutoOpen(html), false);
+    }
+
+    const noNavbarLink = await renderPublicAnnouncementPage({
+      announcement: serializePublicSiteAnnouncement(activeRecord({
+        showNavLink: false,
+      })),
+      data: { isHomepage: true },
+    });
+    assert.doesNotMatch(noNavbarLink, /id="site-announcement-trigger"/u);
+  });
 });
 
 class FakeElement {
@@ -705,7 +792,15 @@ describe('public dismissal browser behavior', () => {
   test('auto-opens first revision, stores dismissal, stays closed, then opens a new revision', async () => {
     const source = await read('public/js/siteAnnouncement.js');
     const storage = new Map();
-    const first = publicHarness({ revision: 7, storage });
+    const normalPage = await renderPublicAnnouncementPage({
+      announcement: serializePublicSiteAnnouncement(activeRecord({ revision: 7 })),
+      data: { currentPath: '/other/faq' },
+    });
+    const first = publicHarness({
+      revision: 7,
+      autoOpen: renderedAnnouncementAutoOpen(normalPage),
+      storage,
+    });
     vm.runInContext(source, first.context);
     assert.equal(first.dialog.showCount, 1);
     first.close.dispatch('click');
@@ -717,6 +812,36 @@ describe('public dismissal browser behavior', () => {
     const next = publicHarness({ revision: 8, storage });
     vm.runInContext(source, next.context);
     assert.equal(next.dialog.showCount, 1);
+  });
+
+  test('homepage load stays closed and undismissed until a manual navbar open is closed', async () => {
+    const source = await read('public/js/siteAnnouncement.js');
+    const announcement = serializePublicSiteAnnouncement(activeRecord({ revision: 9 }));
+    const homepage = await renderPublicAnnouncementPage({
+      announcement,
+      data: { isHomepage: true },
+    });
+    assert.match(homepage, /id="site-announcement-trigger"/u);
+
+    const storage = new Map();
+    const harness = publicHarness({
+      revision: announcement.revision,
+      autoOpen: renderedAnnouncementAutoOpen(homepage),
+      storage,
+    });
+    vm.runInContext(source, harness.context);
+    assert.equal(harness.dialog.showCount || 0, 0);
+    assert.equal(storage.size, 0);
+
+    assert.equal(harness.trigger.dispatch('click').defaultPrevented, true);
+    assert.equal(harness.dialog.open, true);
+    assert.equal(storage.size, 0);
+    harness.close.dispatch('click');
+    assert.equal(
+      storage.get('campPicsAnnouncementDismissed:site-wide:9'),
+      'true',
+    );
+    assert.equal(harness.trigger.focusCount, 1);
   });
 
   test('manual navbar open ignores dismissal and restores trigger focus on close', async () => {

@@ -1,6 +1,12 @@
 <!-- Define data to pass through to other ejs partials -->
 <% data = typeof data !== 'undefined' ? data : {}; %>
 <% const activeSiteAnnouncement = typeof siteAnnouncement !== 'undefined' ? siteAnnouncement : null; %>
+<% const renderedSiteAnnouncement = activeSiteAnnouncement
+	? {
+		...activeSiteAnnouncement,
+		autoOpen: activeSiteAnnouncement.autoOpen === true && data?.isHomepage !== true,
+	}
+	: null; %>
 
 <!DOCTYPE html>
 <html lang="eng" data-theme="light">
@@ -89,7 +95,7 @@
 			<div id="layout-wrapper">
 				<%- include('../partials/navbar') %> <!-- including the navbar -->
 				<% if (activeSiteAnnouncement) { %>
-					<%- include('../partials/siteAnnouncement', { siteAnnouncement: activeSiteAnnouncement }) %>
+					<%- include('../partials/siteAnnouncement', { siteAnnouncement: renderedSiteAnnouncement }) %>
 				<% } %>
 
 				 <!-- Any flash messages to user -->

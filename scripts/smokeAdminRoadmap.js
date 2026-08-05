@@ -140,6 +140,15 @@ function validateRoadmap() {
   assert(announcement.status === 'completed');
   assert(announcement.title === 'Site-wide announcements and campaigns');
   assert(announcement.completedOn === '2026-08-03');
+  assert(announcement.notes.includes(
+    'Automatic modal opening is suppressed on the homepage.',
+  ));
+  assert(announcement.notes.includes(
+    'The optional homepage navbar link can still open the announcement manually.',
+  ));
+  assert(announcement.notes.includes(
+    'Other pages retain the configured auto-open and revision-dismissal behaviour.',
+  ));
   const monthlyRules = itemsById.get('monthly-draw-rules-and-no-upload-entry');
   assert(monthlyRules.status === 'completed');
   assert(monthlyRules.completedOn === '2026-08-03');

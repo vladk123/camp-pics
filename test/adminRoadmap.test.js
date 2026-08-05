@@ -347,6 +347,9 @@ describe('authoritative administrator roadmap configuration', () => {
       'Optional date scheduling and an optional validated internal CTA are supported.',
       'Monthly upload promotion and winner-announcement use cases are supported.',
       'Announcement content is plain text and rendered safely against XSS.',
+      'Automatic modal opening is suppressed on the homepage.',
+      'The optional homepage navbar link can still open the announcement manually.',
+      'Other pages retain the configured auto-open and revision-dismissal behaviour.',
     ]);
   });
 
