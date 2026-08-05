@@ -176,16 +176,23 @@ function validateRoadmap() {
   ));
   const monthlyScheduler = itemsById.get('monthly-draw-scheduler-activation');
   assert(monthlyScheduler.status === 'in_progress');
-  assert(monthlyScheduler.notes.some(note =>
-    note.startsWith('User-reported external configuration:') &&
-      note.includes('06:00 UTC') && note.includes('11:00 UTC') &&
-      note.includes('did not inspect or verify Heroku')
+  assert(monthlyScheduler.completedOn === null);
+  assert(monthlyScheduler.notes.every(note =>
+    note.startsWith('User-reported production verification:') ||
+      note.startsWith('Outstanding:')
   ));
   assert(monthlyScheduler.notes.some(note =>
-    note === 'A third daily backup at 23:00 UTC remains recommended.'
+    note.includes('06:00, 11:00 and 23:00 UTC daily')
   ));
   assert(monthlyScheduler.notes.some(note =>
-    note === 'The latest committed code still needs deployment and verification.'
+    note.includes('already-sent/no-op outcome') &&
+      note.includes('did not send a duplicate email')
+  ));
+  assert(monthlyScheduler.notes.some(note =>
+    note === 'Outstanding: observe at least one real first-of-month Scheduler execution.'
+  ));
+  assert(monthlyScheduler.notes.some(note =>
+    note === 'Outstanding: then mark Scheduler activation completed in a later roadmap-only update.'
   ));
   const targetedDependency = itemsById.get('targeted-dependency-maintenance');
   assert(targetedDependency.status === 'planned');

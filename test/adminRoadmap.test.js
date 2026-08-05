@@ -103,7 +103,7 @@ function assertDeeplyFrozen(value) {
 describe('authoritative administrator roadmap configuration', () => {
   test('has the exact baseline version, date, phases and stable item IDs', () => {
     assert.equal(adminRoadmap.version, 1);
-    assert.equal(adminRoadmap.updatedOn, '2026-08-04');
+    assert.equal(adminRoadmap.updatedOn, '2026-08-05');
     assert.deepEqual(adminRoadmap.phases.map(phase => phase.id), REQUIRED_PHASE_IDS);
     assert.deepEqual(allItems().map(item => item.id), REQUIRED_ITEM_IDS);
     assertDeeplyFrozen(adminRoadmap);
@@ -463,20 +463,31 @@ describe('authoritative administrator roadmap configuration', () => {
       'The implementation does not automatically contact entrants or deliver a prize.',
     ]) assert.equal(phase.items[2].notes.includes(note), true, note);
     assert.deepEqual(phase.items[3].notes, [
-      'User-reported external configuration: production Heroku Scheduler runs `npm run monthly-draw:scheduled` daily at 06:00 UTC and 11:00 UTC; this repository pass did not inspect or verify Heroku.',
-      'A third daily backup at 23:00 UTC remains recommended.',
-      'The latest committed code still needs deployment and verification.',
-      'First-Eastern-day self-gating is implemented.',
-      'A successful controlled Heroku command/email test and an observed scheduled execution remain outstanding.',
-      'Scheduler execution can occasionally be skipped or duplicated, while repository idempotence handles repeats.',
+      'User-reported production verification: the latest monthly-draw code was deployed to production.',
+      'User-reported production verification: three Heroku Scheduler jobs using `npm run monthly-draw:scheduled` were configured for 06:00, 11:00 and 23:00 UTC daily.',
+      'User-reported production verification: a non-first-Eastern-day invocation safely returned a no-op without selection or email.',
+      'User-reported production verification: the July 2026 selection dry-run completed successfully with zero eligible entries.',
+      'User-reported production verification: the July 2026 apply command created a `no-eligible-entries` result.',
+      'User-reported production verification: notification dry-run found the stored result.',
+      'User-reported production verification: the administrator notification was sent successfully.',
+      'User-reported production verification: repeating notification apply returned an already-sent/no-op outcome and did not send a duplicate email.',
+      'Outstanding: observe at least one real first-of-month Scheduler execution.',
+      'Outstanding: confirm the automatic production email arrives once.',
+      'Outstanding: confirm repeated Scheduler attempts reuse the stored selection and sent marker.',
+      'Outstanding: then mark Scheduler activation completed in a later roadmap-only update.',
     ]);
     assert.deepEqual(phase.items[3].dependencies, [
       'monthly-draw-selection-and-notification.',
       'Deployment and controlled verification of the latest committed code.',
     ]);
     const schedulerNotes = phase.items[3].notes.join('\n');
-    assert.match(schedulerNotes, /User-reported external configuration/u);
-    assert.match(schedulerNotes, /did not inspect or verify Heroku/u);
+    assert.equal(phase.items[3].status, 'in_progress');
+    assert.equal(phase.items[3].completedOn, null);
+    assert.match(schedulerNotes, /User-reported production verification/u);
+    assert.match(schedulerNotes, /real first-of-month Scheduler execution/u);
+    assert.match(schedulerNotes, /automatic production email arrives once/u);
+    assert.match(schedulerNotes, /reuse the stored selection and sent marker/u);
+    assert.match(schedulerNotes, /later roadmap-only update/u);
     assert.doesNotMatch(schedulerNotes, /repository-verified|Heroku verification succeeded/iu);
   });
 
@@ -485,7 +496,7 @@ describe('authoritative administrator roadmap configuration', () => {
     const second = formatAdminRoadmapPlainText();
 
     assert.equal(first, second);
-    assert.match(first, /^CampPics administrator roadmap\nVersion: 1\nUpdated: 2026-08-04\n/u);
+    assert.match(first, /^CampPics administrator roadmap\nVersion: 1\nUpdated: 2026-08-05\n/u);
     assert.match(first, /\nActive work\n/u);
     assert.match(first, /Operations and launch readiness/u);
     assert.match(first, /Schedule the media cleanup worker \[blocked\] \(schedule-media-cleanup-worker\)/u);

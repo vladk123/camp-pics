@@ -1224,7 +1224,7 @@ describe('rules, roadmap and deferred-scope source guards', () => {
     const scheduler = items.find(item =>
       item.id === 'monthly-draw-scheduler-activation'
     );
-    assert.equal(adminRoadmap.updatedOn, '2026-08-04');
+    assert.equal(adminRoadmap.updatedOn, '2026-08-05');
     assert.equal(selection.status, 'completed');
     assert.equal(selection.completedOn, '2026-08-04');
     assert.match(selection.notes.join('\n'),
@@ -1235,10 +1235,10 @@ describe('rules, roadmap and deferred-scope source guards', () => {
       /Scheduler-ready combined command self-gates/u);
     assert.equal(scheduler.status, 'in_progress');
     assert.match(scheduler.notes.join('\n'),
-      /User-reported external configuration/u);
-    assert.match(scheduler.notes.join('\n'), /06:00 UTC/u);
-    assert.match(scheduler.notes.join('\n'), /11:00 UTC/u);
-    assert.match(scheduler.notes.join('\n'), /23:00 UTC remains recommended/u);
+      /User-reported production verification/u);
+    assert.match(scheduler.notes.join('\n'),
+      /06:00, 11:00 and 23:00 UTC daily/u);
+    assert.match(scheduler.notes.join('\n'), /real first-of-month Scheduler execution/u);
   });
 
   test('keeps providers, email, Scheduler, routes, migrations and startup mutation deferred', async () => {
