@@ -13,6 +13,7 @@
     /^\/camp\/park\/[a-z0-9]+(?:-[a-z0-9]+)*(?:\/campground\/[a-z0-9]+(?:-[a-z0-9]+)*)?\/campsite\/[a-z0-9]+(?:-[a-z0-9]+)*$/u;
   const DASHBOARD_USER_DETAIL_URL_PATTERN =
     /^\/a\/users\/[a-f0-9]{24}$/u;
+  const DASHBOARD_DRAW_STATUS_PATTERN = /^(?:pending|eligible|ineligible)$/u;
 
   const parsePositivePage = value => {
     if (typeof value !== 'string' || !/^[1-9]\d*$/.test(value)) return 1;
@@ -177,18 +178,19 @@
     const badges = document.createElement('div');
     badges.className = 'admin-upload-card__badges';
     badges.append(mediaBadge);
-    const drawLabels = {
-      pending: 'Eligible (legacy)',
-      eligible: 'Eligible',
-      ineligible: 'Ineligible',
-    };
-    if (Object.hasOwn(drawLabels, upload.monthlyDrawStatus)) {
-      badges.append(createTextElement(
-        'span',
-        `admin-status-badge admin-status-badge--draw admin-status-badge--draw-${upload.monthlyDrawStatus}`,
-        `Draw: ${drawLabels[upload.monthlyDrawStatus]}`,
-      ));
-    }
+    const drawState = typeof upload.monthlyDrawStatus === 'string' &&
+      DASHBOARD_DRAW_STATUS_PATTERN.test(upload.monthlyDrawStatus)
+      ? upload.monthlyDrawStatus
+      : 'not-entered';
+    const drawLabel = typeof upload.monthlyDrawLabel === 'string' &&
+      upload.monthlyDrawLabel
+      ? upload.monthlyDrawLabel
+      : 'Not entered';
+    badges.append(createTextElement(
+      'span',
+      `admin-status-badge admin-status-badge--draw admin-status-badge--draw-${drawState}`,
+      `Draw: ${drawLabel}`,
+    ));
     header.append(badges, time);
 
     const details = document.createElement('dl');
@@ -201,11 +203,22 @@
       upload.uploader?.fname || 'Unknown',
     ));
     if (upload.uploader?.username) {
-      uploaderValue.append(createTextElement(
-        'span',
-        '',
-        upload.uploader.username,
-      ));
+      const uploaderEmail = createTextElement('span', '', '');
+      if (
+        typeof upload.uploader.userDetailUrl === 'string' &&
+        DASHBOARD_USER_DETAIL_URL_PATTERN.test(upload.uploader.userDetailUrl)
+      ) {
+        const uploaderLink = createTextElement(
+          'a',
+          'admin-user-detail-link',
+          upload.uploader.username,
+        );
+        uploaderLink.href = upload.uploader.userDetailUrl;
+        uploaderEmail.append(uploaderLink);
+      } else {
+        uploaderEmail.textContent = upload.uploader.username;
+      }
+      uploaderValue.append(uploaderEmail);
     }
     uploader.append(createTextElement('dt', '', 'Uploader'), uploaderValue);
     details.append(

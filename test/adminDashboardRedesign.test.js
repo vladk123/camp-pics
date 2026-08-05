@@ -362,8 +362,29 @@ describe('administrator dashboard rendering', () => {
           campsiteName: hostile,
           createdAt: '2026-08-01T00:00:00.000Z',
           mediaType: 'photo',
+          monthlyDrawLabel: 'Eligible (legacy)',
+          monthlyDrawStatus: 'pending',
           parkName: hostile,
-          uploader: { fname: hostile, username: hostile },
+          uploader: {
+            fname: hostile,
+            username: 'linked@example.test',
+            userDetailUrl: '/a/users/64b7f2d4c9f1e8a123456789',
+          },
+        },
+        {
+          adminPhotoUrl: null,
+          campgroundName: null,
+          campsiteName: null,
+          createdAt: '2026-08-01T00:00:00.000Z',
+          mediaType: 'unknown',
+          monthlyDrawLabel: 'Not entered',
+          monthlyDrawStatus: null,
+          parkName: 'Plain park',
+          uploader: {
+            fname: 'Plain uploader',
+            username: 'plain@example.test',
+            userDetailUrl: null,
+          },
         },
       ],
       users: [
@@ -420,6 +441,17 @@ describe('administrator dashboard rendering', () => {
     assert.doesNotMatch(html, /<script id="dashboard-xss">/u);
     assert.equal(html.includes('must-not-render-public-id'), false);
     assert.equal(html.includes('must-not-render-password-hash'), false);
+    assert.match(
+      html,
+      /<a class="admin-user-detail-link" href="\/a\/users\/64b7f2d4c9f1e8a123456789">linked@example\.test<\/a>/u,
+    );
+    assert.doesNotMatch(
+      html,
+      /<a[^>]+href="[^"]+"[^>]*>plain@example\.test<\/a>/u,
+    );
+    assert.match(html, />\s*plain@example\.test\s*<\/span>/u);
+    assert.match(html, /Draw: Eligible \(legacy\)/u);
+    assert.match(html, /Draw: Not entered/u);
 
     const active = html.replace(/<!--[\s\S]*?-->/gu, '');
     assert.doesNotMatch(active, /<style\b|\sstyle\s*=|\son[a-z]+\s*=/iu);
@@ -636,9 +668,14 @@ describe('administrator dashboard browser behavior', () => {
                   campsiteName: hostile,
                   createdAt: '2026-08-01T00:00:00.000Z',
                   mediaType: 'photo',
+                  monthlyDrawLabel: 'Eligible (legacy)',
                   monthlyDrawStatus: 'pending',
                   parkName: hostile,
-                  uploader: { fname: hostile, username: hostile },
+                  uploader: {
+                    fname: hostile,
+                    username: hostile,
+                    userDetailUrl: '/a/users/64b7f2d4c9f1e8a123456789',
+                  },
                 }],
                 hasMoreUploads: false,
               }
@@ -682,6 +719,17 @@ describe('administrator dashboard browser behavior', () => {
       'https://cdn.example.test/photo.jpg',
     ]);
     assert.equal(harness.mediaCalls.images.length, 1);
+    const uploaderLinks = findAll(
+      harness.uploads.children[0],
+      element => element.tagName === 'A' &&
+        element.className === 'admin-user-detail-link',
+    );
+    assert.equal(uploaderLinks.length, 1);
+    assert.equal(
+      uploaderLinks[0].href,
+      '/a/users/64b7f2d4c9f1e8a123456789',
+    );
+    assert.equal(uploaderLinks[0].target, undefined);
 
     const userRow = harness.users.children[0];
     assert.equal(userRow.tagName, 'TR');
@@ -715,6 +763,71 @@ describe('administrator dashboard browser behavior', () => {
     assert.equal(harness.usersEmpty.hidden, true);
     assert.equal(harness.uploadsVisibleCount.textContent, '1');
     assert.equal(harness.usersVisibleCount.textContent, '1');
+  });
+
+  test('uses serialized draw labels and rejects unsafe uploader detail URLs', async () => {
+    const source = await read('public/js/adminDashboard.js');
+    const fixtures = [
+      ['eligible', 'Eligible', '/a/users/64b7f2d4c9f1e8a123456789'],
+      ['pending', 'Eligible (legacy)', 'https://example.test/a/users/64b7f2d4c9f1e8a123456789'],
+      ['ineligible', 'Ineligible', '//example.test/a/users/64b7f2d4c9f1e8a123456789'],
+      [null, 'Not entered', '/a/users/not-an-object-id'],
+      [null, 'Not entered', null],
+    ].map(([monthlyDrawStatus, monthlyDrawLabel, userDetailUrl], index) => ({
+      adminPhotoUrl: null,
+      campgroundName: null,
+      campsiteName: null,
+      createdAt: '2026-08-01T00:00:00.000Z',
+      mediaType: 'unknown',
+      monthlyDrawLabel,
+      monthlyDrawStatus,
+      parkName: `Park ${index}`,
+      uploader: {
+        fname: `Camper ${index}`,
+        username: `camper-${index}@example.test`,
+        userDetailUrl,
+      },
+    }));
+    const harness = createBrowserHarness({
+      fetchImplementation: async () => ({
+        ok: true,
+        json: async () => ({ uploads: fixtures, hasMoreUploads: false }),
+      }),
+    });
+    const initialWindowKeys = Object.keys(harness.window).sort();
+    vm.runInContext(source, harness.context);
+    await harness.uploadButton.listeners.get('click')[0]();
+
+    assert.deepEqual(Object.keys(harness.window).sort(), initialWindowKeys);
+    assert.equal(harness.uploads.children.length, fixtures.length);
+    for (let index = 0; index < fixtures.length; index += 1) {
+      const card = harness.uploads.children[index];
+      const expectedLabel = fixtures[index].monthlyDrawLabel;
+      assert.equal(combinedText(card).includes(`Draw: ${expectedLabel}`), true);
+      assert.equal(
+        findAll(card, element => element.className.split(/\s+/u)
+          .includes('admin-status-badge--draw')).length,
+        1,
+      );
+      const emailLinks = findAll(card, element =>
+        element.tagName === 'A' &&
+        element.className === 'admin-user-detail-link');
+      assert.equal(emailLinks.length, index === 0 ? 1 : 0);
+      if (index === 0) {
+        assert.equal(emailLinks[0].href, fixtures[index].uploader.userDetailUrl);
+        assert.equal(emailLinks[0].target, undefined);
+      } else {
+        assert.equal(
+          combinedText(card).includes(fixtures[index].uploader.username),
+          true,
+        );
+      }
+    }
+    assert.match(
+      source,
+      /DASHBOARD_USER_DETAIL_URL_PATTERN\.test\(upload\.uploader\.userDetailUrl\)/u,
+    );
+    assert.doesNotMatch(source, /window\.[A-Za-z_$][\w$]*\s*=/u);
   });
 
   test('isolates loading state, prevents duplicate requests and permits retry after failure', async () => {

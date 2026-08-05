@@ -313,6 +313,7 @@ describe('administrator upload location lookup', () => {
         'adminPhotoUrl',
         'uploader',
         'monthlyDrawStatus',
+        'monthlyDrawLabel',
       ]);
       for (const rawId of ['parkId', 'campgroundId', 'campsiteId']) {
         assert.equal(rawId in serialized, false);

@@ -1,5 +1,7 @@
 <% const uploadedDate = new Date(upload.createdAt); %>
 <% const uploadedDateIsValid = !Number.isNaN(uploadedDate.getTime()); %>
+<% const monthlyDrawDisplayState = ['pending', 'eligible', 'ineligible'].includes(upload.monthlyDrawStatus) ? upload.monthlyDrawStatus : 'not-entered'; %>
+<% const monthlyDrawLabel = typeof upload.monthlyDrawLabel === 'string' && upload.monthlyDrawLabel ? upload.monthlyDrawLabel : 'Not entered'; %>
 <article class="upload-item admin-upload-card">
   <div class="admin-upload-card__media">
     <% const youtubeVideoId = extractYouTubeVideoId(upload.youtubeId); %>
@@ -24,11 +26,9 @@
         <span class="admin-status-badge admin-status-badge--media">
           <%= upload.mediaType === 'photo' ? 'Photo' : upload.mediaType === 'video' ? 'Video' : 'Unknown media' %>
         </span>
-        <% if (upload.monthlyDrawStatus) { %>
-          <span class="admin-status-badge admin-status-badge--draw admin-status-badge--draw-<%= upload.monthlyDrawStatus %>">
-            Draw: <%= upload.monthlyDrawStatus === 'pending' ? 'Eligible (legacy)' : upload.monthlyDrawStatus === 'eligible' ? 'Eligible' : 'Ineligible' %>
-          </span>
-        <% } %>
+        <span class="admin-status-badge admin-status-badge--draw admin-status-badge--draw-<%= monthlyDrawDisplayState %>">
+          Draw: <%= monthlyDrawLabel %>
+        </span>
       </div>
       <time<% if (uploadedDateIsValid) { %> datetime="<%= uploadedDate.toISOString() %>"<% } %>>
         <%= uploadedDateIsValid ? uploadedDate.toLocaleString() : 'Upload date unavailable' %>
@@ -40,7 +40,15 @@
           <dt>Uploader</dt>
           <dd>
             <strong><%= upload.uploader.fname || 'Unknown' %></strong>
-            <% if (upload.uploader.username) { %><span><%= upload.uploader.username %></span><% } %>
+            <% if (upload.uploader.username) { %>
+              <span>
+                <% if (upload.uploader.userDetailUrl) { %>
+                  <a class="admin-user-detail-link" href="<%= upload.uploader.userDetailUrl %>"><%= upload.uploader.username %></a>
+                <% } else { %>
+                  <%= upload.uploader.username %>
+                <% } %>
+              </span>
+            <% } %>
           </dd>
         </div>
       <% } %>

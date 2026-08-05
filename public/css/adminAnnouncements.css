@@ -220,13 +220,21 @@
   white-space: pre-wrap;
 }
 
-.admin-announcement-preview__cta {
+.admin-announcement-preview a.admin-announcement-preview__cta,
+.admin-announcement-preview a.admin-announcement-preview__cta:visited {
   justify-self: start;
   border-radius: 0.4rem;
   padding: 0.55rem 0.85rem;
-  background: #1f4f66;
+  background: var(--orange);
   color: #fff;
   text-decoration: none;
+}
+
+.admin-announcement-preview a.admin-announcement-preview__cta:hover,
+.admin-announcement-preview a.admin-announcement-preview__cta:focus-visible,
+.admin-announcement-preview a.admin-announcement-preview__cta:active {
+  background: var(--darker-orange);
+  color: #fff;
 }
 
 .admin-announcement-preview__close {

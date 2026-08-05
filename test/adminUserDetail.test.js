@@ -737,6 +737,58 @@ describe('administrator user-detail rendering and source guards', () => {
     );
   });
 
+  test('uses the shared draw labels on every user-detail upload card', async () => {
+    const uploads = [
+      serializeAdminUpload(uploadRecord(1, {
+        monthlyDraw: { status: 'eligible' },
+      })),
+      serializeAdminUpload(uploadRecord(2, {
+        monthlyDraw: { status: 'pending' },
+      })),
+      serializeAdminUpload(uploadRecord(3, {
+        monthlyDraw: { status: 'ineligible' },
+      })),
+      serializeAdminUpload(uploadRecord(4, {
+        monthlyDraw: { status: 'malformed' },
+      })),
+    ];
+    const html = await renderDetail({
+      currentPath: `/a/users/${TARGET_ID}`,
+      currentPage: 1,
+      extractYouTubeVideoId: () => null,
+      hasNextPage: false,
+      hasPreviousPage: false,
+      loginActivity: [],
+      totalPages: 1,
+      totalUploadCount: uploads.length,
+      uploads,
+      user: {
+        _id: TARGET_ID,
+        fname: 'Camper',
+        username: 'camper@example.test',
+        date_created: new Date('2026-01-02T00:00:00.000Z'),
+        email_verified: true,
+        blocked: false,
+        canChangeBlockedStatus: true,
+      },
+    });
+
+    for (const label of [
+      'Draw: Eligible',
+      'Draw: Eligible (legacy)',
+      'Draw: Ineligible',
+      'Draw: Not entered',
+    ]) {
+      assert.match(html, new RegExp(label.replace(/[()]/gu, '\\$&'), 'u'));
+    }
+    assert.equal(
+      (html.match(/admin-status-badge--draw(?:\s|")/gu) || []).length,
+      uploads.length,
+    );
+    assert.doesNotMatch(html, /name="ineligibilityReason"/u);
+    assert.doesNotMatch(html, /monthly-draw\/uploads\/.+\/status/iu);
+  });
+
   test('renders empty login/upload states and no self-block action', async () => {
     const html = await renderDetail({
       currentPath: `/a/users/${ADMIN_ID}`,

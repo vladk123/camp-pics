@@ -54,11 +54,19 @@
   font-weight: 700;
 }
 
-.site-announcement-dialog__cta {
+.site-announcement-dialog a.site-announcement-dialog__cta,
+.site-announcement-dialog a.site-announcement-dialog__cta:visited {
   justify-self: start;
   background: var(--orange);
   color: #fff;
   text-decoration: none;
+}
+
+.site-announcement-dialog a.site-announcement-dialog__cta:hover,
+.site-announcement-dialog a.site-announcement-dialog__cta:focus-visible,
+.site-announcement-dialog a.site-announcement-dialog__cta:active {
+  background: var(--darker-orange);
+  color: #fff;
 }
 
 .site-announcement-dialog__close {

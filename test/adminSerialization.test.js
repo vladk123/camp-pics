@@ -35,6 +35,7 @@ const ADMIN_UPLOAD_KEYS = [
   'adminPhotoUrl',
   'uploader',
   'monthlyDrawStatus',
+  'monthlyDrawLabel',
 ];
 
 function sensitiveUser(overrides = {}) {
@@ -91,6 +92,7 @@ function sensitiveUpload(overrides = {}) {
 
 function queryModel(records, count) {
   const calls = {
+    finds: 0,
     selects: [],
     populates: [],
   };
@@ -99,6 +101,7 @@ function queryModel(records, count) {
     calls,
     model: {
       find() {
+        calls.finds += 1;
         const chain = {
           select(value) {
             calls.selects.push(value);
@@ -168,10 +171,15 @@ describe('administrator dashboard serialization', () => {
     const serialized = serializeAdminUpload(sensitiveUpload());
 
     assert.deepEqual(Object.keys(serialized), ADMIN_UPLOAD_KEYS);
-    assert.deepEqual(Object.keys(serialized.uploader), ['fname', 'username']);
+    assert.deepEqual(Object.keys(serialized.uploader), [
+      'fname',
+      'username',
+      'userDetailUrl',
+    ]);
     assert.deepEqual(serialized.uploader, {
       fname: 'Camper',
       username: 'camper@example.test',
+      userDetailUrl: null,
     });
     assert.equal(
       serialized.adminPhotoUrl,
@@ -183,9 +191,75 @@ describe('administrator dashboard serialization', () => {
     assert.equal(serialized.campgroundUrl, null);
     assert.equal(serialized.campsiteUrl, null);
     assert.equal(serialized.monthlyDrawStatus, null);
+    assert.equal(serialized.monthlyDrawLabel, 'Not entered');
     for (const rawId of ['parkId', 'campgroundId', 'campsiteId']) {
       assert.equal(rawId in serialized, false);
     }
+  });
+
+  test('uses one safe uploader detail URL and one authoritative draw label contract', () => {
+    const userId = '64b7f2d4c9f1e8a123456789';
+    assert.deepEqual(ADMIN_UPLOAD_USER_PROJECTION, {
+      _id: 1,
+      fname: 1,
+      username: 1,
+    });
+
+    for (const [status, expectedLabel] of [
+      ['eligible', 'Eligible'],
+      ['pending', 'Eligible (legacy)'],
+      ['ineligible', 'Ineligible'],
+      ['malformed', 'Not entered'],
+      [null, 'Not entered'],
+    ]) {
+      const upload = sensitiveUpload({
+        userId: sensitiveUser({ _id: userId }),
+        ...(status === null ? {} : { monthlyDraw: { status } }),
+      });
+      const serialized = serializeAdminUpload(upload);
+      assert.equal(serialized.monthlyDrawLabel, expectedLabel, String(status));
+      assert.equal(
+        serialized.monthlyDrawStatus,
+        ['eligible', 'pending', 'ineligible'].includes(status) ? status : null,
+      );
+      assert.equal(serialized.uploader.userDetailUrl, `/a/users/${userId}`);
+      assert.equal('_id' in serialized.uploader, false);
+      assert.equal(JSON.stringify(serialized.uploader).includes(userId), true);
+      assert.deepEqual(Object.keys(serialized.uploader), [
+        'fname',
+        'username',
+        'userDetailUrl',
+      ]);
+    }
+
+    for (const invalidId of [
+      null,
+      'missing',
+      'https://example.test/a/users/64b7f2d4c9f1e8a123456789',
+      '//example.test/a/users/64b7f2d4c9f1e8a123456789',
+      '/a/users/64b7f2d4c9f1e8a123456789',
+    ]) {
+      const serialized = serializeAdminUpload(sensitiveUpload({
+        userId: sensitiveUser({ _id: invalidId }),
+      }));
+      assert.equal(serialized.uploader.userDetailUrl, null, String(invalidId));
+    }
+  });
+
+  test('serializing upload display state does not modify the Upload data', () => {
+    const upload = sensitiveUpload({
+      monthlyDraw: {
+        status: 'eligible',
+        monthKey: '2026-08',
+        ineligibilityReason: null,
+      },
+      userId: sensitiveUser({ _id: '64b7f2d4c9f1e8a123456789' }),
+    });
+    const before = structuredClone(upload);
+
+    serializeAdminUpload(upload);
+
+    assert.deepEqual(upload, before);
   });
 
   test('initial rendering and JSON pagination share serializers and restrictive queries', async () => {
@@ -223,6 +297,8 @@ describe('administrator dashboard serialization', () => {
       { path: 'userId', select: ADMIN_UPLOAD_USER_PROJECTION },
       { path: 'userId', select: ADMIN_UPLOAD_USER_PROJECTION },
     ]);
+    assert.equal(uploads.calls.finds, 2);
+    assert.equal(users.calls.finds, 2);
   });
 });
 

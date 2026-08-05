@@ -6,6 +6,7 @@ import { describe, test } from 'node:test';
 import ejs from 'ejs';
 import mongoose from 'mongoose';
 
+import { serializeAdminUpload } from '../controllers/admin.js';
 import {
   ADMIN_MONTHLY_DRAW_ACCOUNT_INELIGIBLE_MESSAGE,
   ADMIN_MONTHLY_DRAW_NOT_FOUND_MESSAGE,
@@ -843,8 +844,17 @@ describe('administrator qualification rendering and source guards', () => {
     );
     assert.equal((html.match(/<h1\b/gu) || []).length, 1);
     assert.match(html, /Monthly draw upload review/u);
-    assert.match(html, /Uploads from qualifying accounts enter automatically/u);
+    assert.match(
+      html,
+      /New uploads from eligible, verified non-administrator accounts enter automatically/u,
+    );
     assert.match(html, /no approval action is required/u);
+    assert.match(html, /Administrator-account uploads are not entered\./u);
+    assert.match(html, /page contains only draw-tracked Uploads/u);
+    assert.match(
+      html,
+      /uploads showing Draw: Not entered on the dashboard do not appear in this review queue/u,
+    );
     assert.match(html, /Currently in the draw[\s\S]*?>3</u);
     assert.match(html, /Legacy pending/u);
     assert.match(html, /Total draw-tracked uploads/u);
@@ -861,7 +871,7 @@ describe('administrator qualification rendering and source guards', () => {
     assert.doesNotMatch(html, /\b(?:hash|salt|session|auth_version|previous_logins)\b/iu);
   });
 
-  test('renders the empty state and shared badges only when metadata exists', async () => {
+  test('renders the empty state and exactly one shared draw badge for every status', async () => {
     const page = await ejs.renderFile(
       path.join(root, 'views', 'admin', 'monthlyDrawUploads.ejs'),
       {
@@ -901,27 +911,35 @@ describe('administrator qualification rendering and source guards', () => {
       campsiteName: null,
       campsiteUrl: null,
     };
-    const legacy = await ejs.renderFile(cardPath, {
-      upload: { ...base, monthlyDrawStatus: null },
-      showUploader: false,
-      extractYouTubeVideoId,
-    });
-    const eligible = await ejs.renderFile(cardPath, {
-      upload: { ...base, monthlyDrawStatus: 'eligible' },
-      showUploader: false,
-      extractYouTubeVideoId,
-    });
-    const pendingLegacy = await ejs.renderFile(cardPath, {
-      upload: { ...base, monthlyDrawStatus: 'pending' },
-      showUploader: false,
-      extractYouTubeVideoId,
-    });
-    assert.doesNotMatch(legacy, /Draw:/u);
-    assert.match(eligible, /Draw: Eligible/u);
-    assert.match(pendingLegacy, /Draw: Eligible \(legacy\)/u);
-    assert.doesNotMatch(pendingLegacy, /Draw: Pending/u);
+    const cases = [
+      [{ status: 'eligible' }, 'Draw: Eligible'],
+      [{ status: 'pending' }, 'Draw: Eligible (legacy)'],
+      [{ status: 'ineligible' }, 'Draw: Ineligible'],
+      [undefined, 'Draw: Not entered'],
+      [{ status: 'malformed' }, 'Draw: Not entered'],
+    ];
+    const renderedCards = [];
+    for (const [monthlyDraw, expectedLabel] of cases) {
+      const serialized = serializeAdminUpload({
+        ...base,
+        ...(monthlyDraw === undefined ? {} : { monthlyDraw }),
+      });
+      const card = await ejs.renderFile(cardPath, {
+        upload: serialized,
+        showUploader: false,
+        extractYouTubeVideoId,
+      });
+      renderedCards.push(card);
+      assert.match(card, new RegExp(expectedLabel.replace(/[()]/gu, '\\$&'), 'u'));
+      assert.equal(
+        (card.match(/admin-status-badge--draw(?:\s|")/gu) || []).length,
+        1,
+      );
+    }
+    const allCards = renderedCards.join('\n');
+    assert.doesNotMatch(allCards, /Draw: Pending/u);
     assert.doesNotMatch(
-      legacy + eligible + pendingLegacy,
+      allCards,
       /monthly-draw\/uploads\/.+\/status/iu,
     );
   });

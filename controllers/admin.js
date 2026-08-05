@@ -71,7 +71,7 @@ export const ADMIN_PARK_LOCATION_PROJECTION = Object.freeze({
 });
 
 export const ADMIN_UPLOAD_USER_PROJECTION = Object.freeze({
-  _id: 0,
+  _id: 1,
   fname: 1,
   username: 1,
 });
@@ -91,6 +91,11 @@ const ADMIN_CAMPSITE_URL_PATTERN =
 const ADMIN_USER_DETAIL_PAGE_SIZE = 20;
 const ADMIN_LOGIN_ACTIVITY_LIMIT = 20;
 const MONTHLY_DRAW_UPLOAD_STATUS_SET = new Set(MONTHLY_DRAW_UPLOAD_STATUSES);
+const ADMIN_UPLOAD_DRAW_LABELS = Object.freeze({
+  pending: 'Eligible (legacy)',
+  eligible: 'Eligible',
+  ineligible: 'Ineligible',
+});
 const MONTHLY_DRAW_SELECTABLE_UPLOAD_STATUSES = Object.freeze(
   MONTHLY_DRAW_UPLOAD_STATUSES.filter(isMonthlyDrawUploadSelectableStatus),
 );
@@ -331,8 +336,12 @@ export function serializeAdminUpload(upload, locationUrls = {}) {
     uploader: {
       fname: upload?.userId?.fname ?? null,
       username: upload?.userId?.username ?? null,
+      userDetailUrl: getAdminUserDetailUrl(upload?.userId?._id),
     },
     monthlyDrawStatus,
+    monthlyDrawLabel: monthlyDrawStatus
+      ? ADMIN_UPLOAD_DRAW_LABELS[monthlyDrawStatus]
+      : 'Not entered',
   };
 }
 

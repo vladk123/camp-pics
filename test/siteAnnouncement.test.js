@@ -37,6 +37,45 @@ const NOW = new Date('2026-08-03T12:00:00.000Z');
 const hostile = '</textarea><script id="announcement-xss">attack()</script> "quotes" & ' +
   `${String.fromCharCode(0x2028)}${String.fromCharCode(0x2029)}`;
 
+function findCssRule(css, selector) {
+  for (const match of css.matchAll(/([^{}]+)\{([^{}]*)\}/gu)) {
+    const selectors = match[1]
+      .replace(/\/\*[\s\S]*?\*\//gu, '')
+      .split(',')
+      .map(value => value.trim());
+    if (selectors.includes(selector)) return match[2];
+  }
+  return null;
+}
+
+function selectorSpecificity(selector) {
+  let remaining = selector;
+  const specificity = [0, 0, 0];
+  for (const match of selector.matchAll(/:not\(([^)]*)\)/gu)) {
+    const argumentSpecificities = match[1]
+      .split(',')
+      .map(argument => selectorSpecificity(argument.trim()))
+      .sort((left, right) => {
+        for (let index = 0; index < left.length; index += 1) {
+          if (left[index] !== right[index]) return right[index] - left[index];
+        }
+        return 0;
+      });
+    argumentSpecificities[0].forEach((value, index) => {
+      specificity[index] += value;
+    });
+  }
+  remaining = remaining.replace(/:not\([^)]*\)/gu, '');
+  specificity[0] += (remaining.match(/#[a-z0-9_-]+/giu) || []).length;
+  specificity[1] += (remaining.match(/\.[a-z0-9_-]+/giu) || []).length;
+  specificity[1] += (remaining.match(/\[[^\]]+\]/gu) || []).length;
+  specificity[1] += (remaining.match(/:(?!:)[a-z0-9_-]+/giu) || []).length;
+  specificity[2] += (
+    remaining.match(/(?:^|[\s>+~])(?:[a-z][a-z0-9-]*)/giu) || []
+  ).length;
+  return specificity;
+}
+
 function validForm(overrides = {}) {
   return {
     _csrf: 'test-token',
@@ -524,6 +563,72 @@ describe('public announcement middleware', () => {
 });
 
 describe('announcement rendering', () => {
+  test('public and preview CTAs keep explicit readable colours in every link state', async () => {
+    const [generalCss, publicCss, adminCss] = await Promise.all([
+      read('public/css/general.css'),
+      read('public/css/siteAnnouncement.css'),
+      read('public/css/adminAnnouncements.css'),
+    ]);
+    const genericSelector = generalCss.match(
+      /a:not\(\.btn-primary, \.btn-secondary\)/u,
+    )?.[0];
+    assert.ok(genericSelector);
+
+    const publicNormalSelector =
+      '.site-announcement-dialog a.site-announcement-dialog__cta';
+    const publicVisitedSelector = `${publicNormalSelector}:visited`;
+    const publicHoverSelector = `${publicNormalSelector}:hover`;
+    const publicFocusSelector = `${publicNormalSelector}:focus-visible`;
+    const publicActiveSelector = `${publicNormalSelector}:active`;
+    const publicNormalRule = findCssRule(publicCss, publicNormalSelector);
+    const publicVisitedRule = findCssRule(publicCss, publicVisitedSelector);
+    const publicHoverRule = findCssRule(publicCss, publicHoverSelector);
+    const publicFocusRule = findCssRule(publicCss, publicFocusSelector);
+    const publicActiveRule = findCssRule(publicCss, publicActiveSelector);
+    for (const rule of [publicNormalRule, publicVisitedRule]) {
+      assert.match(rule, /background:\s*var\(--orange\)\s*;/u);
+      assert.match(rule, /color:\s*#fff\s*;/u);
+    }
+    for (const rule of [publicHoverRule, publicFocusRule, publicActiveRule]) {
+      assert.match(rule, /background:\s*var\(--darker-orange\)\s*;/u);
+      assert.match(rule, /color:\s*#fff\s*;/u);
+    }
+    assert.deepEqual(selectorSpecificity(genericSelector), [0, 1, 1]);
+    assert.deepEqual(selectorSpecificity(publicNormalSelector), [0, 2, 1]);
+    assert.ok(
+      selectorSpecificity(publicNormalSelector)[1] >
+        selectorSpecificity(genericSelector)[1],
+    );
+    assert.match(
+      publicCss,
+      /\.site-announcement-dialog__cta:focus-visible,[\s\S]*?outline:\s*3px solid var\(--yellow\)/u,
+    );
+
+    const previewNormalSelector =
+      '.admin-announcement-preview a.admin-announcement-preview__cta';
+    const previewRules = {
+      normal: findCssRule(adminCss, previewNormalSelector),
+      visited: findCssRule(adminCss, `${previewNormalSelector}:visited`),
+      hover: findCssRule(adminCss, `${previewNormalSelector}:hover`),
+      focus: findCssRule(adminCss, `${previewNormalSelector}:focus-visible`),
+      active: findCssRule(adminCss, `${previewNormalSelector}:active`),
+    };
+    for (const rule of [previewRules.normal, previewRules.visited]) {
+      assert.match(rule, /background:\s*var\(--orange\)\s*;/u);
+      assert.match(rule, /color:\s*#fff\s*;/u);
+    }
+    for (const rule of [
+      previewRules.hover,
+      previewRules.focus,
+      previewRules.active,
+    ]) {
+      assert.match(rule, /background:\s*var\(--darker-orange\)\s*;/u);
+      assert.match(rule, /color:\s*#fff\s*;/u);
+    }
+    assert.deepEqual(selectorSpecificity(previewNormalSelector), [0, 2, 1]);
+    assert.doesNotMatch(`${publicCss}\n${adminCss}`, /!important/iu);
+  });
+
   test('admin content is escaped and contains one CSRF form with external assets', async () => {
     const filename = path.join(root, 'views/admin/announcements.ejs');
     const source = await read('views/admin/announcements.ejs');
