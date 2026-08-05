@@ -828,10 +828,11 @@ describe('administrator qualification rendering and source guards', () => {
           youtubeId: null,
           parkName: hostile,
           parkUrl: '/camp/park/safe-park',
-          campgroundName: null,
-          campgroundUrl: null,
-          campsiteName: null,
-          campsiteUrl: null,
+          campgroundName: 'North Loop',
+          campgroundUrl: '/camp/park/safe-park#north-loop',
+          campsiteName: 'Site 12',
+          campsiteUrl:
+            '/camp/park/safe-park?campground=north-loop&campsite=site-12',
           caption: hostile,
           monthKey: '2026-08',
           status: 'pending',
@@ -866,6 +867,10 @@ describe('administrator qualification rendering and source guards', () => {
     }
     assert.match(html, /name="_csrf" value="&lt;csrf-token&gt;"/u);
     assert.match(html, /This account is not currently eligible for the monthly draw\./u);
+    assert.match(
+      html,
+      /href="\/camp\/park\/safe-park\?campground=north-loop&amp;campsite=site-12"/u,
+    );
     assert.equal(html.includes('<script id="draw-xss">'), false);
     assert.match(html, /&lt;script id=&#34;draw-xss&#34;&gt;/u);
     assert.doesNotMatch(html, /\b(?:hash|salt|session|auth_version|previous_logins)\b/iu);

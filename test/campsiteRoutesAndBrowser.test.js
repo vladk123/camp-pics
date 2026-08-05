@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { describe, test } from 'node:test';
 import vm from 'node:vm';
 
+import * as camp from '../controllers/camp.js';
 import campRouter from '../routes/camp.js';
 
 const helperSource = await readFile(
@@ -65,6 +66,28 @@ test('every campsite API/upload/delete route exists exactly once', () => {
       entry.method === method && entry.path === path);
     assert.equal(matches.length, 1, `${method} ${path}`);
   }
+});
+
+test('public park HTML and campsite JSON GET routes keep distinct handlers', () => {
+  const entries = routeEntries();
+  const parkPage = entries.find(entry =>
+    entry.method === 'GET' && entry.path === '/park/:parkSlug');
+  const standaloneApi = entries.find(entry =>
+    entry.method === 'GET' &&
+    entry.path === '/park/:parkSlug/campsite/:campsiteSlug');
+  const campgroundApi = entries.find(entry =>
+    entry.method === 'GET' &&
+    entry.path ===
+      '/park/:parkSlug/campground/:campgroundSlug/campsite/:campsiteSlug');
+
+  assert.equal(parkPage.handlers.at(-1), camp.showPark);
+  assert.equal(standaloneApi.handlers.at(-1), camp.getCampsite);
+  assert.equal(
+    campgroundApi.handlers.at(-1),
+    camp.getCampgroundCampsite,
+  );
+  assert.notEqual(standaloneApi.handlers.at(-1), camp.showPark);
+  assert.notEqual(campgroundApi.handlers.at(-1), camp.showPark);
 });
 
 test('every campsite POST/DELETE route preserves authentication and global CSRF coverage', () => {
@@ -320,6 +343,298 @@ describe('browser campsite location helper', () => {
     assert.match(
       showParkSource,
       /if \(!popup \|\| popup\.classList\.contains\('hidden'\)\) return null/,
+    );
+  });
+});
+
+class DeepLinkClassList {
+  constructor() {
+    this.values = new Set();
+  }
+
+  add(...values) {
+    values.forEach(value => this.values.add(value));
+  }
+
+  remove(...values) {
+    values.forEach(value => this.values.delete(value));
+  }
+}
+
+function deepLinkCampsite({
+  campsiteSlug,
+  campgroundSlug = '',
+  hasCampground = false,
+}) {
+  return {
+    dataset: {
+      csSlug: campsiteSlug,
+      cgSlug: campgroundSlug,
+      hasCg: String(hasCampground),
+    },
+    scrollCalls: [],
+    scrollIntoView(options) {
+      this.scrollCalls.push(options);
+    },
+  };
+}
+
+function createShowParkDeepLinkHarness({ search = '', campsites = [] } = {}) {
+  const documentListeners = new Map();
+  const campsiteClickListeners = [];
+  const querySelectorAllCalls = [];
+  const coordinatorCalls = [];
+  const fetchCalls = [];
+  const clearedModals = [];
+  const modal = { dataset: {} };
+  const slider = { classList: new DeepLinkClassList() };
+  const noMedia = {
+    classList: new DeepLinkClassList(),
+    replaceChildren() {},
+    textContent: '',
+  };
+  const parkCampsites = {
+    addEventListener(type, listener) {
+      assert.equal(type, 'click');
+      campsiteClickListeners.push(listener);
+    },
+  };
+  const document = {
+    addEventListener(type, listener) {
+      const listeners = documentListeners.get(type) || [];
+      listeners.push(listener);
+      documentListeners.set(type, listeners);
+    },
+    getElementById(id) {
+      if (id === 'park-campsites') return parkCampsites;
+      if (id === 'campsite-modal-parent') return modal;
+      if (id === 'park-media-slider') return slider;
+      if (id === 'no-park-media') return noMedia;
+      return null;
+    },
+    querySelector() {
+      return null;
+    },
+    querySelectorAll(selector) {
+      querySelectorAllCalls.push(selector);
+      if (selector === '.campsite') return campsites;
+      return [];
+    },
+  };
+  let coordinatorCreateCalls = 0;
+  const window = {
+    CampPicsCampsiteLocation: {
+      clearCanonicalLocation(element) {
+        clearedModals.push(element);
+        element.dataset.campsiteSlug = '';
+        element.dataset.campgroundSlug = '';
+        element.dataset.locationKind = '';
+      },
+    },
+    CampPicsCampsiteRequests: {
+      createCoordinator() {
+        coordinatorCreateCalls += 1;
+        return {
+          cancelOpen() {},
+          async openLatest(location) {
+            coordinatorCalls.push({ ...location });
+            return { status: 'displayed' };
+          },
+          async refreshTarget() {
+            throw new Error('Unexpected campsite refresh');
+          },
+        };
+      },
+    },
+    CampPicsMedia: {},
+    CampPicsMediaDeletionResponse: {},
+    CURRENT_USER_ID: '',
+    PARK: { slug: 'safe-park' },
+    location: {
+      href: `https://camppics.example.test/camp/park/safe-park${search}`,
+      search,
+    },
+  };
+  window.window = window;
+  const initialWindowKeys = Object.keys(window).sort();
+  const context = vm.createContext({
+    console,
+    document,
+    fetch: async url => {
+      fetchCalls.push(url);
+      return {
+        ok: true,
+        async json() { return { photos: [], videos: [] }; },
+      };
+    },
+    initializeParkSlider() {},
+    URLSearchParams,
+    window,
+  });
+  vm.runInContext(showParkSource, context);
+
+  return {
+    campsiteClickListeners,
+    clearedModals,
+    coordinatorCalls,
+    get coordinatorCreateCalls() { return coordinatorCreateCalls; },
+    documentListeners,
+    fetchCalls,
+    initialWindowKeys,
+    modal,
+    querySelectorAllCalls,
+    window,
+    async initialize() {
+      const listeners = documentListeners.get('DOMContentLoaded') || [];
+      for (const listener of listeners) await listener();
+    },
+  };
+}
+
+describe('public park campsite deep links', () => {
+  test('opens valid standalone and campground targets exactly once through the coordinator', async () => {
+    const cases = [
+      {
+        name: 'standalone',
+        search: '?campsite=standalone-12',
+        sites: [
+          deepLinkCampsite({
+            campsiteSlug: 'standalone-12',
+            campgroundSlug: 'north-loop',
+            hasCampground: true,
+          }),
+          deepLinkCampsite({ campsiteSlug: 'standalone-12' }),
+        ],
+        expected: {
+          parkSlug: 'safe-park',
+          campsiteSlug: 'standalone-12',
+          campgroundSlug: null,
+        },
+        matchedIndex: 1,
+      },
+      {
+        name: 'campground',
+        search: '?campground=north-loop&campsite=site-12',
+        sites: [
+          deepLinkCampsite({
+            campsiteSlug: 'site-12',
+            campgroundSlug: 'south-loop',
+            hasCampground: true,
+          }),
+          deepLinkCampsite({ campsiteSlug: 'site-12' }),
+          deepLinkCampsite({
+            campsiteSlug: 'site-12',
+            campgroundSlug: 'north-loop',
+            hasCampground: true,
+          }),
+        ],
+        expected: {
+          parkSlug: 'safe-park',
+          campsiteSlug: 'site-12',
+          campgroundSlug: 'north-loop',
+        },
+        matchedIndex: 2,
+      },
+    ];
+
+    for (const fixture of cases) {
+      const harness = createShowParkDeepLinkHarness({
+        search: fixture.search,
+        campsites: fixture.sites,
+      });
+      await harness.initialize();
+
+      assert.equal(harness.coordinatorCreateCalls, 1, fixture.name);
+      assert.deepEqual(harness.coordinatorCalls, [fixture.expected], fixture.name);
+      assert.equal(harness.clearedModals.length, 1, fixture.name);
+      assert.equal(
+        fixture.sites[fixture.matchedIndex].scrollCalls.length,
+        1,
+        fixture.name,
+      );
+      assert.deepEqual(
+        harness.fetchCalls,
+        ['/camp/park/safe-park/media'],
+        fixture.name,
+      );
+      assert.deepEqual(
+        Object.keys(harness.window).sort().filter(key =>
+          !harness.initialWindowKeys.includes(key)),
+        [
+          'openCampsiteFullscreen',
+          'openFullscreenImage',
+          'openFullscreenVideo',
+        ],
+        fixture.name,
+      );
+    }
+  });
+
+  test('does nothing for scope mismatches or absent, duplicate, blank, malformed and unknown parameters', async () => {
+    const nested = deepLinkCampsite({
+      campsiteSlug: 'site-12',
+      campgroundSlug: 'north-loop',
+      hasCampground: true,
+    });
+    const standalone = deepLinkCampsite({ campsiteSlug: 'standalone-12' });
+    const cases = [
+      ['', [nested, standalone]],
+      ['?campground=north-loop', [nested]],
+      ['?campsite=', [standalone]],
+      ['?campsite=site-12&campsite=site-12', [nested]],
+      ['?campground=north-loop&campground=south-loop&campsite=site-12', [nested]],
+      ['?campground=south-loop&campsite=site-12', [nested]],
+      ['?campsite=site-12', [nested]],
+      ['?campground=north-loop&campsite=standalone-12', [standalone]],
+      ['?campsite=UPPERCASE', [standalone]],
+      ['?campsite=unsafe%2Fpath', [standalone]],
+      ['?campsite=-leading', [standalone]],
+      ['?campsite=two--hyphens', [standalone]],
+      ['?campsite=standalone-12&extra=value', [standalone]],
+      ['?campsite=site-12&campground=north-loop', [nested]],
+    ];
+
+    for (const [search, sites] of cases) {
+      const harness = createShowParkDeepLinkHarness({ search, campsites: sites });
+      await harness.initialize();
+      assert.deepEqual(harness.coordinatorCalls, [], search || 'no parameters');
+      assert.equal(harness.clearedModals.length, 0, search || 'no parameters');
+      assert.equal(
+        sites.every(site => site.scrollCalls.length === 0),
+        true,
+        search || 'no parameters',
+      );
+      assert.deepEqual(harness.fetchCalls, ['/camp/park/safe-park/media']);
+    }
+  });
+
+  test('requires one unambiguous dataset match without selector interpolation or unsafe sinks', async () => {
+    const duplicateA = deepLinkCampsite({ campsiteSlug: 'duplicate-12' });
+    const duplicateB = deepLinkCampsite({ campsiteSlug: 'duplicate-12' });
+    const harness = createShowParkDeepLinkHarness({
+      search: '?campsite=duplicate-12',
+      campsites: [duplicateA, duplicateB],
+    });
+    await harness.initialize();
+
+    assert.deepEqual(harness.coordinatorCalls, []);
+    assert.equal(
+      harness.querySelectorAllCalls.filter(selector => selector === '.campsite')
+        .length,
+      1,
+    );
+    const start = showParkSource.indexOf('const findDeepLinkedCampsite =');
+    const end = showParkSource.indexOf('// Listen to campsite clicks', start);
+    assert.ok(start >= 0 && end > start);
+    const deepLinkSource = showParkSource.slice(start, end);
+    assert.match(deepLinkSource, /document\.querySelectorAll\('\.campsite'\)/u);
+    assert.match(deepLinkSource, /dataset\.csSlug === campsiteSlug/u);
+    assert.match(deepLinkSource, /dataset\.cgSlug === campgroundSlug/u);
+    assert.match(deepLinkSource, /dataset\.hasCg === 'false'/u);
+    assert.match(deepLinkSource, /dataset\.hasCg === 'true'/u);
+    assert.doesNotMatch(
+      deepLinkSource,
+      /querySelector(?:All)?\s*\(\s*`|innerHTML|outerHTML|insertAdjacentHTML|window\.[A-Za-z_$][\w$]*\s*=/u,
     );
   });
 });

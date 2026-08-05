@@ -490,7 +490,14 @@ describe('stored candidate resolution and administrator delivery', () => {
       ['Photo upload', 'No-upload entry', 'Video upload']);
     assert.equal(
       sent.templateData.candidates[0].locationUrl,
-      'https://camppics.example.test/camp/park/safe-park/campground/north-loop/campsite/site-12',
+      'https://camppics.example.test/camp/park/safe-park?campground=north-loop&campsite=site-12',
+    );
+    assert.deepEqual(
+      [...new URL(sent.templateData.candidates[0].locationUrl).searchParams],
+      [
+        ['campground', 'north-loop'],
+        ['campsite', 'site-12'],
+      ],
     );
     assert.equal(
       sent.templateData.candidates[2].locationUrl,
@@ -513,7 +520,21 @@ describe('stored candidate resolution and administrator delivery', () => {
       {
         name: 'campsite',
         upload: upload(),
-        expected: '/camp/park/safe-park/campground/north-loop/campsite/site-12',
+        expected:
+          '/camp/park/safe-park?campground=north-loop&campsite=site-12',
+      },
+      {
+        name: 'standalone campsite',
+        upload: upload({
+          campgroundId: null,
+          campgroundName: null,
+        }),
+        parks: [{
+          ...park(),
+          campgrounds: [],
+          campsites: [{ _id: CAMPSITE_ID, slug: 'site-12' }],
+        }],
+        expected: '/camp/park/safe-park?campsite=site-12',
       },
       {
         name: 'campground',
@@ -532,26 +553,39 @@ describe('stored candidate resolution and administrator delivery', () => {
       },
     ];
     for (const fixture of cases) {
-      const harness = createHarness({ uploads: [fixture.upload] });
+      const harness = createHarness({
+        uploads: [fixture.upload],
+        parks: fixture.parks,
+      });
       await harness.service.notifyStoredResult({ monthKey: MONTH });
+      const locationUrl =
+        harness.calls.sends[0].templateData.candidates[0].locationUrl;
+      const parsedLocationUrl = new URL(locationUrl);
       assert.equal(
-        new URL(harness.calls.sends[0].templateData.candidates[0].locationUrl)
-          .pathname + new URL(
-            harness.calls.sends[0].templateData.candidates[0].locationUrl,
-          ).hash,
+        parsedLocationUrl.pathname +
+          parsedLocationUrl.search +
+          parsedLocationUrl.hash,
         fixture.expected,
         fixture.name,
       );
+      assert.equal(parsedLocationUrl.origin, 'https://camppics.example.test');
     }
 
-    const hostile = createHarness({
-      parks: [{ ...park(), slug: 'https://evil.example/path' }],
-    });
-    await hostile.service.notifyStoredResult({ monthKey: MONTH });
-    assert.equal(
-      hostile.calls.sends[0].templateData.candidates[0].locationUrl,
-      null,
-    );
+    for (const unsafeParkSlug of [
+      'https://evil.example/path',
+      '//evil.example/path',
+      'safe-park?campsite=forged',
+    ]) {
+      const hostile = createHarness({
+        parks: [{ ...park(), slug: unsafeParkSlug }],
+      });
+      await hostile.service.notifyStoredResult({ monthKey: MONTH });
+      assert.equal(
+        hostile.calls.sends[0].templateData.candidates[0].locationUrl,
+        null,
+        unsafeParkSlug,
+      );
+    }
   });
 
   test('keeps eligible and legacy pending upload sources resolvable without redrawing', async () => {

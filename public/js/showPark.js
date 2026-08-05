@@ -3,6 +3,7 @@ const mediaDeletionResponse = window.CampPicsMediaDeletionResponse;
 const campsiteLocation = window.CampPicsCampsiteLocation;
 const campsiteRequests = window.CampPicsCampsiteRequests.createCoordinator();
 const boundCampsiteNavButtons = new WeakSet();
+const campsiteDeepLinkSlugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 
 function sortMediaByDate(items) {
   return items.sort((a, b) => {
@@ -19,12 +20,7 @@ function createInternalLink(href, text) {
   return link;
 }
 
-// Listen to campsite clicks
-const parkCampsitesDiv = document.getElementById('park-campsites')
-parkCampsitesDiv.addEventListener('click', async e => {
-  const csEl = e.target.closest('.campsite');
-  if (!csEl) return;
-
+const openCampsiteElement = async csEl => {
   const parkSlug = window.PARK.slug;
   const campsiteSlug = csEl.dataset.csSlug;
   const hasCg = csEl.dataset.hasCg === "true";
@@ -59,6 +55,72 @@ parkCampsitesDiv.addEventListener('click', async e => {
   } catch {
     createFlashMsg('error', 'Could not load campsite details.', 'campsite-loading-error', 10)
   }
+};
+
+const findDeepLinkedCampsite = search => {
+  let params;
+  try {
+    params = new URLSearchParams(search);
+  } catch {
+    return null;
+  }
+
+  const entries = [...params.entries()];
+  const campsiteValues = params.getAll('campsite');
+  const campgroundValues = params.getAll('campground');
+  if (
+    campsiteValues.length !== 1 ||
+    campgroundValues.length > 1 ||
+    entries.some(([name]) => name !== 'campsite' && name !== 'campground')
+  ) {
+    return null;
+  }
+
+  const campsiteSlug = campsiteValues[0];
+  const campgroundSlug = campgroundValues.length === 1
+    ? campgroundValues[0]
+    : null;
+  if (
+    !campsiteDeepLinkSlugPattern.test(campsiteSlug) ||
+    (
+      campgroundSlug !== null &&
+      !campsiteDeepLinkSlugPattern.test(campgroundSlug)
+    )
+  ) {
+    return null;
+  }
+
+  const expectedNames = campgroundSlug === null
+    ? ['campsite']
+    : ['campground', 'campsite'];
+  if (
+    entries.length !== expectedNames.length ||
+    entries.some(([name], index) => name !== expectedNames[index])
+  ) {
+    return null;
+  }
+
+  let exactMatch = null;
+  for (const campsiteElement of document.querySelectorAll('.campsite')) {
+    const matches = campsiteElement.dataset.csSlug === campsiteSlug && (
+      campgroundSlug === null
+        ? campsiteElement.dataset.hasCg === 'false'
+        : campsiteElement.dataset.hasCg === 'true' &&
+          campsiteElement.dataset.cgSlug === campgroundSlug
+    );
+    if (!matches) continue;
+    if (exactMatch) return null;
+    exactMatch = campsiteElement;
+  }
+  return exactMatch;
+};
+
+// Listen to campsite clicks
+const parkCampsitesDiv = document.getElementById('park-campsites')
+parkCampsitesDiv.addEventListener('click', async e => {
+  const csEl = e.target.closest('.campsite');
+  if (!csEl) return;
+  await openCampsiteElement(csEl);
 });
 
 
@@ -354,6 +416,14 @@ function scrollCampsiteThumbIntoView(index) {
 
 document.addEventListener('DOMContentLoaded', async() => {
   const parkSlug = window.PARK.slug;
+  const deepLinkedCampsite = findDeepLinkedCampsite(window.location.search);
+  if (deepLinkedCampsite) {
+    deepLinkedCampsite.scrollIntoView?.({
+      behavior: 'smooth',
+      block: 'center',
+    });
+    await openCampsiteElement(deepLinkedCampsite);
+  }
 
   // Park-level forms
   const parkPhotoForm  = document.getElementById('park-photo-form');

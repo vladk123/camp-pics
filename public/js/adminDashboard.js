@@ -10,7 +10,7 @@
   const DASHBOARD_CAMPGROUND_URL_PATTERN =
     /^\/camp\/park\/[a-z0-9]+(?:-[a-z0-9]+)*#[a-z0-9]+(?:-[a-z0-9]+)*$/u;
   const DASHBOARD_CAMPSITE_URL_PATTERN =
-    /^\/camp\/park\/[a-z0-9]+(?:-[a-z0-9]+)*(?:\/campground\/[a-z0-9]+(?:-[a-z0-9]+)*)?\/campsite\/[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+    /^\/camp\/park\/[a-z0-9]+(?:-[a-z0-9]+)*\?(?:campsite=[a-z0-9]+(?:-[a-z0-9]+)*|campground=[a-z0-9]+(?:-[a-z0-9]+)*&campsite=[a-z0-9]+(?:-[a-z0-9]+)*)$/u;
   const DASHBOARD_USER_DETAIL_URL_PATTERN =
     /^\/a\/users\/[a-f0-9]{24}$/u;
   const DASHBOARD_DRAW_STATUS_PATTERN = /^(?:pending|eligible|ineligible)$/u;

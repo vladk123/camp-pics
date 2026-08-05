@@ -510,7 +510,7 @@ describe('administrator user upload ownership, pagination and locations', () => 
     );
     assert.equal(
       locals.uploads[0].campsiteUrl,
-      '/camp/park/safe-park/campground/safe-campground/campsite/safe-campsite',
+      '/camp/park/safe-park?campground=safe-campground&campsite=safe-campsite',
     );
     for (const upload of locals.uploads) {
       for (const rawId of ['parkId', 'campgroundId', 'campsiteId', 'userId']) {
@@ -674,6 +674,8 @@ describe('administrator user-detail rendering and source guards', () => {
     }), {
       parkUrl: '/camp/park/safe-park',
       campgroundUrl: '/camp/park/safe-park#safe-campground',
+      campsiteUrl:
+        '/camp/park/safe-park?campground=safe-campground&campsite=safe-campsite',
     });
     const html = await renderDetail({
       currentPath: `/a/users/${TARGET_ID}`,
@@ -719,6 +721,10 @@ describe('administrator user-detail rendering and source guards', () => {
     assert.match(html, /class="upload-item admin-upload-card"/u);
     assert.match(html, /href="\/camp\/park\/safe-park"/u);
     assert.match(html, /href="\/camp\/park\/safe-park#safe-campground"/u);
+    assert.match(
+      html,
+      /href="\/camp\/park\/safe-park\?campground=safe-campground&amp;campsite=safe-campsite"/u,
+    );
     assert.match(html, /href="\/a\/users\/64b7f2d4c9f1e8a123456789\?page=2">Next<\/a>/u);
     assert.match(html, /Page 1 of 2/u);
     assert.match(html, /action="\/a\/user\/64b7f2d4c9f1e8a123456789\/unblock"/u);

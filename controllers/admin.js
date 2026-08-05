@@ -87,7 +87,7 @@ const ADMIN_PARK_URL_PATTERN =
 const ADMIN_CAMPGROUND_URL_PATTERN =
   /^\/camp\/park\/[a-z0-9]+(?:-[a-z0-9]+)*#[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const ADMIN_CAMPSITE_URL_PATTERN =
-  /^\/camp\/park\/[a-z0-9]+(?:-[a-z0-9]+)*(?:\/campground\/[a-z0-9]+(?:-[a-z0-9]+)*)?\/campsite\/[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+  /^\/camp\/park\/[a-z0-9]+(?:-[a-z0-9]+)*\?(?:campsite=[a-z0-9]+(?:-[a-z0-9]+)*|campground=[a-z0-9]+(?:-[a-z0-9]+)*&campsite=[a-z0-9]+(?:-[a-z0-9]+)*)$/u;
 const ADMIN_USER_DETAIL_PAGE_SIZE = 20;
 const ADMIN_LOGIN_ACTIVITY_LIMIT = 20;
 const MONTHLY_DRAW_UPLOAD_STATUS_SET = new Set(MONTHLY_DRAW_UPLOAD_STATUSES);
@@ -124,12 +124,12 @@ export function getAdminCampsiteUrl(
   const parkUrl = getAdminParkUrl(parkSlug);
   if (!parkUrl || !isValidAdminLocationSlug(campsiteSlug)) return null;
   if (campgroundSlug == null) {
-    return `${parkUrl}/campsite/${encodeURIComponent(campsiteSlug)}`;
+    return `${parkUrl}?campsite=${encodeURIComponent(campsiteSlug)}`;
   }
   if (!isValidAdminLocationSlug(campgroundSlug)) return null;
-  return `${parkUrl}/campground/${encodeURIComponent(
+  return `${parkUrl}?campground=${encodeURIComponent(
     campgroundSlug,
-  )}/campsite/${encodeURIComponent(campsiteSlug)}`;
+  )}&campsite=${encodeURIComponent(campsiteSlug)}`;
 }
 
 export function getAdminUserDetailUrl(value) {
@@ -326,7 +326,7 @@ export function serializeAdminUpload(upload, locationUrls = {}) {
       ? campgroundUrl
       : null,
     campsiteUrl: parkUrl && campsiteUrl &&
-      campsiteUrl.startsWith(`${parkUrl}/`)
+      campsiteUrl.startsWith(`${parkUrl}?`)
       ? campsiteUrl
       : null,
     youtubeId: upload?.youtubeId ?? null,

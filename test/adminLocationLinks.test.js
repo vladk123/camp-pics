@@ -284,13 +284,13 @@ describe('administrator upload location lookup', () => {
     );
     assert.equal(
       result.body.uploads[0].campsiteUrl,
-      '/camp/park/current-park/campground/north-loop/campsite/site-12',
+      '/camp/park/current-park?campground=north-loop&campsite=site-12',
     );
     assert.equal(result.body.uploads[1].parkUrl, '/camp/park/current-park');
     assert.equal(result.body.uploads[1].campgroundUrl, null);
     assert.equal(
       result.body.uploads[1].campsiteUrl,
-      '/camp/park/current-park/campsite/standalone-site',
+      '/camp/park/current-park?campsite=standalone-site',
     );
     assert.equal(result.body.uploads[2].parkUrl, '/camp/park/second-park');
     assert.equal(result.body.uploads[2].campgroundUrl, null);
@@ -341,15 +341,19 @@ describe('administrator upload location lookup', () => {
 });
 
 describe('administrator upload location URL resolution', () => {
-  test('generates only validated current Park and Campground URLs', () => {
+  test('generates only fixed validated public-page location URLs', () => {
     assert.equal(getAdminParkUrl('current-park'), '/camp/park/current-park');
     assert.equal(
       getAdminCampgroundUrl('current-park', 'north-loop'),
       '/camp/park/current-park#north-loop',
     );
     assert.equal(
-      getAdminCampsiteUrl('current-park', 'site-12', 'north-loop'),
-      '/camp/park/current-park/campground/north-loop/campsite/site-12',
+      getAdminCampsiteUrl('safe-park', 'standalone-12'),
+      '/camp/park/safe-park?campsite=standalone-12',
+    );
+    assert.equal(
+      getAdminCampsiteUrl('safe-park', 'site-12', 'north-loop'),
+      '/camp/park/safe-park?campground=north-loop&campsite=site-12',
     );
 
     for (const unsafeSlug of [
@@ -368,8 +372,15 @@ describe('administrator upload location URL resolution', () => {
       assert.equal(getAdminParkUrl(unsafeSlug), null, unsafeSlug);
       assert.equal(getAdminCampgroundUrl('current-park', unsafeSlug), null, unsafeSlug);
       assert.equal(getAdminCampsiteUrl('current-park', unsafeSlug), null, unsafeSlug);
+      assert.equal(
+        getAdminCampsiteUrl('current-park', 'site-12', unsafeSlug),
+        null,
+        unsafeSlug,
+      );
     }
     assert.equal(getAdminCampgroundUrl('bad/park', 'north-loop'), null);
+    assert.equal(getAdminCampsiteUrl('bad/park', 'site-12'), null);
+    assert.equal(getAdminCampsiteUrl('safe-park'), null);
   });
 
   test('resolves scoped campsites and rejects missing, malformed or mismatched IDs', () => {
@@ -399,7 +410,7 @@ describe('administrator upload location URL resolution', () => {
       campgroundUrl:
         '/camp/park/authoritative-current-park#authoritative-current-campground',
       campsiteUrl:
-        '/camp/park/authoritative-current-park/campground/authoritative-current-campground/campsite/authoritative-site-12',
+        '/camp/park/authoritative-current-park?campground=authoritative-current-campground&campsite=authoritative-site-12',
     });
     assert.deepEqual(resolveAdminUploadLocationUrls(uploadRecord({
       campgroundId: null,
@@ -408,7 +419,7 @@ describe('administrator upload location URL resolution', () => {
       parkUrl: '/camp/park/authoritative-current-park',
       campgroundUrl: null,
       campsiteUrl:
-        '/camp/park/authoritative-current-park/campsite/authoritative-standalone-site',
+        '/camp/park/authoritative-current-park?campsite=authoritative-standalone-site',
     });
     for (const campsiteId of [
       null,
@@ -462,11 +473,30 @@ describe('administrator upload location URL resolution', () => {
     });
   });
 
-  test('serializer rejects injected URL values and exposes no raw location IDs', () => {
+  test('serializer accepts only fixed campsite parameters and exposes no raw location IDs', () => {
+    const standalone = serializeAdminUpload(uploadRecord(), {
+      parkUrl: '/camp/park/current-park',
+      campsiteUrl: '/camp/park/current-park?campsite=site-12',
+    });
+    assert.equal(
+      standalone.campsiteUrl,
+      '/camp/park/current-park?campsite=site-12',
+    );
+
+    const nested = serializeAdminUpload(uploadRecord(), {
+      parkUrl: '/camp/park/current-park',
+      campsiteUrl:
+        '/camp/park/current-park?campground=north-loop&campsite=site-12',
+    });
+    assert.equal(
+      nested.campsiteUrl,
+      '/camp/park/current-park?campground=north-loop&campsite=site-12',
+    );
+
     const serialized = serializeAdminUpload(uploadRecord(), {
       parkUrl: 'https://evil.example/camp/park/current-park',
       campgroundUrl: '/camp/park/current-park#north-loop?attack=1',
-      campsiteUrl: '/camp/park/current-park/campsite/site-12?attack=1',
+      campsiteUrl: '/camp/park/current-park?campsite=site-12&attack=1',
     });
 
     assert.equal(serialized.parkUrl, null);
@@ -476,7 +506,7 @@ describe('administrator upload location URL resolution', () => {
     const mismatched = serializeAdminUpload(uploadRecord(), {
       parkUrl: '/camp/park/current-park',
       campgroundUrl: '/camp/park/different-park#north-loop',
-      campsiteUrl: '/camp/park/different-park/campsite/site-12',
+      campsiteUrl: '/camp/park/different-park?campsite=site-12',
     });
     assert.equal(mismatched.parkUrl, '/camp/park/current-park');
     assert.equal(mismatched.campgroundUrl, null);
@@ -488,6 +518,27 @@ describe('administrator upload location URL resolution', () => {
     assert.equal(campgroundWithoutPark.parkUrl, null);
     assert.equal(campgroundWithoutPark.campgroundUrl, null);
     assert.equal(campgroundWithoutPark.campsiteUrl, null);
+
+    for (const campsiteUrl of [
+      '/camp/park/current-park/campsite/site-12',
+      '/camp/park/current-park/campground/north-loop/campsite/site-12',
+      '/camp/park/current-park?campsite=site-12&campground=north-loop',
+      '/camp/park/current-park?campsite=site-12&campsite=site-12',
+      '/camp/park/current-park?campground=north-loop&campground=south-loop&campsite=site-12',
+      '/camp/park/current-park?campground=north-loop&campsite=site-12&extra=value',
+      '/camp/park/current-park?campsite=',
+      '//evil.example/camp/park/current-park?campsite=site-12',
+      'https://evil.example/camp/park/current-park?campsite=site-12',
+    ]) {
+      assert.equal(
+        serializeAdminUpload(uploadRecord(), {
+          parkUrl: '/camp/park/current-park',
+          campsiteUrl,
+        }).campsiteUrl,
+        null,
+        campsiteUrl,
+      );
+    }
     for (const rawId of ['parkId', 'campgroundId', 'campsiteId']) {
       assert.equal(rawId in serialized, false);
     }
@@ -526,6 +577,8 @@ describe('server-rendered administrator location links', () => {
     }), {
       parkUrl: '/camp/park/current-park',
       campgroundUrl: '/camp/park/current-park#north-loop',
+      campsiteUrl:
+        '/camp/park/current-park?campground=north-loop&campsite=site-12',
     });
     const plain = serializeAdminUpload(uploadRecord({
       parkName: 'Plain Park',
@@ -549,9 +602,13 @@ describe('server-rendered administrator location links', () => {
       html,
       /<a class="admin-upload-card__location-link" href="\/camp\/park\/current-park#north-loop" target="_blank" rel="noopener noreferrer">/u,
     );
+    assert.match(
+      html,
+      /<a class="admin-upload-card__location-link" href="\/camp\/park\/current-park\?campground=north-loop&amp;campsite=site-12" target="_blank" rel="noopener noreferrer">/u,
+    );
     assert.equal(
       (html.match(/class="admin-upload-card__location-link"/gu) || []).length,
-      2,
+      3,
     );
     assert.equal(html.includes(hostile), false);
     assert.doesNotMatch(html, /<script id="location-xss">/u);
@@ -671,30 +728,52 @@ describe('dynamically loaded administrator location links', () => {
         parkUrl: '/camp/park/valid-park',
         campgroundName: 'Valid Campground',
         campgroundUrl: '/camp/park/valid-park#valid-campground',
+        campsiteName: 'Valid Campsite',
+        campsiteUrl:
+          '/camp/park/valid-park?campground=valid-campground&campsite=site-12',
+      },
+      {
+        parkName: 'Valid Standalone Park',
+        parkUrl: '/camp/park/valid-park',
+        campgroundName: null,
+        campsiteName: 'Valid Standalone Campsite',
+        campsiteUrl: '/camp/park/valid-park?campsite=standalone-12',
       },
       {
         parkName: 'External Park',
         parkUrl: 'https://evil.example/camp/park/valid-park',
         campgroundName: 'Protocol Relative Campground',
         campgroundUrl: '//evil.example/camp/park/valid-park',
+        campsiteName: 'External Campsite',
+        campsiteUrl:
+          'https://evil.example/camp/park/valid-park?campsite=site-12',
       },
       {
         parkName: 'Query Park',
         parkUrl: '/camp/park/valid-park?attack=1',
         campgroundName: 'Query Campground',
         campgroundUrl: '/camp/park/valid-park#valid-campground?attack=1',
+        campsiteName: 'Extra Query Campsite',
+        campsiteUrl:
+          '/camp/park/valid-park?campsite=site-12&extra=value',
       },
       {
         parkName: 'Backslash Park',
         parkUrl: '\\camp\\park\\valid-park',
         campgroundName: 'Malformed Fragment Campground',
         campgroundUrl: '/camp/park/valid-park##valid-campground',
+        campsiteName: 'Duplicate Campsite Query',
+        campsiteUrl:
+          '/camp/park/valid-park?campsite=site-12&campsite=site-12',
       },
       {
         parkName: 'Fragment Park',
         parkUrl: '/camp/park/valid-park#wrong-shape',
         campgroundName: 'Fragmentless Campground',
         campgroundUrl: '/camp/park/valid-park',
+        campsiteName: 'Reordered Campsite Query',
+        campsiteUrl:
+          '/camp/park/valid-park?campsite=site-12&campground=north-loop',
       },
       {
         parkName: 'Park Link Survives',
@@ -702,6 +781,7 @@ describe('dynamically loaded administrator location links', () => {
         campgroundName: 'Rejected Campground',
         campgroundUrl: 'javascript:alert(1)',
         campsiteName: 'Campsite Remains Text',
+        campsiteUrl: '/camp/park/valid-park/campsite/site-12',
       },
     ].map((fixture, index) => ({
       createdAt: '2026-08-01T00:00:00.000Z',
@@ -733,7 +813,7 @@ describe('dynamically loaded administrator location links', () => {
     ));
     assert.deepEqual(
       anchorsByRow.map(anchors => anchors.length),
-      [2, 0, 0, 0, 0, 1],
+      [3, 2, 0, 0, 0, 0, 1],
     );
     assert.deepEqual(anchorsByRow[0].map(link => ({
       href: link.href,
@@ -753,21 +833,48 @@ describe('dynamically loaded administrator location links', () => {
         target: '_blank',
         text: 'Valid Campground',
       },
+      {
+        href:
+          '/camp/park/valid-park?campground=valid-campground&campsite=site-12',
+        rel: 'noopener noreferrer',
+        target: '_blank',
+        text: 'Valid Campsite',
+      },
     ]);
-    assert.equal(anchorsByRow[5][0].textContent, 'Park Link Survives');
+    assert.deepEqual(anchorsByRow[1].map(link => ({
+      href: link.href,
+      text: link.textContent,
+    })), [
+      { href: '/camp/park/valid-park', text: 'Valid Standalone Park' },
+      {
+        href: '/camp/park/valid-park?campsite=standalone-12',
+        text: 'Valid Standalone Campsite',
+      },
+    ]);
+    assert.equal(anchorsByRow[6][0].textContent, 'Park Link Survives');
     for (let index = 0; index < fixtures.length; index += 1) {
       assert.equal(
         combinedText(harness.uploads.children[index]).includes(fixtures[index].parkName),
         true,
       );
-      assert.equal(
-        combinedText(harness.uploads.children[index]).includes(fixtures[index].campgroundName),
-        true,
-      );
+      if (fixtures[index].campgroundName) {
+        assert.equal(
+          combinedText(harness.uploads.children[index])
+            .includes(fixtures[index].campgroundName),
+          true,
+        );
+      }
+      if (fixtures[index].campsiteName) {
+        assert.equal(
+          combinedText(harness.uploads.children[index])
+            .includes(fixtures[index].campsiteName),
+          true,
+        );
+      }
     }
     assert.equal(
       findAll(
-        harness.uploads.children[5],
+        harness.uploads.children[6],
         element => element.tagName === 'A' &&
           element.textContent === 'Campsite Remains Text',
       ).length,
